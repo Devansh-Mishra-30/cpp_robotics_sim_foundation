@@ -8,28 +8,28 @@
 int main() {
 	const double dt = 0.1;
 	const int commandCount = 20;
-	// parameters
-	Pose2D robotPose{0.0, 0.0, 0.0};
-	// initial pose
-	const RobotCommand command{1.0,0.2};
-	std::vector<RobotCommand> commands{ commandCount, command };
+	
+	const Pose2D initialPose{ 0.0, 0.0, 0.0 };
+	const Pose2D targetPose{ 2.0, 0.0, 0.0 };
 
-	std::vector<Pose2D> trajectory;
-	trajectory.push_back(robotPose);
-	SimInput inputCheck = validateSimulationInput(dt, commands);
+	const RobotCommand command{ 1.0, 0.2 };
+	const std::vector<RobotCommand> commands(commandCount, command);
+
+	const SimInput inputCheck = validateSimulationInput(dt, commands);
 
 	if (!inputCheck.commandbool) {
-		printValidationReport(inputCheck, dt, commands, trajectory);
+		const std::vector<Pose2D> emptyTrajectory;
+		printValidationReport(inputCheck, dt, commands, emptyTrajectory);
 		return 1;
 	}
 
-	Simulator simulator(dt);
+	Simulator simulator(dt, initialPose);
 
 	for (const RobotCommand& currentCommand : commands) {
 		simulator.step(currentCommand);
 	}
 
-	printSimulationSummary(dt,commands, simulator.getTrajectory());
+	printSimulationSummary(dt,commands, simulator.getTrajectory(), targetPose);
 
 	return 0;
 }

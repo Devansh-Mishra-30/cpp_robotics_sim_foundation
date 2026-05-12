@@ -2,8 +2,8 @@
 #include<iostream>
 
 void printSimulationHeader() {
-	std::cout << "---------------------------------------------------"
-		<< "------------- STARTING THE SIMULATION -------------"
+	std::cout << "---------------------------------------------------\n"
+		<< "------------- STARTING THE SIMULATION -------------\n"
 		<< "---------------------------------------------------" << std::endl;
 }
 
@@ -38,7 +38,7 @@ void printFinalPose(const std::vector<Pose2D>& trajectory) {
 }
 
 void printTrajectoryCount(const std::vector<Pose2D>& trajectory) {
-	std::cout << "\n Saved trajectory points: " << trajectory.size() << "\n";
+	std::cout << "\nSaved trajectory points: " << trajectory.size() << "\n";
 }
 
 void printSelectedTrajectory(const std::vector<Pose2D>& trajectory, int sampleInterval) {
@@ -101,15 +101,40 @@ void printValidationReport(const SimInput& inputCheck, double dt, const std::vec
 	}
 }
 
+void printTargetPose(const Pose2D& targetPose) {
+	printPose(targetPose);
+}
 
-void printSimulationSummary(double dt, const std::vector<RobotCommand>& commands, const std::vector<Pose2D>& trajectory) {
+void printTotalDistance(const std::vector<Pose2D>& trajectory) {
+	std::cout << "Total distance traveled: " << computeTotalDistance(trajectory) << " m" << std::endl;
+
+}
+
+void printFinalPositionError(const std::vector<Pose2D>& trajectory, const Pose2D& targetPose) {
+	std::cout << "Final position error: " << computeFinalPositionError(trajectory, targetPose) << " m"  << std::endl;
+}
+
+void printMaxSpeed(const std::vector<Pose2D>& trajectory, double dt) {
+	std::cout << "Maximum speed: " << computeMaxSpeed(trajectory, dt) << " m/s" << std::endl;
+}
+
+
+void printSimulationSummary(double dt, const std::vector<RobotCommand>& commands, const std::vector<Pose2D>& trajectory, const Pose2D& targetPose) {
 	std::cout << "Simulation Summary: \n" << std::endl;
 	printSimulationHeader();
 	printSimulationSetup(dt, static_cast<int>(commands.size()));
 	printValidationReport(validateSimulationInput(dt, commands), dt, commands, trajectory);
 	printInitialPose(trajectory);
 	printFinalPose(trajectory);
+	std::cout << "Target Pose: \n";
+	printTargetPose(targetPose);
+
 	printTrajectoryCount(trajectory);
 	printSelectedTrajectory(trajectory, 5);
+	
+	printTotalDistance(trajectory);
+	printFinalPositionError(trajectory, targetPose);
+	printMaxSpeed(trajectory, dt);
+
 }
 

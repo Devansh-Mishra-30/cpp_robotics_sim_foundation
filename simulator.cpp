@@ -1,24 +1,22 @@
 #include "simulator.h"
-#include "pose2d.h"
-#include "robot_command.h"
 #include "robot_utils.h"
 #include <cmath>
 
 
-Simulator::Simulator(double dt) : robotPose_{0.0,0.0,0.0},
-dt_{dt} {
-	trajectory_.push_back(robotPose_);
-} 
+Simulator::Simulator(double dt, const Pose2D& initialPose)
+	: dt_(dt), pose_(initialPose) {
+	trajectory_.push_back(pose_);
+}
 
 void Simulator::step(const RobotCommand& command) {
-	robotPose_.x += command.v * std::cos(robotPose_.theta) * dt_;
-	robotPose_.y += command.v * std::sin(robotPose_.theta) * dt_;
-	robotPose_.theta = wrapToPi(robotPose_.theta + command.omega * dt_);
-	trajectory_.push_back(robotPose_);
+	pose_.x += command.v * std::cos(pose_.theta) * dt_;
+	pose_.y += command.v * std::sin(pose_.theta) * dt_;
+	pose_.theta = wrapToPi(pose_.theta + command.omega * dt_);
+	trajectory_.push_back(pose_);
 }
 
 const Pose2D& Simulator::getPose() const {
-	return robotPose_;
+	return pose_;
 }
 
 const std::vector<Pose2D>& Simulator::getTrajectory() const {

@@ -12,4 +12,4 @@ void printFinalPose(const std::vector<Pose2D>& trajectory);
 void printTrajectoryCount(const std::vector<Pose2D>& trajectory);
 void printSelectedTrajectory(const std::vector<Pose2D>& trajectory, int sampleInterval);
 void printValidationReport(const SimInput& inputCheck, double dt, const std::vector<RobotCommand>& commands, const std::vector<Pose2D>& trajectory);
-void printSimulationSummary(double dt, const std::vector<RobotCommand>& commands,const std::vector<Pose2D>& trajectory);
+void printSimulationSummary(double dt, const std::vector<RobotCommand>& commands,const std::vector<Pose2D>& trajectory, const Pose2D& targetPose);

@@ -5,14 +5,14 @@
 
 class Simulator {
 public: 
-	explicit Simulator(double dt);
+	explicit Simulator(double dt, const Pose2D& initialPose = Pose2D{0.0, 0.0, 0.0});
 	void step(const RobotCommand& command);
 
 	const Pose2D& getPose() const;
 	const std::vector<Pose2D>& getTrajectory() const;
 
 private:
-	Pose2D robotPose_;
+	Pose2D pose_;
 	double dt_;
 	std::vector<Pose2D> trajectory_;
 };
