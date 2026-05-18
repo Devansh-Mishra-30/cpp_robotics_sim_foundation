@@ -3,6 +3,7 @@
 #include <cmath>
 
 
+
 Simulator::Simulator(double dt, const Pose2D& initialPose)
 	: dt_(dt), pose_(initialPose) {
 	trajectory_.push_back(pose_);

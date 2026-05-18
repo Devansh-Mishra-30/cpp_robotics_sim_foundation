@@ -4,3 +4,4 @@ struct Pose2D {
 	double y;
 	double theta;
 };
+

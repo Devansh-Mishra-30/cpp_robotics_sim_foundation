@@ -19,6 +19,14 @@ void printPose(const Pose2D& robotPose) {
 		<< " m; y: " << robotPose.y
 		<< " m; theta: " << robotPose.theta << " rad" << std::endl;
 }
+void printJointStates(const std::vector<JointState>& joints) {
+	for (const JointState& joint : joints) {
+		std::cout << joint.name
+			<< "position: " << joint.position
+			<< " rad; velocity: " << joint.velocity
+			<< " rad/s" << std::endl;
+	}
+}
 
 void printInitialPose(const std::vector<Pose2D>& trajectory) {
 	std::cout << "Initial pose: " << std::endl;

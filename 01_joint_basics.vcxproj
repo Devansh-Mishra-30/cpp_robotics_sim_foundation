@@ -128,11 +128,14 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="manipulator_utils.cpp" />
     <ClCompile Include="reporter.cpp" />
     <ClCompile Include="robot_utils.cpp" />
     <ClCompile Include="simulator.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="joint_state.h" />
+    <ClInclude Include="manipulator_utils.h" />
     <ClInclude Include="reporter.h" />
     <ClInclude Include="pose2d.h" />
     <ClInclude Include="robot_command.h" />
