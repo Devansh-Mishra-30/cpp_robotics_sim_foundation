@@ -2,13 +2,15 @@
 #include <vector>
 
 #include "differential_drive.h"
+#include "joint_state.h"
+#include "manipulator_utils.h"
 #include "pose2d.h"
 #include "reporter.h"
 #include "robot_command.h"
 #include "robot_utils.h"
 #include "simulator.h"
 
-int main() {
+void runDifferentialDriveDemo() {
 	const double dt = 0.1;
 	const double duration = 10.0;
 	const int commandCount = static_cast<int>(duration / dt);
@@ -31,7 +33,7 @@ int main() {
 	if (!inputCheck.commandbool) {
 		const std::vector<Pose2D> emptyTrajectory;
 		printValidationReport(inputCheck, dt, commands, emptyTrajectory);
-		return 1;
+		return;
 	}
 
 	Simulator simulator(dt, initialPose);
@@ -39,7 +41,7 @@ int main() {
 		simulator.step(currentCommand);
 	}
 
-	std::cout << "Day 27 Differential Drive Mini-Sim\n";
+	std::cout << "\nDifferential Drive Demo\n";
 	std::cout << "-----------------------------------\n";
 	std::cout << "Left wheel speed: " << wheelCommand.leftWheelSpeed << " rad/s\n";
 	std::cout << "Right wheel speed: " << wheelCommand.rightWheelSpeed << " rad/s\n";
@@ -47,8 +49,47 @@ int main() {
 	std::cout << "Computed omega: " << robotCommand.omega << " rad/s\n";
 
 	printSimulationSummary(dt, commands, simulator.getTrajectory(), targetPose);
+}
+
+void runManipulatorDemo() {
+	const double dt = 0.1;
+	const double duration = 10.0;
+	const int stepCount = static_cast<int>(duration / dt);
+	std::vector<JointState> threeJointArm = {
+		{"shoulder", 0.0, 0.5},
+		{"elbow", 0.0, 0.3},
+		{"wrist", 0.0, 0.2},
+	};
+
+	std::cout << "\nManipulator Joint-Space Demo\n";
+	std::cout << "--------------------------------\n";
+
+	std::cout << "Initial joint states: \n";
+	printJointStates(threeJointArm);
+
+	for (int step = 0; step < stepCount; ++step) {
+		updateAllJoints(threeJointArm, dt);
+	}
+	std::cout << "Final joint states: \n";
+	printJointStates(threeJointArm);
+
+	std::cout << "\nManipulator setup:\n";
+	std::cout << "dt: " << dt << " s\n";
+	std::cout << "duration: " << duration << " s\n";
+	std::cout << "step count: " << stepCount << " \n";
+}
+
+int main() {
+	std::cout << "Day 29 Integrated Robotics Simulation Project\n";
+	std::cout << "=============================================\n";
+
+	runDifferentialDriveDemo();
+	runManipulatorDemo();
 	return 0;
 }
+
+
+
 
 
 
