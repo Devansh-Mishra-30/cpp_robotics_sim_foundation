@@ -22,7 +22,7 @@ void printPose(const Pose2D& robotPose) {
 void printJointStates(const std::vector<JointState>& joints) {
 	for (const JointState& joint : joints) {
 		std::cout << joint.name
-			<< "position: " << joint.position
+			<< "| position: " << joint.position
 			<< " rad; velocity: " << joint.velocity
 			<< " rad/s" << std::endl;
 	}

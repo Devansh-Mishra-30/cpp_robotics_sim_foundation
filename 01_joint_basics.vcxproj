@@ -127,6 +127,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="differential_drive.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="manipulator_utils.cpp" />
     <ClCompile Include="reporter.cpp" />
@@ -134,6 +135,7 @@
     <ClCompile Include="simulator.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="differential_drive.h" />
     <ClInclude Include="joint_state.h" />
     <ClInclude Include="manipulator_utils.h" />
     <ClInclude Include="reporter.h" />
