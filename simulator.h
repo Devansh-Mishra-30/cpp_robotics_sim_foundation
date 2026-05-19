@@ -1,10 +1,12 @@
 #pragma once
-#include<vector>
-#include"pose2d.h"
-#include"robot_command.h"
+
+#include <vector>
+
+#include "pose2d.h"
+#include "robot_command.h"
 
 class Simulator {
-public: 
+public:
 	explicit Simulator(double dt, const Pose2D& initialPose = Pose2D{0.0, 0.0, 0.0});
 	void step(const RobotCommand& command);
 

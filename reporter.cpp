@@ -1,5 +1,6 @@
-#include"reporter.h"
-#include<iostream>
+#include "reporter.h"
+
+#include <iostream>
 
 void printSimulationHeader() {
 	std::cout << "---------------------------------------------------\n"
@@ -14,15 +15,15 @@ void printSimulationSetup(const double dt, int commandCount) {
 		<< "Expected simulation time: " << dt * commandCount << " s\n" << std::endl;
 }
 
-void printPose(const Pose2D& robotPose) {
-	std::cout << "x: " << robotPose.x
-		<< " m; y: " << robotPose.y
-		<< " m; theta: " << robotPose.theta << " rad" << std::endl;
+void printPose(const Pose2D& pose) {
+	std::cout << "x: " << pose.x
+		<< " m; y: " << pose.y
+		<< " m; theta: " << pose.theta << " rad" << std::endl;
 }
 void printJointStates(const std::vector<JointState>& joints) {
 	for (const JointState& joint : joints) {
 		std::cout << joint.name
-			<< "| position: " << joint.position
+			<< " | position: " << joint.position
 			<< " rad; velocity: " << joint.velocity
 			<< " rad/s" << std::endl;
 	}
@@ -64,17 +65,17 @@ void printSelectedTrajectory(const std::vector<Pose2D>& trajectory, int sampleIn
 
 	const size_t interval = static_cast<size_t>(sampleInterval);
 
-	for (size_t i = 0; i < trajectory.size(); i += static_cast<size_t>(sampleInterval)) {
+	for (size_t i = 0; i < trajectory.size(); i += interval) {
 		std::cout << "Step: " << i << ": ";
 		printPose(trajectory[i]);
 	}
 
 	const size_t finalIndex = trajectory.size() - 1;
 
-	if (finalIndex% static_cast<int>(sampleInterval) != 0){
-		std::cout << "Step " << finalIndex << ": ";
+	if (finalIndex % interval != 0) {
+		std::cout << "Step: " << finalIndex << ": ";
 		printPose(trajectory.back());
- 	}
+	}
 }
 
 
@@ -119,7 +120,7 @@ void printTotalDistance(const std::vector<Pose2D>& trajectory) {
 }
 
 void printFinalPositionError(const std::vector<Pose2D>& trajectory, const Pose2D& targetPose) {
-	std::cout << "Final position error: " << computeFinalPositionError(trajectory, targetPose) << " m"  << std::endl;
+	std::cout << "Final position error: " << computeFinalPositionError(trajectory, targetPose) << " m" << std::endl;
 }
 
 void printMaxSpeed(const std::vector<Pose2D>& trajectory, double dt) {

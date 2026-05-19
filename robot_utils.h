@@ -1,6 +1,9 @@
 #pragma once
-#include"robot_command.h"
+
 #include <vector>
+
+#include "pose2d.h"
+#include "robot_command.h"
 
 struct SimInput {
 	bool commandbool;

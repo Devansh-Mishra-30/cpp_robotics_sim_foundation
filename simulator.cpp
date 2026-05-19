@@ -1,8 +1,7 @@
 #include "simulator.h"
 #include "robot_utils.h"
+
 #include <cmath>
-
-
 
 Simulator::Simulator(double dt, const Pose2D& initialPose)
 	: dt_(dt), pose_(initialPose) {
