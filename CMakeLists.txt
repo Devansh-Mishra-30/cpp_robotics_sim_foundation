@@ -12,7 +12,7 @@ add_executable(robotics_sim
 	src/reporter.cpp
 	src/differential_drive.cpp
 	src/manipulator_utils.cpp
-)
+ "include/mobile_robot.h" "src/mobile_robot.cpp")
 
 target_include_directories(robotics_sim
 	PRIVATE
