@@ -49,7 +49,6 @@ void runDifferentialDriveDemo() {
 	std::cout << "Computed v: " << robotCommand.v << " m/s\n";
 	std::cout << "Computed omega: " << robotCommand.omega << " rad/s\n";
 
-
 	printSimulationSummary(dt, commands, robot.getTrajectory(), targetPose);
 	
 	robot.reset(initialPose);
