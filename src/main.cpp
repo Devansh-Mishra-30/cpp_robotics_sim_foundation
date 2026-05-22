@@ -8,7 +8,7 @@
 #include "reporter.h"
 #include "robot_command.h"
 #include "robot_utils.h"
-#include "simulator.h"
+#include "mobile_robot.h"
 
 void runDifferentialDriveDemo() {
 	const double dt = 0.1;
@@ -36,9 +36,10 @@ void runDifferentialDriveDemo() {
 		return;
 	}
 
-	Simulator simulator(dt, initialPose);
-	for (const RobotCommand& currentCommand : commands) {
-		simulator.step(currentCommand);
+	MobileRobot robot(initialPose);
+
+	for (const RobotCommand& command : commands) {
+		robot.update(command, dt);
 	}
 
 	std::cout << "\nDifferential Drive Demo\n";
@@ -48,7 +49,12 @@ void runDifferentialDriveDemo() {
 	std::cout << "Computed v: " << robotCommand.v << " m/s\n";
 	std::cout << "Computed omega: " << robotCommand.omega << " rad/s\n";
 
-	printSimulationSummary(dt, commands, simulator.getTrajectory(), targetPose);
+
+	printSimulationSummary(dt, commands, robot.getTrajectory(), targetPose);
+	
+	robot.reset(initialPose);
+	std::cout << "\nAfter reset pose:\n";
+	printPose(robot.getPose());
 }
 
 void runManipulatorDemo() {
@@ -76,7 +82,7 @@ void runManipulatorDemo() {
 	std::cout << "\nManipulator setup:\n";
 	std::cout << "dt: " << dt << " s\n";
 	std::cout << "duration: " << duration << " s\n";
-	std::cout << "step count: " << stepCount << " \n";
+	std::cout << "step count: " << stepCount << "\n";
 }
 
 int main() {

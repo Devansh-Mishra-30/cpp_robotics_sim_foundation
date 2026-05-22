@@ -12,6 +12,7 @@ void Simulator::step(const RobotCommand& command) {
 	pose_.x += command.v * std::cos(pose_.theta) * dt_;
 	pose_.y += command.v * std::sin(pose_.theta) * dt_;
 	pose_.theta = wrapToPi(pose_.theta + command.omega * dt_);
+
 	trajectory_.push_back(pose_);
 }
 
