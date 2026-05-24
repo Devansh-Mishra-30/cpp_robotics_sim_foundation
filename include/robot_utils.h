@@ -1,7 +1,7 @@
 #pragma once
 
 #include <vector>
-
+#include "joint_state.h"
 #include "pose2d.h"
 #include "robot_command.h"
 
@@ -9,6 +9,15 @@ struct SimInput {
 	bool commandbool;
 	int commandsindex;
 };
+
+bool areAllCommandsValid(const std::vector<RobotCommand>& commands);
+size_t countMovingJoints(const std::vector<JointState>& joints);
+double computeMaxJointPositionMagnitude(const std::vector<JointState>& joints);
+
+const Pose2D* findClosestPoseToTarget(
+	const std::vector<Pose2D>& trajectory,
+	const Pose2D& targetPose
+);
 
 double wrapToPi(double angle_rad);
 bool isValidDt(double dt);

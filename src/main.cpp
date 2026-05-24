@@ -51,6 +51,18 @@ void runDifferentialDriveDemo() {
 
 	printSimulationSummary(dt, commands, robot.getTrajectory(), targetPose);
 	
+	std::cout << "\nSTL analysis:\n";
+	std::cout << "All commands valid: "
+		<< (areAllCommandsValid(commands) ? "true" : "false") << "\n";
+
+	const Pose2D* closestPose =
+		findClosestPoseToTarget(robot.getTrajectory(), targetPose);
+
+	if (closestPose != nullptr) {
+		std::cout << "Closest pose to target: \n";
+		printPose(*closestPose);
+	}
+
 	robot.reset(initialPose);
 	std::cout << "\nAfter reset pose:\n";
 	printPose(robot.getPose());

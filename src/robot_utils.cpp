@@ -1,6 +1,70 @@
 #include "robot_utils.h"
-
+#include "joint_state.h"
+#include <algorithm>
 #include <cmath>
+
+bool areAllCommandsValid(const std::vector<RobotCommand>& commands) {
+	return std::all_of(
+		commands.begin(),
+		commands.end(),
+		[](const RobotCommand& command) {
+			return isValidCommand(command);
+		}
+	);
+}
+
+size_t countMovingJoints(const std::vector<JointState>& joints) {
+	return static_cast<size_t>(
+		std::count_if(
+			joints.begin(),
+			joints.end(),
+			[](const JointState& joint) {
+				return std::abs(joint.velocity) > 0.0;
+			}
+		)
+		);
+}
+
+double computeMaxJointPositionMagnitude(const std::vector<JointState>& joints) {
+	if (joints.empty()) {
+		return 0.0;
+	}
+
+	const auto maxIt = std::max_element(
+		joints.begin(),
+		joints.end(),
+		[](const JointState& a, const JointState& b) {
+			return std::abs(a.position) < std::abs(b.position);
+		}
+	);
+	return std::abs(maxIt->position);
+}
+
+const Pose2D* findClosestPoseToTarget(
+	const std::vector<Pose2D>& trajectory,
+	const Pose2D& targetPose
+) {
+	if (trajectory.empty()) {
+		return nullptr;
+	}
+
+	const auto closestIt = std::min_element(
+		trajectory.begin(),
+		trajectory.end(),
+		[&targetPose](const Pose2D& a, const Pose2D& b) {
+			const double dxA = targetPose.x - a.x;
+			const double dyA = targetPose.y - a.y;
+			const double distanceA = dxA * dxA + dyA * dyA;
+
+			const double dxB = targetPose.x - b.x;
+			const double dyB = targetPose.y - b.y;
+			const double distanceB = dxB * dxB + dyB * dyB;
+
+			return distanceA < distanceB;
+		}
+	);
+	return &(*closestIt);
+}
 
 double wrapToPi(double angle_rad) {
 	return std::atan2(std::sin(angle_rad), std::cos(angle_rad));
