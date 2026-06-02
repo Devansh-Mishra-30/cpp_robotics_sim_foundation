@@ -63,9 +63,16 @@ void runDifferentialDriveDemo() {
 		printPose(*closestPose);
 	}
 
-	robot.reset(initialPose);
-	std::cout << "\nAfter reset pose:\n";
-	printPose(robot.getPose());
+	std::string filename = "trajectory.csv";
+	if (!writeTrajectoryToCsv(filename, robot.getTrajectory(), dt)) {
+		std::cout << "Error: trajectory.csv was not written";
+		return;
+	}
+		std::cout << "Data logged successfully to trajectory.csv\n";
+		robot.reset(initialPose);
+		std::cout << "\nAfter reset pose:\n";
+		printPose(robot.getPose());
+
 }
 
 void runManipulatorDemo() {

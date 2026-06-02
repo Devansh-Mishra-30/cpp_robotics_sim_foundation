@@ -1,6 +1,7 @@
 #include "reporter.h"
 
 #include <iostream>
+#include <fstream>
 
 void printSimulationHeader() {
 	std::cout << "---------------------------------------------------\n"
@@ -146,4 +147,26 @@ void printSimulationSummary(double dt, const std::vector<RobotCommand>& commands
 	printMaxSpeed(trajectory, dt);
 
 }
+
+bool writeTrajectoryToCsv(const std::string& filename, 
+	const std::vector<Pose2D>& trajectory, double dt) {
+	std::ofstream file(filename);
+	if (!file.is_open()) {
+		return false;
+	}
+
+	file << "time,x,y,theta\n";
+	for (size_t i = 0; i < trajectory.size(); i++)
+	{
+		const double time = static_cast<double>(i) * dt;
+		const Pose2D& pose = trajectory[i];
+
+		file << time << "," 
+			<< pose.x << ","
+			<< pose.y << ","
+			<< pose.theta << "\n";
+	}
+	return true;
+}
+
 

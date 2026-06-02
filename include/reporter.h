@@ -1,6 +1,7 @@
 #pragma once
 
 #include <vector>
+#include <string>
 
 #include "joint_state.h"
 #include "pose2d.h"
@@ -23,3 +24,5 @@ void printSimulationSummary(double dt,
 	const std::vector<Pose2D>& trajectory, 
 	const Pose2D& targetPose);
 void printJointStates(const std::vector<JointState>& joints);
+bool writeTrajectoryToCsv(const std::string& filename,
+	const std::vector<Pose2D>& trajectory, double dt);
