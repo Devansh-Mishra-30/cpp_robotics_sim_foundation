@@ -53,7 +53,7 @@ void runDifferentialDriveDemo() {
 		{0.0,0.0}
 	};
 
-	for (const WheelCommand& testCommand : wheelTests) {
+	for(const WheelCommand& testCommand : wheelTests) {
 		const RobotCommand result = convertWheelCommandToRobotCommand(
 			testCommand,
 			wheelRadius,
