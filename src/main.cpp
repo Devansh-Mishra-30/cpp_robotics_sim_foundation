@@ -42,6 +42,31 @@ void runDifferentialDriveDemo() {
 		robot.update(command, dt);
 	}
 
+	std::cout << "\nDay 38 Differential Drive Kinematics Tests\n";
+	std::cout << "---------------------------------------------\n";
+
+	const std::vector<WheelCommand> wheelTests = {
+		{5.0,5.0},
+		{-5.0, 5.0},
+		{3.0, 5.0},
+		{5.0, 3.0},
+		{0.0,0.0}
+	};
+
+	for (const WheelCommand& testCommand : wheelTests) {
+		const RobotCommand result = convertWheelCommandToRobotCommand(
+			testCommand,
+			wheelRadius,
+			wheelBase
+		);
+
+		std::cout << "wl: " << testCommand.leftWheelSpeed
+			<< "rad/s, wr: << testCommand.rightWheelSpeed"
+			<< "rad/s, -> v: " << result.v
+			<< "m/s, omega: " << result.omega
+			<< "rad/s\n";
+	}
+
 	std::cout << "\nDifferential Drive Demo\n";
 	std::cout << "-----------------------------------\n";
 	std::cout << "Left wheel speed: " << wheelCommand.leftWheelSpeed << " rad/s\n";
