@@ -83,6 +83,7 @@ void printSelectedTrajectory(const std::vector<Pose2D>& trajectory, int sampleIn
 void printValidationReport(const SimInput& inputCheck, double dt, const std::vector<RobotCommand>& commands, const std::vector<Pose2D>& trajectory) {
 
 	std::cout << "\nValidation Report\n";
+	std::cout << "Command count checked: " << commands.size() << "\n";
 	int errorCount = 0;
 	if (inputCheck.commandbool == false && inputCheck.commandsindex == -2) {
 		std::cout << "Error. dt must be finite and greater than 0. Current time step: " << dt << std::endl;

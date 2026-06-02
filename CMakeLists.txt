@@ -19,3 +19,9 @@ target_include_directories(robotics_sim
 	PRIVATE
 		${CMAKE_CURRENT_SOURCE_DIR}/include
 )
+
+if (MSVC)
+	target_compile_options(robotics_sim PRIVATE /W4)
+else()
+	target_compile_options(robotics_sim PRIVATE -Wall -Wextra -Wpedantic)
+endif()
