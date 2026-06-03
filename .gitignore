@@ -3,6 +3,31 @@
 ##
 ## Get latest from https://github.com/github/gitignore/blob/master/VisualStudio.gitignore
 
+# CMake build folder
+build/
+out/
+x64/
+
+# Visual Studio files
+*.sln
+*.slnx
+*.vcxproj
+*.vcxproj.filters
+*.vcxproj.user
+
+# CMake generated files
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+
+# Logs and generated outputs
+*.csv
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
 # User-specific files
 *.rsuser
 *.suo
@@ -361,5 +386,3 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
-# CMake build folder
-build/
