@@ -14,7 +14,8 @@ add_executable(robotics_sim
 	src/manipulator_utils.cpp
 	src/mobile_robot.cpp
 	src/differential_drive_robot.cpp
- "include/differential_drive_robot.h" "src/differential_drive_robot.cpp" "include/trajectory_metrics.h" "include/simulation_scenario.h" "include/validation_result.h")
+	src/target_controller.cpp
+ )
 
 target_include_directories(robotics_sim
 	PRIVATE

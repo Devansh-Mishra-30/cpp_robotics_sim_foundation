@@ -10,6 +10,7 @@
 #include "robot_utils.h"
 #include "differential_drive_robot.h"
 #include "trajectory_metrics.h"
+#include "target_controller.h"
 
 void runDifferentialDriveDemo() {
 	const double dt = 0.1;
@@ -474,6 +475,75 @@ void runValidationTestsDemo() {
 	}
 }
 
+void runTargetTrackingDemo() {
+	const double dt = 0.1;
+	const int maxSteps = 300;
+	const double wheelRadius = 0.1;
+	const double wheelBase = 0.5;
+
+	const Pose2D initialPose{ 0.0,0.0,0.0 };
+	const Pose2D targetPose{ 3.0, 2.0, 0.0 };
+
+	const TargetControllerGains gains{
+		0.8,
+		2.0,
+		0.8,
+		1.5,
+		0.05
+	};
+
+	DifferentialDriveRobot  robot(initialPose, wheelRadius, wheelBase);
+
+	for (int step = 0; step < maxSteps; ++step) {
+
+		const RobotCommand robotCommand = computeTargetTrackingControl(
+			robot.getPose(),
+			targetPose,
+			gains
+		);
+
+		const WheelCommand wheelCommand = convertRobotCommandToWheelCommand(
+			robotCommand,
+			wheelRadius,
+			wheelBase
+		);
+
+		robot.update(wheelCommand, dt);
+
+		const double distanceError = computeFinalPositionError(
+			{ robot.getPose() },
+			targetPose
+		);
+
+		if (distanceError <= gains.positionTolerance) {
+			break;
+		}
+	}
+
+	const TrajectoryMetrics metrics = computeTrajectoryMetrics(
+		robot.getTrajectory(),
+		targetPose,
+		dt
+	);
+
+	std::cout << "\nDay 43 Target Tracking Demo\n";
+	std::cout << "--------------------------------\n";
+	std::cout << "Target pose:\n";
+	printPose(targetPose);
+
+	std::cout << "Final pose:\n";
+	printPose(robot.getPose());
+
+	printTrajectoryMetrics(metrics);
+
+	if (metrics.finalPositionError <= gains.positionTolerance) {
+		std::cout << "[PASS] Target reached within tolerance\n";
+	}
+	else {
+		std::cout << "[FAIL] Target not reached within tolerance\n";
+	}
+}
+
 int main() {
 	std::cout << "Day 42 Robotics Simulation Project\n";
 	std::cout << "=============================================\n";
@@ -482,6 +552,7 @@ int main() {
 	runManipulatorDemo();
 	runScenarioRunnerDemo();
 	runValidationTestsDemo();
+	runTargetTrackingDemo();
 	return 0;
 }
 

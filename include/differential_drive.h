@@ -12,3 +12,9 @@ RobotCommand convertWheelCommandToRobotCommand(
 	double wheelRadius,
 	double wheelBase
 );
+
+WheelCommand convertRobotCommandToWheelCommand(
+	const RobotCommand& robotCommand,
+	double wheelRadius,
+	double wheelBase
+);
