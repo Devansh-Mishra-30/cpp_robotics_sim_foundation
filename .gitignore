@@ -3,6 +3,8 @@
 ##
 ## Get latest from https://github.com/github/gitignore/blob/master/VisualStudio.gitignore
 
+day30_rebuild_assessment/
+
 # CMake build folder
 build/
 out/
