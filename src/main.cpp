@@ -174,21 +174,34 @@ void runScenarioRunnerDemo() {
 
 void runValidationTestsDemo() {
 	const double dt = 0.1;
+	const int stepCount = 100;
+	const double duration = static_cast<double>(stepCount) * dt;
 	const double wheelRadius = 0.1;
 	const double wheelBase = 0.5;
 	const double tolerance = 1e-6;
+	const double curveTolerance = 1e-4;
 
 	std::cout << "\nDay 42 Validation Tests Demo\n";
 	std::cout << "--------------------------------\n";
 	{
+		// Straight motion validation
 		const Pose2D initialPose{ 0.0, 0.0, 0.0 };
-		const WheelCommand wheelCommand{5.0, 5.0};
+		const Pose2D targetPose{ 5.0, 0.0, 0.0 };
+		const WheelCommand wheelCommand{ 5.0, 5.0 };
+
 		DifferentialDriveRobot robot(initialPose, wheelRadius, wheelBase);
-		for (int step = 0; step < 100; ++step) {
+
+		for (int step = 0; step < stepCount; ++step) {
 			robot.update(wheelCommand, dt);
 		}
 
 		const Pose2D& finalPose = robot.getPose();
+
+		const TrajectoryMetrics metrics = computeTrajectoryMetrics(
+			robot.getTrajectory(),
+			targetPose,
+			dt
+		);
 
 		printValidationResult(validateScalar(
 			"Straight final x",
@@ -210,18 +223,47 @@ void runValidationTestsDemo() {
 			0.0,
 			tolerance
 		));
+
+		printValidationResult(validateScalar(
+			"Straight total distance",
+			metrics.totalDistance,
+			5.0,
+			tolerance
+		));
+
+		printValidationResult(validateScalar(
+			"Straight final position error",
+			metrics.finalPositionError,
+			0.0,
+			tolerance
+		));
+
+		printValidationResult(validateScalar(
+			"Straight maximum speed",
+			metrics.maxSpeed,
+			0.5,
+			tolerance
+		));
 	}
 	{
+		// No motion validation
 		const Pose2D initialPose{ 0.0, 0.0, 0.0 };
+		const Pose2D targetPose{ 0.0,0.0,0.0 };
 		const WheelCommand wheelCommand{ 0.0, 0.0 };
 
 		DifferentialDriveRobot robot(initialPose, wheelRadius, wheelBase);
 
-		for (int step = 0; step < 100; ++step) {
+		for (int step = 0; step < stepCount; ++step) {
 			robot.update(wheelCommand, dt);
 		}
 
 		const Pose2D& finalPose = robot.getPose();
+
+		const TrajectoryMetrics metrics = computeTrajectoryMetrics(
+			robot.getTrajectory(),
+			targetPose,
+			dt
+		);
 
 		printValidationResult(validateScalar(
 			"No motion final x",
@@ -243,18 +285,55 @@ void runValidationTestsDemo() {
 			0.0,
 			tolerance
 		));
+
+		printValidationResult(validateScalar(
+			"No motion total distance",
+			metrics.totalDistance,
+			0.0,
+			tolerance
+		));
+
+		printValidationResult(validateScalar(
+			"No motion final position error",
+			metrics.finalPositionError,
+			0.0,
+			tolerance
+		));
+
+		printValidationResult(validateScalar(
+			"No motion maximum speed",
+			metrics.maxSpeed,
+			0.0,
+			tolerance
+		));
 	}
 	{
+		// Rotate in place validation
 		const Pose2D initialPose{ 0.0, 0.0, 0.0 };
+		const Pose2D targetPose{ 0.0, 0.0, 0.0 };
 		const WheelCommand wheelCommand{ -5.0, 5.0 };
 
 		DifferentialDriveRobot robot(initialPose, wheelRadius, wheelBase);
 
-		for (int step = 0; step < 100; ++step) {
+		for (int step = 0; step < stepCount; ++step) {
 			robot.update(wheelCommand, dt);
 		}
 
+		const RobotCommand robotCommand = convertWheelCommandToRobotCommand(
+			wheelCommand,
+			wheelRadius,
+			wheelBase
+		);
+
+		const double expectedTheta = wrapToPi(robotCommand.omega * duration);
+
 		const Pose2D& finalPose = robot.getPose();
+
+		const TrajectoryMetrics metrics = computeTrajectoryMetrics(
+			robot.getTrajectory(),
+			targetPose,
+			dt
+		);
 
 		printValidationResult(validateScalar(
 			"Rotate final x",
@@ -269,6 +348,129 @@ void runValidationTestsDemo() {
 			0.0,
 			tolerance
 		));
+
+		printValidationResult(validateScalar(
+			"Rotate final theta",
+			finalPose.theta,
+			expectedTheta,
+			tolerance
+		));
+
+		printValidationResult(validateScalar(
+			"Rotate total distance",
+			metrics.totalDistance,
+			0.0,
+			tolerance
+		));
+
+		printValidationResult(validateScalar(
+			"Rotate final position error",
+			metrics.finalPositionError,
+			0.0,
+			tolerance
+		));
+
+		printValidationResult(validateScalar(
+			"Rotate maximum speed",
+			metrics.maxSpeed,
+			0.0,
+			tolerance
+		));
+	}
+	{
+		// Curve-left and Curve-right symmetry validation
+
+		const Pose2D initialPose{ 0.0,0.0,0.0 };
+		const Pose2D targetPose{ 0.0,0.0,0.0 };
+		const WheelCommand leftCommand{ 3.0, 5.0 };
+		const WheelCommand rightCommand{ 5.0, 3.0 };
+
+		DifferentialDriveRobot leftRobot(initialPose, wheelRadius, wheelBase);
+		DifferentialDriveRobot rightRobot(initialPose, wheelRadius, wheelBase);
+
+		for (int step = 0; step < stepCount; ++step) {
+			leftRobot.update(leftCommand, dt);
+			rightRobot.update(rightCommand, dt);
+		}
+
+		const Pose2D& leftFinal = leftRobot.getPose();
+		const Pose2D& rightFinal = rightRobot.getPose();
+
+		const TrajectoryMetrics leftMetrics = computeTrajectoryMetrics(
+			leftRobot.getTrajectory(),
+			targetPose,
+			dt
+		);
+
+		const TrajectoryMetrics rightMetrics = computeTrajectoryMetrics(
+			rightRobot.getTrajectory(),
+			targetPose,
+			dt
+		);
+
+		printValidationResult(validateScalar(
+			"Curve symmetry x",
+			leftFinal.x,
+			rightFinal.x,
+			curveTolerance
+		));
+
+		printValidationResult(validateScalar(
+			"Curve symmetry y",
+			leftFinal.y,
+			-rightFinal.y,
+			curveTolerance
+		));
+
+		printValidationResult(validateScalar(
+			"Curve symmetry theta",
+			leftFinal.theta,
+			-rightFinal.theta,
+			curveTolerance
+		));
+
+		printValidationResult(validateScalar(
+			"Curve right total distance",
+			rightMetrics.totalDistance,
+			4.0,
+			curveTolerance
+		));
+
+		printValidationResult(validateScalar(
+			"Curve left total distance",
+			leftMetrics.totalDistance,
+			4.0,
+			curveTolerance
+		));
+
+		printValidationResult(validateScalar(
+			"Curve distance symmetry",
+			leftMetrics.totalDistance,
+			rightMetrics.totalDistance,
+			curveTolerance
+		));
+
+		printValidationResult(validateScalar(
+			"Curve left maximum speed",
+			leftMetrics.maxSpeed,
+			0.4,
+			curveTolerance
+		));
+
+		printValidationResult(validateScalar(
+			"Curve right maximum speed",
+			rightMetrics.maxSpeed,
+			0.4,
+			curveTolerance
+		));
+
+		printValidationResult(validateScalar(
+			"Curve maximum speed symmetry",
+			leftMetrics.maxSpeed,
+			rightMetrics.maxSpeed,
+			curveTolerance
+		));
+
 	}
 }
 
