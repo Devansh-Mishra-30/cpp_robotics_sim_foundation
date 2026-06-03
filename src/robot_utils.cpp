@@ -195,3 +195,26 @@ std::vector<SimulationScenario> createDefaultScenarios() {
 		}
 	};
 }
+
+bool isNear(
+	double actual,
+	double expected,
+	double tolerance
+) {
+	return std::abs(actual - expected) <= tolerance;
+}
+
+ValidationResult validateScalar(
+	const std::string& testName,
+	double actual,
+	double expected,
+	double tolerance
+) {
+	return {
+		testName,
+		isNear(actual, expected, tolerance),
+		actual,
+		expected,
+		tolerance
+	};
+}

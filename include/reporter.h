@@ -33,3 +33,4 @@ void printScenarioResult(
 	const SimulationScenario& scenario,
 	const Pose2D& finalPose,
 	const TrajectoryMetrics& metrics);
+void printValidationResult(const ValidationResult& result);

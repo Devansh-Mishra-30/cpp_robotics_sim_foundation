@@ -6,6 +6,7 @@
 #include "robot_command.h"
 #include "trajectory_metrics.h"
 #include "simulation_scenario.h"
+#include "validation_result.h"
 
 struct SimInput {
 	bool commandbool;
@@ -34,4 +35,16 @@ TrajectoryMetrics computeTrajectoryMetrics(
 	const std::vector <Pose2D>& trajectory,
 	const Pose2D& targetPose,
 	double dt
+);
+bool isNear(
+	double actual,
+	double expected,
+	double tolerance
+);
+
+ValidationResult validateScalar(
+	const std::string& testName,
+	double actual,
+	double expected,
+	double tolerance
 );

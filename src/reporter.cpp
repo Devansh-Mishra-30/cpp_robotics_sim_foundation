@@ -193,3 +193,12 @@ void printScenarioResult(
 	std::cout << "Final position error: " << metrics.finalPositionError << " m\n";
 	std::cout << "Maximum speed: " << metrics.maxSpeed << " m/s\n";
 }
+
+void printValidationResult(const ValidationResult& result) {
+	std::cout << (result.passed ? "[PASS] " : "[FAIL] ")
+		<< result.testName
+		<< " | actual: " << result.actualValue
+		<< " | expected: " << result.expectedValue
+		<< " | tolerance: " << result.tolerance
+		<< "\n";
+}

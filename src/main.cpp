@@ -62,10 +62,10 @@ void runDifferentialDriveDemo() {
 		);
 
 		std::cout << "wl: " << testCommand.leftWheelSpeed
-			<< "rad/s, wr: " << testCommand.rightWheelSpeed
-			<< "rad/s -> v: " << result.v
-			<< "m/s, omega: " << result.omega
-			<< "rad/s\n";
+			<< " rad/s, wr: " << testCommand.rightWheelSpeed
+			<< " rad/s -> v: " << result.v
+			<< " m/s, omega: " << result.omega
+			<< " rad/s\n";
 	}
 
 	std::cout << "\nDifferential Drive Demo\n";
@@ -172,13 +172,114 @@ void runScenarioRunnerDemo() {
 	}
 }
 
+void runValidationTestsDemo() {
+	const double dt = 0.1;
+	const double wheelRadius = 0.1;
+	const double wheelBase = 0.5;
+	const double tolerance = 1e-6;
+
+	std::cout << "\nDay 42 Validation Tests Demo\n";
+	std::cout << "--------------------------------\n";
+	{
+		const Pose2D initialPose{ 0.0, 0.0, 0.0 };
+		const WheelCommand wheelCommand{5.0, 5.0};
+		DifferentialDriveRobot robot(initialPose, wheelRadius, wheelBase);
+		for (int step = 0; step < 100; ++step) {
+			robot.update(wheelCommand, dt);
+		}
+
+		const Pose2D& finalPose = robot.getPose();
+
+		printValidationResult(validateScalar(
+			"Straight final x",
+			finalPose.x,
+			5.0,
+			tolerance
+		));
+
+		printValidationResult(validateScalar(
+			"Straight final y",
+			finalPose.y,
+			0.0,
+			tolerance
+		));
+
+		printValidationResult(validateScalar(
+			"Straight final theta",
+			finalPose.theta,
+			0.0,
+			tolerance
+		));
+	}
+	{
+		const Pose2D initialPose{ 0.0, 0.0, 0.0 };
+		const WheelCommand wheelCommand{ 0.0, 0.0 };
+
+		DifferentialDriveRobot robot(initialPose, wheelRadius, wheelBase);
+
+		for (int step = 0; step < 100; ++step) {
+			robot.update(wheelCommand, dt);
+		}
+
+		const Pose2D& finalPose = robot.getPose();
+
+		printValidationResult(validateScalar(
+			"No motion final x",
+			finalPose.x,
+			0.0,
+			tolerance
+		));
+
+		printValidationResult(validateScalar(
+			"No motion final y",
+			finalPose.y,
+			0.0,
+			tolerance
+		));
+
+		printValidationResult(validateScalar(
+			"No motion final theta",
+			finalPose.theta,
+			0.0,
+			tolerance
+		));
+	}
+	{
+		const Pose2D initialPose{ 0.0, 0.0, 0.0 };
+		const WheelCommand wheelCommand{ -5.0, 5.0 };
+
+		DifferentialDriveRobot robot(initialPose, wheelRadius, wheelBase);
+
+		for (int step = 0; step < 100; ++step) {
+			robot.update(wheelCommand, dt);
+		}
+
+		const Pose2D& finalPose = robot.getPose();
+
+		printValidationResult(validateScalar(
+			"Rotate final x",
+			finalPose.x,
+			0.0,
+			tolerance
+		));
+
+		printValidationResult(validateScalar(
+			"Rotate final y",
+			finalPose.y,
+			0.0,
+			tolerance
+		));
+	}
+}
+
 int main() {
-	std::cout << "Day 41 Robotics Simulation Project\n";
+	std::cout << "Day 42 Robotics Simulation Project\n";
 	std::cout << "=============================================\n";
 
 	runDifferentialDriveDemo();
 	runManipulatorDemo();
 	runScenarioRunnerDemo();
+	runValidationTestsDemo();
 	return 0;
 }
 
