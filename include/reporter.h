@@ -8,6 +8,7 @@
 #include "robot_command.h"
 #include "robot_utils.h"
 #include "trajectory_metrics.h"
+#include "simulation_scenario.h"
 
 void printSimulationHeader();
 void printSimulationSetup(const double dt, int commandCount);
@@ -28,3 +29,7 @@ void printJointStates(const std::vector<JointState>& joints);
 bool writeTrajectoryToCsv(const std::string& filename,
 	const std::vector<Pose2D>& trajectory, double dt);
 void printTrajectoryMetrics(const TrajectoryMetrics& metrics);
+void printScenarioResult(
+	const SimulationScenario& scenario,
+	const Pose2D& finalPose,
+	const TrajectoryMetrics& metrics);

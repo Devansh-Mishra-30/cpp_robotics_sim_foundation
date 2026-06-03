@@ -181,3 +181,15 @@ void printTrajectoryMetrics(const TrajectoryMetrics& metrics) {
 		<< metrics.maxSpeed << " m/s\n";
 }
 
+void printScenarioResult(
+	const SimulationScenario& scenario,
+	const Pose2D& finalPose,
+	const TrajectoryMetrics& metrics) {
+	std::cout << "\nScenario: " << scenario.name << "\n";
+	std::cout << "-------------------------\n";
+	std::cout << "Final pose: ";
+	printPose(finalPose);
+	std::cout << "Total distance: " << metrics.totalDistance << " m\n";
+	std::cout << "Final position error: " << metrics.finalPositionError << " m\n";
+	std::cout << "Maximum speed: " << metrics.maxSpeed << " m/s\n";
+}

@@ -5,11 +5,14 @@
 #include "pose2d.h"
 #include "robot_command.h"
 #include "trajectory_metrics.h"
+#include "simulation_scenario.h"
 
 struct SimInput {
 	bool commandbool;
 	int commandsindex;
 };
+
+std::vector<SimulationScenario> createDefaultScenarios();
 
 bool areAllCommandsValid(const std::vector<RobotCommand>& commands);
 size_t countMovingJoints(const std::vector<JointState>& joints);

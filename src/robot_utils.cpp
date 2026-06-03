@@ -2,6 +2,7 @@
 #include "joint_state.h"
 #include <algorithm>
 #include <cmath>
+#include <vector>
 
 bool areAllCommandsValid(const std::vector<RobotCommand>& commands) {
 	return std::all_of(
@@ -155,3 +156,42 @@ SimInput validateSimulationInput(double dt, const std::vector<RobotCommand>& com
 	return result;
 }
 
+std::vector<SimulationScenario> createDefaultScenarios() {
+	return {
+		{
+			"Straight",
+			{0.0, 0.0, 0.0},
+			{5.0, 0.0, 0.0},
+			{5.0, 5.0},
+			10.0
+		},
+		{
+			"Rotate In Place",
+			{0.0, 0.0, 0.0},
+			{0.0, 0.0, 0.0},
+			{-5.0, 5.0},
+			10.0
+		},
+		{
+			"Curve Left",
+			{0.0, 0.0, 0.0},
+			{0.0, 0.0, 0.0},
+			{3.0, 5.0},
+			10.0
+		},
+		{
+			"Curve Right",
+			{0.0, 0.0, 0.0},
+			{0.0, 0.0, 0.0},
+			{5.0, 3.0},
+			10.0
+		},
+		{
+			"No Motion",
+			{0.0, 0.0, 0.0},
+			{0.0, 0.0, 0.0},
+			{0.0, 0.0},
+			10.0
+		}
+	};
+}

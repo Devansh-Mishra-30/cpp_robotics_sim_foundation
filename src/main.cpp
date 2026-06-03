@@ -138,12 +138,47 @@ void runManipulatorDemo() {
 	std::cout << "step count: " << stepCount << "\n";
 }
 
+void runScenarioRunnerDemo() {
+	const double dt = 0.1;
+	const double wheelRadius = 0.1;
+	const double wheelBase = 0.5;
+
+	const std::vector<SimulationScenario> scenarios = createDefaultScenarios();
+
+	std::cout << "\nDay 41 Scenario Runner Demo\n";
+	std::cout << "------------------------------\n";
+
+	for (const SimulationScenario& scenario : scenarios) {
+		DifferentialDriveRobot robot(scenario.initialPose,
+			wheelRadius, wheelBase
+		);
+		const int stepCount = static_cast<int> (scenario.duration / dt);
+
+		for (int step = 0; step < stepCount; ++step) {
+			robot.update(scenario.wheelCommand, dt);
+		}
+
+		const TrajectoryMetrics metrics = computeTrajectoryMetrics(
+			robot.getTrajectory(),
+			scenario.targetPose,
+			dt
+		);
+
+		printScenarioResult(
+			scenario,
+			robot.getPose(),
+			metrics
+		);
+	}
+}
+
 int main() {
-	std::cout << "Day 29 Integrated Robotics Simulation Project\n";
+	std::cout << "Day 41 Robotics Simulation Project\n";
 	std::cout << "=============================================\n";
 
 	runDifferentialDriveDemo();
 	runManipulatorDemo();
+	runScenarioRunnerDemo();
 	return 0;
 }
 

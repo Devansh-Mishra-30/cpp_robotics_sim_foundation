@@ -9,7 +9,6 @@ DifferentialDriveRobot::DifferentialDriveRobot(
 	double wheelRadius,
 	double wheelBase
 )
-
 	: pose_(initialPose),
 	wheelRadius_(wheelRadius),
 	wheelBase_(wheelBase) {
@@ -25,6 +24,7 @@ void DifferentialDriveRobot::update(const WheelCommand& wheelCommand, double dt)
 	pose_.x += command.v * std::cos(pose_.theta) * dt;
 	pose_.y += command.v * std::sin(pose_.theta) * dt;
 	pose_.theta = wrapToPi(pose_.theta + command.omega * dt);
+	trajectory_.push_back(pose_);
 }
 
 void DifferentialDriveRobot::reset(const Pose2D& initialPose) {
