@@ -8,7 +8,7 @@
 #include "reporter.h"
 #include "robot_command.h"
 #include "robot_utils.h"
-#include "mobile_robot.h"
+#include "differential_drive_robot.h"
 
 void runDifferentialDriveDemo() {
 	const double dt = 0.1;
@@ -36,10 +36,10 @@ void runDifferentialDriveDemo() {
 		return;
 	}
 
-	MobileRobot robot(initialPose);
+	DifferentialDriveRobot robot(initialPose, wheelRadius, wheelBase);
 
-	for (const RobotCommand& command : commands) {
-		robot.update(command, dt);
+	for (int step = 0; step < commandCount; ++step) {
+		robot.update(wheelCommand, dt);
 	}
 
 	std::cout << "\nDay 38 Differential Drive Kinematics Tests\n";
@@ -53,7 +53,7 @@ void runDifferentialDriveDemo() {
 		{0.0,0.0}
 	};
 
-	for(const WheelCommand& testCommand : wheelTests) {
+	for (const WheelCommand& testCommand : wheelTests) {
 		const RobotCommand result = convertWheelCommandToRobotCommand(
 			testCommand,
 			wheelRadius,
@@ -61,8 +61,8 @@ void runDifferentialDriveDemo() {
 		);
 
 		std::cout << "wl: " << testCommand.leftWheelSpeed
-			<< "rad/s, wr: << testCommand.rightWheelSpeed"
-			<< "rad/s, -> v: " << result.v
+			<< "rad/s, wr: " << testCommand.rightWheelSpeed
+			<< "rad/s -> v: " << result.v
 			<< "m/s, omega: " << result.omega
 			<< "rad/s\n";
 	}
@@ -90,10 +90,11 @@ void runDifferentialDriveDemo() {
 
 	std::string filename = "trajectory.csv";
 	if (!writeTrajectoryToCsv(filename, robot.getTrajectory(), dt)) {
-		std::cout << "Error: trajectory.csv was not written";
+		std::cout << "Error: trajectory.csv was not written\n";
 		return;
 	}
 		std::cout << "Data logged successfully to trajectory.csv\n";
+
 		robot.reset(initialPose);
 		std::cout << "\nAfter reset pose:\n";
 		printPose(robot.getPose());
