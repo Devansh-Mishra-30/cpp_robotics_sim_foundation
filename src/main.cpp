@@ -9,6 +9,7 @@
 #include "robot_command.h"
 #include "robot_utils.h"
 #include "differential_drive_robot.h"
+#include "trajectory_metrics.h"
 
 void runDifferentialDriveDemo() {
 	const double dt = 0.1;
@@ -76,6 +77,14 @@ void runDifferentialDriveDemo() {
 
 	printSimulationSummary(dt, commands, robot.getTrajectory(), targetPose);
 	
+	const TrajectoryMetrics metrics = computeTrajectoryMetrics(
+		robot.getTrajectory(),
+		targetPose,
+		dt
+	);
+
+	printTrajectoryMetrics(metrics);
+
 	std::cout << "\nSTL analysis:\n";
 	std::cout << "All commands valid: "
 		<< (areAllCommandsValid(commands) ? "true" : "false") << "\n";

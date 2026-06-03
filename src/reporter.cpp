@@ -170,4 +170,14 @@ bool writeTrajectoryToCsv(const std::string& filename,
 	return true;
 }
 
+void printTrajectoryMetrics(const TrajectoryMetrics& metrics) {
+	std::cout << "\nTrajectory Metrics\n";
+	std::cout << "--------------------\n";
+	std::cout << "Total distance traveled: "
+		<< metrics.totalDistance << " m\n";
+	std::cout << "Final position error: "
+		<< metrics.finalPositionError << " m\n";
+	std::cout << "Maximum speed: "
+		<< metrics.maxSpeed << " m/s\n";
+}
 

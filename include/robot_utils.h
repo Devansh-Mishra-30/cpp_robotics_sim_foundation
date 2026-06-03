@@ -4,6 +4,7 @@
 #include "joint_state.h"
 #include "pose2d.h"
 #include "robot_command.h"
+#include "trajectory_metrics.h"
 
 struct SimInput {
 	bool commandbool;
@@ -26,3 +27,8 @@ SimInput validateSimulationInput(double dt, const std::vector<RobotCommand>& com
 double computeTotalDistance(const std::vector<Pose2D>& trajectory);
 double computeFinalPositionError(const std::vector<Pose2D>& trajectory, const Pose2D& targetPose);
 double computeMaxSpeed(const std::vector<Pose2D>& trajectory, double dt);
+TrajectoryMetrics computeTrajectoryMetrics(
+	const std::vector <Pose2D>& trajectory,
+	const Pose2D& targetPose,
+	double dt
+);

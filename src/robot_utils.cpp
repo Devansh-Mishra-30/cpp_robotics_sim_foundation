@@ -114,6 +114,20 @@ double computeMaxSpeed(const std::vector<Pose2D>& trajectory, double dt) {
 	return maxSpeed;
 }
 
+TrajectoryMetrics computeTrajectoryMetrics(
+	const std::vector<Pose2D>& trajectory,
+	const Pose2D& targetPose,
+	double dt
+) {
+	TrajectoryMetrics metrics;
+
+	metrics.totalDistance = computeTotalDistance(trajectory);
+	metrics.finalPositionError = computeFinalPositionError(trajectory, targetPose);
+	metrics.maxSpeed = computeMaxSpeed(trajectory, dt);
+
+	return metrics;
+}
+
 SimInput validateSimulationInput(double dt, const std::vector<RobotCommand>& commands) {
 	SimInput result;
 	result.commandbool = true;

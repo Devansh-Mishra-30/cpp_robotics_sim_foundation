@@ -7,6 +7,7 @@
 #include "pose2d.h"
 #include "robot_command.h"
 #include "robot_utils.h"
+#include "trajectory_metrics.h"
 
 void printSimulationHeader();
 void printSimulationSetup(const double dt, int commandCount);
@@ -26,3 +27,4 @@ void printSimulationSummary(double dt,
 void printJointStates(const std::vector<JointState>& joints);
 bool writeTrajectoryToCsv(const std::string& filename,
 	const std::vector<Pose2D>& trajectory, double dt);
+void printTrajectoryMetrics(const TrajectoryMetrics& metrics);
