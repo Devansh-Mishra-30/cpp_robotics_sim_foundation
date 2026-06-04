@@ -5,26 +5,32 @@
 
 day30_rebuild_assessment/
 
-# CMake build folder
+# Old root generated files
 build/
 out/
 x64/
-
-# Visual Studio files
+.vs/
 *.sln
 *.slnx
 *.vcxproj
 *.vcxproj.filters
 *.vcxproj.user
-
-# CMake generated files
-CMakeFiles/
-CMakeCache.txt
-cmake_install.cmake
-
-# Logs and generated outputs
 *.csv
 *.log
+*.exe
+*.obj
+*.pdb
+*.ilk
+
+# Standalone C++ generated files
+standalone_cpp/build/
+standalone_cpp/out/
+standalone_cpp/x64/
+
+# ROS 2 generated files
+ros2_ws/build/
+ros2_ws/install/
+ros2_ws/log/
 
 # OS files
 .DS_Store
