@@ -13,19 +13,31 @@ class SimNode : public rclcpp::Node {
 public:
     SimNode()
     : Node("sim_node") {
-        pose_publisher_ = create_publisher<geometry_msgs::msg::Pose2D>("robot_pose", 10
+        this->declare_parameter<double>("dt", 0.1);
+        this->declare_parameter<double>("initial_x", 0.0);
+        this->declare_parameter<double>("initial_y", 0.0);
+        this->declare_parameter<double>("initial_theta", 0.0);
+
+        dt_ = this->get_parameter("dt").as_double();
+        pose_.x = this->get_parameter("initial_x").as_double();
+        pose_.y = this->get_parameter("initial_y").as_double();
+        pose_.theta = this->get_parameter("initial_theta").as_double();
+
+        pose_publisher_ = create_publisher<geometry_msgs::msg::Pose2D>("/robot_pose", 10
         );
 
-        cmd_subscriber_ = create_subscription<geometry_msgs::msg::Twist>("cmd_vel", 10, 
+        auto time_period = std::chrono::duration<double>(dt_);
+
+        cmd_subscriber_ = create_subscription<geometry_msgs::msg::Twist>("/cmd_vel", 10, 
             std::bind(&SimNode::cmdVelCallback, 
                 this, std::placeholders::_1));
 
-        timer_ = create_wall_timer(100ms,
+        timer_ = this->create_wall_timer(std::chrono::duration_cast<std::chrono::milliseconds>(time_period),
             std::bind(&SimNode::timerCallback, this)
 
         );
 
-        RCLCPP_INFO(get_logger(), "Day 47 ROS 2 cmd_vel subscriber node started");
+        RCLCPP_INFO(get_logger(), "Day 48 ROS 2 parameterized simulator node started");
     }
 private:
 
