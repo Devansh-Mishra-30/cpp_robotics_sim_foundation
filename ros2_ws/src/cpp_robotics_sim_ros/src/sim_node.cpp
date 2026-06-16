@@ -7,8 +7,7 @@
 #include "geometry_msgs/msg/pose2_d.hpp"
 #include "geometry_msgs/msg/twist.hpp"
 #include "rclcpp/rclcpp.hpp"
-
-using namespace std::chrono_literals;
+#include "nav_msgs/msg/odometry.hpp"
 
 class SimNode : public rclcpp::Node {
 public:
@@ -34,6 +33,8 @@ public:
         pose_publisher_ = create_publisher<geometry_msgs::msg::Pose2D>("/robot_pose", 10
         );
 
+        odom_publisher_ = this->create_publisher<nav_msgs::msg::Odometry>("/odom", 10);
+
         auto time_period = std::chrono::duration<double>(dt_);
 
         cmd_subscriber_ = create_subscription<geometry_msgs::msg::Twist>("/cmd_vel", 10, 
@@ -45,7 +46,7 @@ public:
 
         );
 
-        RCLCPP_INFO(get_logger(), "Day 49 ROS 2 safety enabled simulator node started");
+        RCLCPP_INFO(get_logger(), "Day 50 ROS 2 odometry-enabled simulator node started");
     }
 private:
 
@@ -62,6 +63,11 @@ private:
         if (time_since_cmd > cmd_timeout_) {
             linear_velocity_ = 0.0;
             angular_velocity_ = 0.0;
+
+            RCLCPP_WARN_THROTTLE(get_logger(),
+                *get_clock(),
+                1000,
+                "cmd_vel timeout: stopping robot");
         }
 
         pose_.theta += angular_velocity_ * dt_;
@@ -70,12 +76,44 @@ private:
         pose_.y += linear_velocity_ * std::sin(pose_.theta) * dt_;
 
         pose_publisher_->publish(pose_);
-        RCLCPP_INFO(get_logger(), "Published pose: x=%.2f, y=%.2f, theta=%.2f",
+        publishOdometry();
+        RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 1000, "Pose: x=%.2f, y=%.2f, theta=%.2f | v=%.2f, w=%.2f",
             pose_.x,
             pose_.y,
-            pose_.theta);
+            pose_.theta,
+            linear_velocity_,
+            angular_velocity_);
     }
+
+    void publishOdometry() {
+        nav_msgs::msg::Odometry odom_msg;
+        odom_msg.header.stamp = this->now();
+        odom_msg.header.frame_id = "odom";
+        odom_msg.child_frame_id = "base_link";
+
+        odom_msg.pose.pose.position.x = pose_.x;
+        odom_msg.pose.pose.position.y = pose_.y;
+        odom_msg.pose.pose.position.z = 0.0;
+
+        odom_msg.pose.pose.orientation.x = 0.0;
+        odom_msg.pose.pose.orientation.y = 0.0;
+        odom_msg.pose.pose.orientation.z = std::sin(pose_.theta / 2.0);
+        odom_msg.pose.pose.orientation.w = std::cos(pose_.theta / 2.0);
+
+        odom_msg.twist.twist.linear.x = linear_velocity_;
+        odom_msg.twist.twist.linear.y = 0.0;
+        odom_msg.twist.twist.linear.z = 0.0;
+
+        odom_msg.twist.twist.angular.x = 0.0;
+        odom_msg.twist.twist.angular.y = 0.0;
+        odom_msg.twist.twist.angular.z = angular_velocity_;
+        odom_publisher_->publish(odom_msg);
+    }
+
+
+
     rclcpp::Publisher<geometry_msgs::msg::Pose2D>::SharedPtr pose_publisher_;
+    rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr odom_publisher_;
     rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr cmd_subscriber_;
     rclcpp::TimerBase::SharedPtr timer_;
     geometry_msgs::msg::Pose2D pose_{};
