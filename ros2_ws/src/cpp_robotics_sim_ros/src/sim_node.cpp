@@ -50,7 +50,7 @@ public:
 
         );
 
-        RCLCPP_INFO(get_logger(), "Day 51 ROS 2 odometry + TF simulator node started");
+        RCLCPP_INFO(get_logger(), "Day 52 ROS 2 Testing mindset completed");
     }
 private:
 
