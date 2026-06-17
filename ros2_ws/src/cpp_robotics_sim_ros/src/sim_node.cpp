@@ -8,6 +8,8 @@
 #include "geometry_msgs/msg/twist.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "nav_msgs/msg/odometry.hpp"
+#include "geometry_msgs/msg/transform_stamped.hpp"
+#include "tf2_ros/transform_broadcaster.hpp"
 
 class SimNode : public rclcpp::Node {
 public:
@@ -35,6 +37,8 @@ public:
 
         odom_publisher_ = this->create_publisher<nav_msgs::msg::Odometry>("/odom", 10);
 
+        tf_broadcaster_ = std::make_unique<tf2_ros::TransformBroadcaster>(*this);
+
         auto time_period = std::chrono::duration<double>(dt_);
 
         cmd_subscriber_ = create_subscription<geometry_msgs::msg::Twist>("/cmd_vel", 10, 
@@ -46,7 +50,7 @@ public:
 
         );
 
-        RCLCPP_INFO(get_logger(), "Day 50 ROS 2 odometry-enabled simulator node started");
+        RCLCPP_INFO(get_logger(), "Day 51 ROS 2 odometry + TF simulator node started");
     }
 private:
 
@@ -77,6 +81,7 @@ private:
 
         pose_publisher_->publish(pose_);
         publishOdometry();
+        publishTransform();
         RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 1000, "Pose: x=%.2f, y=%.2f, theta=%.2f | v=%.2f, w=%.2f",
             pose_.x,
             pose_.y,
@@ -110,13 +115,34 @@ private:
         odom_publisher_->publish(odom_msg);
     }
 
+    void publishTransform() {
+        geometry_msgs::msg::TransformStamped transform_msg;
 
+        transform_msg.header.stamp = this->now();
+        transform_msg.header.frame_id = "odom";
+        transform_msg.child_frame_id = "base_link";
+
+        transform_msg.transform.translation.x = pose_.x;
+        transform_msg.transform.translation.y = pose_.y;
+        transform_msg.transform.translation.z = 0.0;
+
+        transform_msg.transform.rotation.x = 0.0;
+        transform_msg.transform.rotation.y = 0.0;
+        transform_msg.transform.rotation.z = std::sin(pose_.theta / 2.0);
+        transform_msg.transform.rotation.w = std::cos(pose_.theta / 2.0);
+
+        tf_broadcaster_->sendTransform(transform_msg);
+
+
+    }
 
     rclcpp::Publisher<geometry_msgs::msg::Pose2D>::SharedPtr pose_publisher_;
     rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr odom_publisher_;
     rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr cmd_subscriber_;
     rclcpp::TimerBase::SharedPtr timer_;
     geometry_msgs::msg::Pose2D pose_{};
+    std::unique_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
+
     double dt_{0.1};
     double linear_velocity_{ 0.0 };
     double angular_velocity_{ 0.0 };
