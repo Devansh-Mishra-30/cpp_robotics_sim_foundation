@@ -1,0 +1,29 @@
+ROS 2 C++ Robot Simulator Architecture
+
+                   geometry_msgs/msg/Twist
+                         /cmd_vel
+                            |
+                            v
+                 +----------------------+
+                 |       sim_node       |
+                 |----------------------|
+                 | cmdVelCallback()     |
+                 | timerCallback()      |
+                 | validateParameters() |
+                 | publishOdometry()    |
+                 | publishTransform()   |
+                 +----------------------+
+                    |          |        |
+                    |          |        |
+                    v          v        v
+          /robot_pose       /odom      /tf
+       Pose2D message   Odometry   odom -> base_link
+                           |
+                           v
+                    position, velocity,
+                    quaternion orientation
+
+Frame Tree:
+
+odom
+  └── base_link
