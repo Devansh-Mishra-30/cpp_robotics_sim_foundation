@@ -64,7 +64,7 @@ public:
 
         );
 
-        RCLCPP_INFO(get_logger(), "Day 54 ROS 2 Debugging Workflow Document added");
+        RCLCPP_INFO(get_logger(), "Day 56 ROS 2 simulator with regression scenarios completed");
     }
 private:
 
@@ -115,6 +115,8 @@ private:
     }
 
     void timerCallback() {
+        auto start_time = std::chrono::steady_clock::now();
+
         double time_since_cmd = (this->now() - last_cmd_time_).seconds();
 
         if (time_since_cmd > cmd_timeout_) {
@@ -135,12 +137,33 @@ private:
         pose_publisher_->publish(pose_);
         publishOdometry();
         publishTransform();
+
         RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 1000, "Pose: x=%.2f, y=%.2f, theta=%.2f | v=%.2f, w=%.2f",
             pose_.x,
             pose_.y,
             pose_.theta,
             linear_velocity_,
             angular_velocity_);
+        
+        auto end_time = std::chrono::steady_clock::now();
+
+        double callback_time_ms =
+            std::chrono::duration<double, std::milli>(end_time - start_time).count();
+
+        total_callback_time_ms_ += callback_time_ms;
+        callback_count_++;
+
+        if (callback_time_ms > max_callback_time_ms_) {
+            max_callback_time_ms_ = callback_time_ms;
+        }
+
+        double average_callback_time_ms = total_callback_time_ms_ / callback_count_;
+
+        RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 2000,
+            "Performance callback avg=%.4f ms, max=%.4f ms, budget=%.2f ms",
+            average_callback_time_ms,
+            max_callback_time_ms_,
+            dt_ * 1000.0);
     }
 
     void publishOdometry() {
@@ -196,6 +219,7 @@ private:
     geometry_msgs::msg::Pose2D pose_{};
     std::unique_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
 
+
     double dt_{0.1};
     double linear_velocity_{ 0.0 };
     double angular_velocity_{ 0.0 };
@@ -203,6 +227,9 @@ private:
     double max_linear_velocity_{ 1.0 };
     double max_angular_velocity_{ 1.0 };
     rclcpp::Time last_cmd_time_;
+    double total_callback_time_ms_{ 0.0 };
+    double max_callback_time_ms_{ 0.0 };
+    int callback_count_{ 0 };
 };
 
 int main(int argc, char** argv) {
