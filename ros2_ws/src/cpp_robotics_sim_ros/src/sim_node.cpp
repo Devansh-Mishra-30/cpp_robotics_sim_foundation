@@ -3,6 +3,7 @@
 #include <functional>
 #include <cmath>
 #include <algorithm>
+#include <stdexcept>
 
 #include "geometry_msgs/msg/pose2_d.hpp"
 #include "geometry_msgs/msg/twist.hpp"
@@ -32,6 +33,19 @@ public:
         max_angular_velocity_ = this->get_parameter("max_angular_velocity").as_double();
         last_cmd_time_ = this->now();
 
+        if (!validateParameters()) {
+            throw std::runtime_error("Invalid simulator parameters");
+        }
+
+        RCLCPP_INFO(
+            get_logger(),
+            "Parameters loaded: dt = %.3f, cmd_timeout=%.3f, max_v=%.3f, max_w=%.3f",
+            dt_,
+            cmd_timeout_,
+            max_linear_velocity_,
+            max_angular_velocity_
+        );
+
         pose_publisher_ = create_publisher<geometry_msgs::msg::Pose2D>("/robot_pose", 10
         );
 
@@ -50,9 +64,48 @@ public:
 
         );
 
-        RCLCPP_INFO(get_logger(), "Day 52 ROS 2 Testing mindset completed");
+        RCLCPP_INFO(get_logger(), "Day 53 ROS 2 Validated parameters");
     }
 private:
+
+    bool validateParameters() {
+        bool valid = true;
+
+        if (dt_ <= 0.0) {
+            RCLCPP_ERROR(
+                get_logger(),
+                "Invalid parameter: dt must be > 0. Current dt=%.3f",
+                dt_
+            );
+            valid = false;
+        }
+
+        if (cmd_timeout_ <= 0.0) {
+            RCLCPP_ERROR(
+                get_logger(),
+                "Invalid parameter: cmd_timeout must be > 0. Current cmd_timeout=%.3f",
+                cmd_timeout_
+            );
+            valid = false;
+        }
+        if (max_linear_velocity_ < 0.0) {
+            RCLCPP_ERROR(
+                get_logger(),
+                "Invalid parameter: max_linear_velocity must be >= 0. Current max_linear_velocity =%.3f",
+                max_linear_velocity_
+            );
+            valid = false;
+        }
+        if (max_angular_velocity_ < 0.0) {
+            RCLCPP_ERROR(
+                get_logger(),
+                "Invalid parameter: max_angular_velocity must be >= 0. Current max_angular_velocity =%.3f",
+                max_angular_velocity_
+                );
+            valid = false;
+        }
+        return valid;
+    }
 
     void cmdVelCallback(const geometry_msgs::msg::Twist::SharedPtr msg) {
         linear_velocity_ = std::clamp(msg->linear.x, -max_linear_velocity_, max_linear_velocity_);
