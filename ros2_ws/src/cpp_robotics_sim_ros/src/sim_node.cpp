@@ -64,7 +64,7 @@ public:
 
         );
 
-        RCLCPP_INFO(get_logger(), "Day 53 ROS 2 Validated parameters");
+        RCLCPP_INFO(get_logger(), "Day 54 ROS 2 Debugging Workflow Document added");
     }
 private:
 
