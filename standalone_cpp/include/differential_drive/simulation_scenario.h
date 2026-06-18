@@ -2,8 +2,8 @@
 
 #include <string>
 
-#include "differential_drive.h"
-#include "pose2d.h"
+#include "differential_drive/differential_drive.h"
+#include "differential_drive/pose2d.h"
 
 struct SimulationScenario {
 	std::string name;

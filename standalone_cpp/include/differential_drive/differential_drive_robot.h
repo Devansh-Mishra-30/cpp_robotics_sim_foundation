@@ -2,8 +2,8 @@
 
 #include<vector>
 
-#include "differential_drive.h"
-#include "pose2d.h"
+#include "differential_drive/differential_drive.h"
+#include "differential_drive/pose2d.h"
 
 class DifferentialDriveRobot {
 public:

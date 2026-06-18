@@ -1,7 +1,7 @@
-#include "mobile_robot.h"
+#include "differential_drive/mobile_robot.h"
 #include <cmath>
 
-#include "robot_utils.h"
+#include "differential_drive/robot_utils.h"
 
 MobileRobot::MobileRobot(const Pose2D& initialPose)
 	: pose_(initialPose) {

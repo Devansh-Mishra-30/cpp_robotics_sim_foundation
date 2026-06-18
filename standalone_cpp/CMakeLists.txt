@@ -7,15 +7,18 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 add_executable(robotics_sim
 	src/main.cpp
-	src/simulator.cpp
-	src/robot_utils.cpp
-	src/reporter.cpp
-	src/differential_drive.cpp
-	src/manipulator_utils.cpp
-	src/mobile_robot.cpp
-	src/differential_drive_robot.cpp
-	src/target_controller.cpp
- )
+
+	src/differential_drive/simulator.cpp
+	src/differential_drive/robot_utils.cpp
+	src/differential_drive/differential_drive_reporter.cpp
+	src/differential_drive/differential_drive.cpp
+	src/differential_drive/mobile_robot.cpp
+	src/differential_drive/differential_drive_robot.cpp
+	src/differential_drive/target_controller.cpp
+
+	src/manipulator/manipulator_reporter.cpp
+	src/manipulator/manipulator_utils.cpp
+)
 
 target_include_directories(robotics_sim
 	PRIVATE

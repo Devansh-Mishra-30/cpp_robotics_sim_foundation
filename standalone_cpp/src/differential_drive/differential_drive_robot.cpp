@@ -1,8 +1,8 @@
-#include "differential_drive_robot.h"
+#include "differential_drive/differential_drive_robot.h"
 
 #include <cmath>
 
-#include "robot_utils.h"
+#include "differential_drive/robot_utils.h"
 
 DifferentialDriveRobot::DifferentialDriveRobot(
 	const Pose2D& initialPose,

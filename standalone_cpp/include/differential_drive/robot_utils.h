@@ -1,12 +1,12 @@
 #pragma once
 
 #include <vector>
-#include "joint_state.h"
-#include "pose2d.h"
-#include "robot_command.h"
-#include "trajectory_metrics.h"
-#include "simulation_scenario.h"
-#include "validation_result.h"
+#include <string>
+#include "differential_drive/pose2d.h"
+#include "differential_drive/robot_command.h"
+#include "differential_drive/trajectory_metrics.h"
+#include "differential_drive/simulation_scenario.h"
+#include "differential_drive/validation_result.h"
 
 struct SimInput {
 	bool commandbool;
@@ -16,8 +16,6 @@ struct SimInput {
 std::vector<SimulationScenario> createDefaultScenarios();
 
 bool areAllCommandsValid(const std::vector<RobotCommand>& commands);
-size_t countMovingJoints(const std::vector<JointState>& joints);
-double computeMaxJointPositionMagnitude(const std::vector<JointState>& joints);
 
 const Pose2D* findClosestPoseToTarget(
 	const std::vector<Pose2D>& trajectory,

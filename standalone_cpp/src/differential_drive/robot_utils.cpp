@@ -1,5 +1,5 @@
-#include "robot_utils.h"
-#include "joint_state.h"
+#include "differential_drive/robot_utils.h"
+
 #include <algorithm>
 #include <cmath>
 #include <vector>
@@ -12,33 +12,6 @@ bool areAllCommandsValid(const std::vector<RobotCommand>& commands) {
 			return isValidCommand(command);
 		}
 	);
-}
-
-size_t countMovingJoints(const std::vector<JointState>& joints) {
-	return static_cast<size_t>(
-		std::count_if(
-			joints.begin(),
-			joints.end(),
-			[](const JointState& joint) {
-				return std::abs(joint.velocity) > 0.0;
-			}
-		)
-		);
-}
-
-double computeMaxJointPositionMagnitude(const std::vector<JointState>& joints) {
-	if (joints.empty()) {
-		return 0.0;
-	}
-
-	const auto maxIt = std::max_element(
-		joints.begin(),
-		joints.end(),
-		[](const JointState& a, const JointState& b) {
-			return std::abs(a.position) < std::abs(b.position);
-		}
-	);
-	return std::abs(maxIt->position);
 }
 
 const Pose2D* findClosestPoseToTarget(

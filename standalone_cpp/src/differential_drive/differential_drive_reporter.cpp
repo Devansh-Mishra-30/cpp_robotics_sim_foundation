@@ -1,4 +1,4 @@
-#include "reporter.h"
+#include "differential_drive/differential_drive_reporter.h"
 
 #include <iostream>
 #include <fstream>
@@ -20,17 +20,6 @@ void printPose(const Pose2D& pose) {
 	std::cout << "x: " << pose.x
 		<< " m; y: " << pose.y
 		<< " m; theta: " << pose.theta << " rad" << std::endl;
-}
-void printJointStates(const std::vector<JointState>& joints) {
-	for (const JointState& joint : joints) {
-		std::cout << joint.name
-			<< " | position: " << joint.position
-			<< " rad; velocity: " << joint.velocity
-			<< " rad/s" << " | limits: ["
-			<< joint.min_position
-			<< ", " << joint.max_position << "] rad"
-			<< std::endl;
-	}
 }
 
 void printInitialPose(const std::vector<Pose2D>& trajectory) {

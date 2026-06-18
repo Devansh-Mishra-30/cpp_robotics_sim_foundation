@@ -1,7 +1,7 @@
 #pragma once
 
-#include "pose2d.h"
-#include "robot_command.h"
+#include "differential_drive/pose2d.h"
+#include "differential_drive/robot_command.h"
 
 struct TargetControllerGains {
 	double linearGain{};
