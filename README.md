@@ -6,6 +6,66 @@ The project started as a C++ robotics simulation foundation and was extended int
 
 ---
 
+## Project Structure
+
+This repository is organized into three main layers:
+
+```txt
+standalone_cpp/  -> Pure C++ robotics simulation modules
+ros2_ws/         -> ROS 2 C++ simulator integration
+docs/            -> Architecture, debugging, regression, and integration documentation
+```
+
+### Standalone C++ Modules
+
+The standalone C++ project is split into two main simulation modules:
+
+```txt
+standalone_cpp/include/differential_drive/
+standalone_cpp/src/differential_drive/
+```
+
+This module contains the differential-drive mobile robot simulation, including wheel-speed conversion, pose updates, trajectory metrics, validation scenarios, and target tracking.
+
+```txt
+standalone_cpp/include/manipulator/
+standalone_cpp/src/manipulator/
+```
+
+This module contains the manipulator joint-state simulation, including joint position updates, joint velocity integration, and joint limit clamping.
+
+`standalone_cpp/src/main.cpp` is the combined demo runner that executes both the differential-drive and manipulator demos.
+
+### ROS 2 Integration
+
+The ROS 2 layer is located at:
+
+```txt
+ros2_ws/src/cpp_robotics_sim_ros/
+```
+
+It exposes the mobile robot simulation through standard ROS 2 interfaces:
+
+```txt
+/cmd_vel
+/robot_pose
+/odom
+/tf
+```
+
+The ROS 2 node subscribes to velocity commands, updates pose, publishes odometry, and broadcasts the `odom -> base_link` transform.
+
+### Integration Documentation
+
+See:
+
+```txt
+docs/project_integration_overview.md
+```
+
+for a complete explanation of how the standalone C++ modules, ROS 2 node, and documentation connect.
+
+
 ## Current Features
 
 * C++ mobile robot simulation core
