@@ -1,0 +1,9 @@
+sim_node:
+  ros__parameters:
+    dt: 0.1
+    initial_x: 0.0
+    initial_y: 0.0
+    initial_theta: 0.0
+    cmd_timeout: 0.5
+    max_linear_velocity: 0.5
+    max_angular_velocity: 0.8
