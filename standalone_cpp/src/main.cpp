@@ -116,13 +116,18 @@ void runManipulatorDemo() {
 	const double duration = 10.0;
 	const int stepCount = static_cast<int>(duration / dt);
 	std::vector<JointState> threeJointArm = {
-		{"shoulder", 0.0, 0.5},
-		{"elbow", 0.0, 0.3},
-		{"wrist", 0.0, 0.2},
+		{"shoulder", 0.0, 0.5, -1.57, 1.57},
+		{"elbow", 0.0, 0.3, -1.20, 1.20},
+		{"wrist", 0.0, 0.2, -2.00, 2.00},
 	};
 
-	std::cout << "\nManipulator Joint-Space Demo\n";
+	std::cout << "\nDay 58 Manipulator Joint-Space Demo\n";
 	std::cout << "--------------------------------\n";
+
+	std::cout << "\nManipulator setup:\n";
+	std::cout << "dt: " << dt << " s\n";
+	std::cout << "duration: " << duration << " s\n";
+	std::cout << "step count: " << stepCount << "\n";
 
 	std::cout << "Initial joint states: \n";
 	printJointStates(threeJointArm);
@@ -130,13 +135,31 @@ void runManipulatorDemo() {
 	for (int step = 0; step < stepCount; ++step) {
 		updateAllJoints(threeJointArm, dt);
 	}
-	std::cout << "Final joint states: \n";
+	std::cout << "Final joint states after integration: \n";
 	printJointStates(threeJointArm);
 
-	std::cout << "\nManipulator setup:\n";
-	std::cout << "dt: " << dt << " s\n";
-	std::cout << "duration: " << duration << " s\n";
-	std::cout << "step count: " << stepCount << "\n";
+	std::cout << "\nExpected behaviour:\n";
+	std::cout << "shoulder tries to reach 5.0 rad but clamp at 1.57 rad\n";
+	std::cout << "elbow tries to reach 3.0 rad but clamp at 1.20 rad\n";
+	std::cout << "wrist tries to reach 2.0 rad and reaches its upper limit\n";
+
+	std::cout << "\nJoint limit clamp test:\n";
+	std::vector<JointState> clampTestArm = {
+		{"test_positive_limit", 1.50, 1.0, -1.57, 1.57},
+		{"test_negative_limit", -1.10, -1.0, -1.20, 1.20},
+	};
+
+	std::cout << "\nBefore clamp test\n";
+	printJointStates(clampTestArm);
+
+	updateAllJoints(clampTestArm, dt);
+
+	std::cout << "\nAfter one update step:\n";
+	printJointStates(clampTestArm);
+
+	std::cout << "\nClamp test expected:\n";
+	std::cout << "test_positive_limit clamps to 1.57 rad\n";
+	std::cout << "test_negative_limit clamps to -1.20 rad\n";
 }
 
 void runScenarioRunnerDemo() {

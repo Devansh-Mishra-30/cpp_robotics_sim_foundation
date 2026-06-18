@@ -6,4 +6,6 @@ struct JointState {
 	std::string name;
 	double position{};
 	double velocity{};
+	double min_position{};
+	double max_position{};
 };
