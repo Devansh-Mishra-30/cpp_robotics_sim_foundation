@@ -173,3 +173,85 @@ max_angular_velocity: 0.8
 ## Interview Explanation
 
 Day 62 moved simulator parameters from the launch file into a YAML configuration file. The launch file now locates the installed package share directory, finds `config/sim_params.yaml`, and passes that file to `sim_node`. This separates code, launch behavior, and runtime configuration. It matters because professional robotics systems use YAML for controller parameters, robot limits, sensor settings, and navigation configuration.
+
+---
+
+# Day 63 — Launch Arguments
+
+## Goal
+
+Add runtime launch arguments for selected simulator parameters.
+
+## Deliverable
+
+The simulator can still be launched with the default YAML configuration:
+
+```bash
+ros2 launch cpp_robotics_sim_ros sim.launch.py
+```
+
+It can also override selected parameters from the terminal:
+
+```bash
+ros2 launch cpp_robotics_sim_ros sim.launch.py dt:=0.05 cmd_timeout:=1.0 max_linear_velocity:=0.2 max_angular_velocity:=0.4
+```
+
+## Parameters Exposed as Launch Arguments
+
+| Launch Argument | Default | Purpose |
+|---|---:|---|
+| dt | 0.1 | Simulation timestep |
+| cmd_timeout | 0.5 | Stops robot if command input becomes stale |
+| max_linear_velocity | 0.5 | Linear velocity safety clamp |
+| max_angular_velocity | 0.8 | Angular velocity safety clamp |
+
+## Launch File Design
+
+The YAML file provides the default configuration:
+
+```python
+parameters=[
+    params_file,
+    {
+        "dt": ParameterValue(LaunchConfiguration("dt"), value_type=float),
+        "cmd_timeout": ParameterValue(LaunchConfiguration("cmd_timeout"), value_type=float),
+        "max_linear_velocity": ParameterValue(LaunchConfiguration("max_linear_velocity"), value_type=float),
+        "max_angular_velocity": ParameterValue(LaunchConfiguration("max_angular_velocity"), value_type=float),
+    },
+]
+```
+
+The dictionary after `params_file` overrides selected YAML parameters at runtime.
+
+## Verification Commands
+
+```bash
+cd "/mnt/c/Self study/PRACTICE C++/Cdev/01_joint_basics/ros2_ws"
+rm -rf build install log
+source /opt/ros/jazzy/setup.bash
+colcon build --cmake-args -DBUILD_TESTING=OFF
+source install/setup.bash
+ros2 launch cpp_robotics_sim_ros sim.launch.py dt:=0.05 cmd_timeout:=1.0 max_linear_velocity:=0.2 max_angular_velocity:=0.4
+```
+
+In another terminal:
+
+```bash
+ros2 param get /sim_node dt
+ros2 param get /sim_node cmd_timeout
+ros2 param get /sim_node max_linear_velocity
+ros2 param get /sim_node max_angular_velocity
+```
+
+Expected:
+
+```txt
+Double value is: 0.05
+Double value is: 1.0
+Double value is: 0.2
+Double value is: 0.4
+```
+
+## Interview Explanation
+
+Day 63 added launch arguments on top of the YAML configuration. YAML stores stable defaults, while launch arguments allow runtime overrides without editing files. This is useful in robotics simulation because engineers often need to test different timesteps, timeout values, and velocity limits quickly while keeping the base configuration version-controlled.
