@@ -3,17 +3,18 @@
 <package format="3">
   <name>cpp_robotics_sim_ros</name>
   <version>0.0.0</version>
-  <description>TODO: Package description</description>
+  <description>ROS 2 C++ differential-drive robot simulation package with pose, odometry, TF, parameters, safety checks, and launch support</description>
   <maintainer email="devansh30mishra@gmail.com">devansh</maintainer>
-  <license>TODO: License declaration</license>
+  <license>MIT</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
 
   <depend>rclcpp</depend>
   <depend>std_msgs</depend>
   <depend>geometry_msgs</depend>
-	<depend>nav_msgs</depend>
-	<depend>tf2_ros</depend>
+  <depend>nav_msgs</depend>
+  <depend>tf2_ros</depend>
+  <exec_depend>ros2launch</exec_depend>
 
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>
