@@ -55,6 +55,8 @@ It exposes the mobile robot simulation through standard ROS 2 interfaces:
 
 The ROS 2 node subscribes to velocity commands, updates pose, publishes odometry, and broadcasts the `odom -> base_link` transform.
 
+---
+
 ### Documentation
 
 See:
@@ -62,13 +64,10 @@ See:
 ```txt
 docs/daily_documentation.md
 docs/system_architecture.md
-docs/system_architecture.md
-docs/debugging_and_validation.md
 docs/debugging_and_validation.md
 ```
 
-for progress tracking, system design, debugging workflow, and validation notes.
-
+The daily engineering log tracks the roadmap from C++ fundamentals through ROS 2 launch, YAML parameters, launch arguments, QoS profiles, rosbag2 recording/replay, and RViz2 visualization.
 ---
 
 ## Current Features
@@ -88,6 +87,8 @@ for progress tracking, system design, debugging workflow, and validation notes.
 * YAML runtime configuration using `config/sim_params.yaml`
 * Launch argument overrides for initial pose, timestep, timeout, and velocity limits
 * Explicit ROS 2 QoS profiles for `/cmd_vel`, `/robot_pose`, and `/odom`
+* rosbag2 recording and replay workflow for `/cmd_vel`, `/robot_pose`, `/odom`, and `/tf`
+* RViz2 visualization workflow with saved `sim_debug.rviz` config
 * Runtime parameters for timestep, initial pose, timeout, and velocity limits
 * Velocity clamping using `std::clamp`
 * Command timeout safety
@@ -304,6 +305,103 @@ The code explicitly configures `KeepLast(10)`. Some ROS 2 CLI outputs may show h
 
 ---
 
+## rosbag2 Recording and Replay
+
+The simulator includes a rosbag2 workflow for recording and replaying command, pose, odometry, and TF data.
+
+Record simulator topics:
+
+```bash
+ros2 bag record -o bags/day65_baseline /cmd_vel /robot_pose /odom /tf
+```
+
+Inspect the bag:
+
+```bash
+ros2 bag info bags/day65_baseline
+```
+
+Replay the bag:
+
+```bash
+ros2 bag play bags/day65_baseline
+```
+
+Expected recorded topics:
+
+```txt
+/cmd_vel
+/robot_pose
+/odom
+/tf
+```
+
+Actual bag data is stored locally under `bags/` and ignored by Git. Only `bags/README.md` is tracked.
+
+---
+
+## RViz2 Visualization
+
+The simulator includes a saved RViz2 debugging configuration:
+
+```txt
+ros2_ws/src/cpp_robotics_sim_ros/rviz/sim_debug.rviz
+```
+
+Launch the simulator:
+
+```bash
+cd ros2_ws
+
+source /opt/ros/jazzy/setup.bash
+source install/setup.bash
+
+ros2 launch cpp_robotics_sim_ros sim.launch.py
+```
+
+Open RViz using the source config:
+
+```bash
+rviz2 -d src/cpp_robotics_sim_ros/rviz/sim_debug.rviz
+```
+
+Open RViz using the installed package config:
+
+```bash
+rviz2 -d "$(ros2 pkg prefix cpp_robotics_sim_ros)/share/cpp_robotics_sim_ros/rviz/sim_debug.rviz"
+```
+
+The RViz config displays:
+
+```txt
+Grid
+TF
+Odometry on /odom
+```
+
+Expected frame tree:
+
+```txt
+odom
+  └── base_link
+```
+
+Motion test:
+
+```bash
+ros2 topic pub -r 10 /cmd_vel geometry_msgs/msg/Twist "{linear: {x: 0.3}, angular: {z: 0.2}}"
+```
+
+Expected behavior:
+
+```txt
+base_link moves relative to odom
+TF display updates
+Odometry display updates from /odom
+```
+
+---
+
 ## Performance Timing
 
 The simulator prints callback timing:
@@ -387,6 +485,47 @@ ros2 topic info /tf --verbose
 
 ---
 
+### rosbag2 Checks
+
+```bash
+ros2 bag record -o bags/day65_baseline /cmd_vel /robot_pose /odom /tf
+ros2 bag info bags/day65_baseline
+ros2 bag play bags/day65_baseline
+```
+
+Expected recorded topics:
+
+```txt
+/cmd_vel
+/robot_pose
+/odom
+/tf
+```
+
+### RViz2 Checks
+
+Open RViz from source config:
+
+```bash
+rviz2 -d src/cpp_robotics_sim_ros/rviz/sim_debug.rviz
+```
+
+Open RViz from installed config:
+
+```bash
+rviz2 -d "$(ros2 pkg prefix cpp_robotics_sim_ros)/share/cpp_robotics_sim_ros/rviz/sim_debug.rviz"
+```
+
+Expected RViz setup:
+
+```txt
+Fixed Frame: odom
+Displays: Grid, TF, Odometry
+Odometry Topic: /odom
+```
+
+---
+
 ## Documentation
 
 Additional documentation:
@@ -394,11 +533,8 @@ Additional documentation:
 * `docs/daily_documentation.md`
 * `docs/system_architecture.md`
 * `docs/debugging_and_validation.md`
-* `docs/debugging_and_validation.md`
-* `docs/system_architecture.md`
 
-The daily engineering log tracks the roadmap from C++ fundamentals through ROS 2 launch, YAML parameters, launch arguments, and QoS profiles.
-
+The daily engineering log tracks the roadmap from C++ fundamentals through ROS 2 launch, YAML parameters, launch arguments, QoS profiles, rosbag2 recording/replay, and RViz2 visualization.
 ---
 
 ## Engineering Focus
@@ -417,6 +553,8 @@ This project demonstrates:
 * YAML runtime configuration
 * launch argument overrides
 * QoS profile design
+* rosbag2 recording and replay
+* RViz2 visual debugging
 * parameterized runtime behavior
 * safety guards
 * debugging discipline
@@ -436,13 +574,13 @@ This project demonstrates:
 | YAML configuration        | Added               |
 | Launch argument overrides | Added               |
 | QoS profiles              | Added               |
-| rosbag2 workflow          | Next                |
-| RViz visualization        | Planned             |
+| rosbag2 workflow          | Added               |
+| RViz visualization        | Added               |
 | URDF/Xacro robot model    | Planned             |
 | Gazebo integration        | Planned             |
 
 Next planned milestone:
 
 ```txt
-Day 65 — rosbag2 recording and replay
+Day 67 — Diagnostics
 ```

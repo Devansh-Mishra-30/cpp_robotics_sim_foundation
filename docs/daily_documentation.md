@@ -23,6 +23,7 @@ This project contains:
 * launch argument overrides
 * explicit QoS profiles
 * rosbag2 recording and replay workflow
+* RViz2 visualization workflow
 * regression testing
 * debugging workflow
 * performance timing
@@ -735,6 +736,100 @@ Day 65 added rosbag2 recording and replay to the simulator workflow. I recorded 
 
 ---
 
+# Day 66 — RViz2 Visualization
+
+## Goal
+
+Visualize the ROS 2 simulator state using RViz2.
+
+## Deliverable
+
+Created a saved RViz2 configuration:
+
+```txt
+ros2_ws/src/cpp_robotics_sim_ros/rviz/sim_debug.rviz
+```
+
+The RViz2 configuration visualizes:
+
+| Display  | Purpose                                          |
+| -------- | ------------------------------------------------ |
+| Grid     | Ground/reference plane                           |
+| TF       | Shows the `odom -> base_link` frame relationship |
+| Odometry | Visualizes robot motion from `/odom`             |
+
+## RViz Fixed Frame
+
+```txt
+odom
+```
+
+## RViz Displays
+
+```txt
+Grid
+TF
+Odometry
+```
+
+Odometry topic:
+
+```txt
+/odom
+```
+
+## Run Simulator
+
+```bash
+cd "/mnt/c/Self study/PRACTICE C++/Cdev/01_joint_basics/ros2_ws"
+
+source /opt/ros/jazzy/setup.bash
+source install/setup.bash
+
+ros2 launch cpp_robotics_sim_ros sim.launch.py
+```
+
+## Open RViz from Source Config
+
+```bash
+cd "/mnt/c/Self study/PRACTICE C++/Cdev/01_joint_basics/ros2_ws"
+
+source /opt/ros/jazzy/setup.bash
+source install/setup.bash
+
+rviz2 -d src/cpp_robotics_sim_ros/rviz/sim_debug.rviz
+```
+
+## Open RViz from Installed Config
+
+```bash
+rviz2 -d "$(ros2 pkg prefix cpp_robotics_sim_ros)/share/cpp_robotics_sim_ros/rviz/sim_debug.rviz"
+```
+
+## Motion Test
+
+```bash
+ros2 topic pub -r 10 /cmd_vel geometry_msgs/msg/Twist "{linear: {x: 0.3}, angular: {z: 0.2}}"
+```
+
+Expected RViz behavior:
+
+```txt
+base_link moves relative to odom
+TF axes update
+/odom visualization updates
+```
+
+## Why This Matters
+
+RViz2 provides visual debugging for robot state, odometry, and TF. Instead of only checking terminal output, the simulator can now be visually inspected to confirm that the robot frame, odometry message, and transform tree behave correctly during motion.
+
+## Interview Explanation
+
+Day 66 added RViz2 visualization to the simulator workflow. I created a saved RViz2 config that uses `odom` as the fixed frame and displays Grid, TF, and Odometry. This lets me visually inspect the `odom -> base_link` transform and verify that `/odom` updates correctly when `/cmd_vel` commands move the robot.
+
+---
+
 # Current Verification Workflow
 
 Use this after meaningful source, launch, config, or documentation changes.
@@ -799,6 +894,41 @@ ros2 bag record -o bags/day65_baseline /cmd_vel /robot_pose /odom /tf
 ros2 bag info bags/day65_baseline
 ros2 bag play bags/day65_baseline
 ```
+
+## RViz2 Checks
+
+```bash
+rviz2 -d src/cpp_robotics_sim_ros/rviz/sim_debug.rviz
+```
+
+Installed config check:
+
+```bash
+rviz2 -d "$(ros2 pkg prefix cpp_robotics_sim_ros)/share/cpp_robotics_sim_ros/rviz/sim_debug.rviz"
+```
+
+Expected RViz setup:
+
+```txt
+Fixed Frame: odom
+Displays: Grid, TF, Odometry
+Odometry Topic: /odom
+```
+
+Motion test:
+
+```bash
+ros2 topic pub -r 10 /cmd_vel geometry_msgs/msg/Twist "{linear: {x: 0.3}, angular: {z: 0.2}}"
+```
+
+Expected behavior:
+
+```txt
+base_link moves relative to odom
+TF display updates
+Odometry display updates
+```
+
 
 Expected recorded topics:
 
@@ -867,6 +997,7 @@ ros2_ws/log/
 |   63 | Complete              | Launch argument overrides                   |
 |   64 | Complete              | Explicit QoS profiles                       |
 |   65 | Complete              | rosbag2 recording and replay workflow       |
+|   66 | Complete              | RViz2 visualization config                  |
 
 Next planned day:
 

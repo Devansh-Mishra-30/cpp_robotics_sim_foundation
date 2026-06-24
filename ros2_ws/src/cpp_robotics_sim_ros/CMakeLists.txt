@@ -29,6 +29,7 @@ DESTINATION lib/${PROJECT_NAME})
 install(DIRECTORY
 launch
 config
+rviz
 DESTINATION share/${PROJECT_NAME})
 
 if(BUILD_TESTING)

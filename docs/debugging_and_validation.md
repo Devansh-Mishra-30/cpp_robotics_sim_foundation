@@ -480,7 +480,81 @@ Commit only bags/README.md.
 
 ---
 
-## 12. Regression Test Checklist
+---
+
+## 12. RViz2 Validation Workflow
+
+RViz2 is used to visually validate odometry and TF behavior.
+
+## Launch Simulator
+
+```bash
+cd "/mnt/c/Self study/PRACTICE C++/Cdev/01_joint_basics/ros2_ws"
+
+source /opt/ros/jazzy/setup.bash
+source install/setup.bash
+
+ros2 launch cpp_robotics_sim_ros sim.launch.py
+```
+
+## Open RViz from Source Config
+
+```bash
+cd "/mnt/c/Self study/PRACTICE C++/Cdev/01_joint_basics/ros2_ws"
+
+source /opt/ros/jazzy/setup.bash
+source install/setup.bash
+
+rviz2 -d src/cpp_robotics_sim_ros/rviz/sim_debug.rviz
+```
+
+## Open RViz from Installed Config
+
+```bash
+rviz2 -d "$(ros2 pkg prefix cpp_robotics_sim_ros)/share/cpp_robotics_sim_ros/rviz/sim_debug.rviz"
+```
+
+## Expected RViz Settings
+
+```txt
+Fixed Frame: odom
+Displays: Grid, TF, Odometry
+Odometry Topic: /odom
+```
+
+## Motion Test
+
+```bash
+ros2 topic pub -r 10 /cmd_vel geometry_msgs/msg/Twist "{linear: {x: 0.3}, angular: {z: 0.2}}"
+```
+
+## Pass Criteria
+
+```txt
+RViz opens without errors
+Fixed Frame is odom
+TF display shows odom and base_link
+Odometry display uses /odom
+base_link moves when /cmd_vel is published
+Odometry visualization updates during motion
+robot stops after command timeout
+saved RViz config reloads from source path
+saved RViz config reloads from installed package path
+```
+
+## Common RViz Failures
+
+| Failure                            | Likely Cause                                   | First Check                                                           |
+| ---------------------------------- | ---------------------------------------------- | --------------------------------------------------------------------- |
+| Fixed frame error                  | wrong fixed frame                              | set Fixed Frame to `odom`                                             |
+| No TF frames                       | simulator not running or TF not publishing     | `ros2 run tf2_ros tf2_echo odom base_link`                            |
+| No odometry display                | wrong topic selected                           | set Odometry topic to `/odom`                                         |
+| `/odom` not in dropdown            | simulator not running or workspace not sourced | `ros2 topic list`                                                     |
+| saved config missing after rebuild | `rviz/` folder not installed                   | check `install(DIRECTORY launch config rviz ...)` in `CMakeLists.txt` |
+| RViz opens but robot does not move | no active `/cmd_vel` command                   | publish `/cmd_vel` at a continuous rate                               |
+
+
+## 13. Regression Test Checklist
 
 Run this checklist after meaningful simulator changes.
 
@@ -505,7 +579,7 @@ Run this checklist after meaningful simulator changes.
 
 ---
 
-## 13. Common Failure Modes
+## 14. Common Failure Modes
 
 | Failure                    | Likely Cause                                | First Check                              |
 | -------------------------- | ------------------------------------------- | ---------------------------------------- |
@@ -524,7 +598,7 @@ Run this checklist after meaningful simulator changes.
 
 ---
 
-## 14. Standalone C++ Validation
+## 15. Standalone C++ Validation
 
 Build standalone simulator on Linux / WSL:
 
@@ -564,7 +638,7 @@ Delete build/ before switching environments.
 
 ---
 
-## 15. Git Validation
+## 16. Git Validation
 
 Before every commit:
 
@@ -607,7 +681,7 @@ Expected:
 
 ---
 
-## 16. Commit Gate
+## 17. Commit Gate
 
 A commit is allowed only if:
 
