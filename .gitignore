@@ -5,6 +5,22 @@
 
 day30_rebuild_assessment/
 
+# ROS 2 / colcon generated files
+build/
+install/
+log/
+ros2_ws/build/
+ros2_ws/install/
+ros2_ws/log/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Editor/system files
+.vscode/
+.DS_Store
+
 # Old root generated files
 build/
 out/

@@ -1,49 +1,145 @@
-# 01_joint_basics
-# C++ Robotics Simulation Foundation
+# Standalone C++ Robotics Simulator
 
-This project is a modular C++ robotics simulation foundation built as part of my robotics software development roadmap.
+This folder contains the pure C++ simulation layer of the project. It does not depend on ROS 2.
 
-The goal of this project is to build clean C++ fundamentals for robotics simulation, including robot state representation, command handling, fixed timestep simulation, trajectory storage, utility math, and basic simulation architecture.
+The standalone simulator demonstrates:
 
-## Current Status
+* C++ project structure
+* differential-drive mobile robot kinematics
+* manipulator joint-state updates
+* fixed-timestep simulation loops
+* trajectory logging and metrics
+* scenario validation
+* target-tracking demo
+* clean header/source separation
 
-This repository currently represents the foundation stage of the simulator.
+---
+
+## Folder Structure
+
+```txt
+standalone_cpp/
+├── include/
+│   ├── differential_drive/
+│   └── manipulator/
+├── src/
+│   ├── differential_drive/
+│   ├── manipulator/
+│   └── main.cpp
+├── CMakeLists.txt
+├── build.ps1
+└── README.md
+```
+
+---
+
+## Modules
+
+### Differential-Drive Module
+
+Location:
+
+```txt
+include/differential_drive/
+src/differential_drive/
+```
+
+This module models a differential-drive mobile robot.
+
+Main behavior:
+
+```txt
+wheel speeds -> linear/angular velocity -> pose update -> trajectory -> metrics
+```
 
 It includes:
 
-- `Pose2D` state representation
-- Robot command structure
-- Fixed timestep simulation loop
-- Heading-aware 2D motion update
-- Utility functions
-- Basic reporting structure
-- Header and source file separation
-- Clean project organization for future expansion
+* wheel-speed conversion
+* pose integration
+* trajectory storage
+* validation scenarios
+* target tracking
+* trajectory metrics
 
-## Why This Project Exists
+---
 
-I am building this project to strengthen my C++ robotics programming foundation from the perspective of modeling, simulation, control, and ROS 2 integration.
+### Manipulator Module
 
-The long-term goal is to evolve this foundation into a complete robotics simulation project with:
+Location:
 
-- Differential-drive robot simulation
-- Trajectory analysis
-- Scenario testing
-- CSV logging
-- Validation checks
-- Controller logic
-- ROS 2 integration
-- TF frame publishing
-- rosbag2 recording
-- Portfolio-ready documentation
+```txt
+include/manipulator/
+src/manipulator/
+```
 
-## Mathematical Model
+This module models basic joint-space motion for a manipulator.
 
-The current simulator is based on planar robot motion.
+Main behavior:
 
-The robot pose is represented as:
+```txt
+q_next = q_current + q_dot * dt
+q_next = clamp(q_next, min_position, max_position)
+```
 
-```text
-x      = robot position in the world x-direction
-y      = robot position in the world y-direction
-theta  = robot heading angle
+It includes:
+
+* joint state representation
+* joint velocity integration
+* joint limit clamping
+* invalid limit checks
+
+---
+
+## Build on Linux / WSL
+
+From this folder:
+
+```bash
+rm -rf build
+mkdir build
+cd build
+cmake ..
+cmake --build .
+./robotics_sim
+```
+
+---
+
+## Build on Windows PowerShell
+
+From this folder:
+
+```powershell
+.\build.ps1
+```
+
+The PowerShell build script configures the project with Visual Studio 2022, builds the Debug executable, and runs:
+
+```txt
+build/Debug/robotics_sim.exe
+```
+
+---
+
+## What This Layer Proves
+
+The standalone C++ layer proves the core simulation logic before ROS 2 integration.
+
+It shows that the project can:
+
+* represent robot state cleanly
+* update mobile robot pose using kinematics
+* update manipulator joint state safely
+* validate deterministic scenarios
+* compute trajectory metrics
+* keep simulation logic modular and testable
+
+---
+
+## Relationship to ROS 2 Layer
+
+The ROS 2 simulator in `../ros2_ws/` builds on the same simulation concepts, but exposes them through ROS 2 topics, parameters, launch files, odometry, TF, YAML configuration, and QoS profiles.
+
+The standalone layer focuses on the C++ simulation foundation.
+
+The ROS 2 layer focuses on robotics middleware integration.

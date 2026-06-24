@@ -46,18 +46,28 @@ public:
             max_angular_velocity_
         );
 
-        pose_publisher_ = create_publisher<geometry_msgs::msg::Pose2D>("/robot_pose", 10
+        const auto command_qos = rclcpp::QoS(rclcpp::KeepLast(10))
+            .reliable()
+            .durability_volatile();
+
+        const auto state_qos = rclcpp::QoS(rclcpp::KeepLast(10))
+            .reliable()
+            .durability_volatile();
+
+        pose_publisher_ = create_publisher<geometry_msgs::msg::Pose2D>("/robot_pose", state_qos
         );
 
-        odom_publisher_ = this->create_publisher<nav_msgs::msg::Odometry>("/odom", 10);
+        odom_publisher_ = this->create_publisher<nav_msgs::msg::Odometry>("/odom", command_qos);
 
         tf_broadcaster_ = std::make_unique<tf2_ros::TransformBroadcaster>(*this);
 
         auto time_period = std::chrono::duration<double>(dt_);
 
-        cmd_subscriber_ = create_subscription<geometry_msgs::msg::Twist>("/cmd_vel", 10, 
+        cmd_subscriber_ = create_subscription<geometry_msgs::msg::Twist>("/cmd_vel", command_qos, 
             std::bind(&SimNode::cmdVelCallback, 
                 this, std::placeholders::_1));
+
+        RCLCPP_INFO(get_logger(), "QoS configured: /cmd_vel reliable volatile depth=10, /robot_pose reliable volatile depth=10, /odom reliable volatile depth=10");
 
         timer_ = this->create_wall_timer(std::chrono::duration_cast<std::chrono::milliseconds>(time_period),
             std::bind(&SimNode::timerCallback, this)

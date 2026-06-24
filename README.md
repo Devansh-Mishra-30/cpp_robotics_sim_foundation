@@ -1,8 +1,8 @@
 # C++ / ROS 2 Robotics Simulation Foundation
 
-This repository contains a C++ and ROS 2 robotics simulation project focused on mobile robot state updates, ROS 2 messaging, odometry, TF frames, runtime safety, performance timing, debugging, and regression testing.
+This repository contains a C++ and ROS 2 robotics simulation project focused on mobile robot state updates, differential-drive kinematics, ROS 2 messaging, odometry, TF frames, runtime configuration, launch workflows, QoS profiles, safety validation, performance timing, debugging, and regression testing.
 
-The project started as a C++ robotics simulation foundation and was extended into a ROS 2 C++ simulator.
+The project started as a standalone C++ robotics simulation foundation and was extended into a ROS 2 C++ simulator.
 
 ---
 
@@ -13,7 +13,7 @@ This repository is organized into three main layers:
 ```txt
 standalone_cpp/  -> Pure C++ robotics simulation modules
 ros2_ws/         -> ROS 2 C++ simulator integration
-docs/            -> Architecture, debugging, regression, and integration documentation
+docs/            -> Architecture, debugging, regression, integration, and daily documentation
 ```
 
 ### Standalone C++ Modules
@@ -55,32 +55,46 @@ It exposes the mobile robot simulation through standard ROS 2 interfaces:
 
 The ROS 2 node subscribes to velocity commands, updates pose, publishes odometry, and broadcasts the `odom -> base_link` transform.
 
-### Integration Documentation
+### Documentation
 
 See:
 
 ```txt
-docs/project_integration_overview.md
+docs/daily_documentation.md
+docs/system_architecture.md
+docs/system_architecture.md
+docs/debugging_and_validation.md
+docs/debugging_and_validation.md
 ```
 
-for a complete explanation of how the standalone C++ modules, ROS 2 node, and documentation connect.
+for progress tracking, system design, debugging workflow, and validation notes.
 
+---
 
 ## Current Features
 
 * C++ mobile robot simulation core
+* C++ manipulator joint-state mini-simulation
+* Differential-drive wheel-speed to body-velocity conversion
+* Pose integration using `x`, `y`, and `theta`
+* Trajectory logging and metrics
+* Validation scenarios and regression checklist
 * ROS 2 `rclcpp` node
 * `/cmd_vel` subscriber using `geometry_msgs/msg/Twist`
 * `/robot_pose` publisher using `geometry_msgs/msg/Pose2D`
 * `/odom` publisher using `nav_msgs/msg/Odometry`
 * `/tf` broadcaster for `odom -> base_link`
+* ROS 2 launch workflow using `sim.launch.py`
+* YAML runtime configuration using `config/sim_params.yaml`
+* Launch argument overrides for initial pose, timestep, timeout, and velocity limits
+* Explicit ROS 2 QoS profiles for `/cmd_vel`, `/robot_pose`, and `/odom`
 * Runtime parameters for timestep, initial pose, timeout, and velocity limits
 * Velocity clamping using `std::clamp`
 * Command timeout safety
 * Parameter validation guards
 * Performance timing using `std::chrono::steady_clock`
 * Debug workflow documentation
-* Regression test checklist
+* Daily engineering documentation
 
 ---
 
@@ -108,6 +122,8 @@ The simulator publishes the pose of `base_link` relative to `odom`.
 
 ## Build
 
+From the ROS 2 workspace:
+
 ```bash
 cd ros2_ws
 rm -rf build install log
@@ -120,14 +136,70 @@ source install/setup.bash
 
 ## Run
 
+Launch the simulator with the default YAML configuration:
+
 ```bash
-ros2 run cpp_robotics_sim_ros sim_node
+ros2 launch cpp_robotics_sim_ros sim.launch.py
 ```
 
-Run with parameters:
+The launch file loads parameters from:
+
+```txt
+ros2_ws/src/cpp_robotics_sim_ros/config/sim_params.yaml
+```
+
+Run with launch argument overrides:
 
 ```bash
-ros2 run cpp_robotics_sim_ros sim_node --ros-args -p dt:=0.1 -p cmd_timeout:=0.5 -p max_linear_velocity:=0.5 -p max_angular_velocity:=0.8
+ros2 launch cpp_robotics_sim_ros sim.launch.py initial_x:=2.0 initial_y:=1.0 initial_theta:=0.5 dt:=0.05 cmd_timeout:=1.0 max_linear_velocity:=0.2 max_angular_velocity:=0.4
+```
+
+For exposed parameters, the precedence is:
+
+```txt
+terminal override > DeclareLaunchArgument default > YAML > C++ hardcoded default
+```
+
+---
+
+## Runtime Configuration
+
+Default simulator parameters are stored in:
+
+```txt
+ros2_ws/src/cpp_robotics_sim_ros/config/sim_params.yaml
+```
+
+Current parameters:
+
+```yaml
+sim_node:
+  ros__parameters:
+    dt: 0.1
+    initial_x: 0.0
+    initial_y: 0.0
+    initial_theta: 0.0
+    cmd_timeout: 0.5
+    max_linear_velocity: 0.5
+    max_angular_velocity: 0.8
+```
+
+Check loaded parameters:
+
+```bash
+ros2 param get /sim_node dt
+ros2 param get /sim_node initial_x
+ros2 param get /sim_node initial_y
+ros2 param get /sim_node initial_theta
+ros2 param get /sim_node cmd_timeout
+ros2 param get /sim_node max_linear_velocity
+ros2 param get /sim_node max_angular_velocity
+```
+
+Check the installed YAML file that ROS 2 is actually using:
+
+```bash
+cat "$(ros2 pkg prefix cpp_robotics_sim_ros)/share/cpp_robotics_sim_ros/config/sim_params.yaml"
 ```
 
 ---
@@ -160,6 +232,22 @@ linear.x=0.50, angular.z=0.80
 
 ---
 
+## Check Pose
+
+```bash
+ros2 topic echo --once /robot_pose
+```
+
+Expected fields:
+
+```txt
+x: ...
+y: ...
+theta: ...
+```
+
+---
+
 ## Check Odometry
 
 ```bash
@@ -182,6 +270,37 @@ Expected:
 Translation: [x, y, 0.000]
 Rotation: Quaternion [0.000, 0.000, z, w]
 ```
+
+---
+
+## Check QoS
+
+The simulator uses explicit QoS profiles for command and state topics.
+
+| Topic         | Endpoint   | QoS                                        |
+| ------------- | ---------- | ------------------------------------------ |
+| `/cmd_vel`    | Subscriber | reliable, volatile, keep_last(10)          |
+| `/robot_pose` | Publisher  | reliable, volatile, keep_last(10)          |
+| `/odom`       | Publisher  | reliable, volatile, keep_last(10)          |
+| `/tf`         | Publisher  | handled by `tf2_ros::TransformBroadcaster` |
+
+Inspect QoS:
+
+```bash
+ros2 topic info /cmd_vel --verbose
+ros2 topic info /robot_pose --verbose
+ros2 topic info /odom --verbose
+ros2 topic info /tf --verbose
+```
+
+Expected for `/cmd_vel`, `/robot_pose`, and `/odom`:
+
+```txt
+Reliability: RELIABLE
+Durability: VOLATILE
+```
+
+The code explicitly configures `KeepLast(10)`. Some ROS 2 CLI outputs may show history/depth as `UNKNOWN` depending on middleware introspection.
 
 ---
 
@@ -209,13 +328,76 @@ dt = 0.001 -> 1 ms budget
 
 ---
 
+## Verification Workflow
+
+Use this sequence after meaningful source, launch, config, or documentation changes.
+
+### Build
+
+```bash
+cd ros2_ws
+rm -rf build install log
+source /opt/ros/jazzy/setup.bash
+colcon build --cmake-args -DBUILD_TESTING=OFF
+source install/setup.bash
+```
+
+### Launch
+
+```bash
+ros2 launch cpp_robotics_sim_ros sim.launch.py
+```
+
+### Topic Checks
+
+```bash
+ros2 topic list
+ros2 topic echo --once /robot_pose
+ros2 topic echo --once /odom
+ros2 run tf2_ros tf2_echo odom base_link
+```
+
+### Command Test
+
+```bash
+ros2 topic pub --once /cmd_vel geometry_msgs/msg/Twist "{linear: {x: 0.3}, angular: {z: 0.2}}"
+ros2 topic echo --once /robot_pose
+```
+
+### Parameter Checks
+
+```bash
+ros2 param get /sim_node dt
+ros2 param get /sim_node initial_x
+ros2 param get /sim_node initial_y
+ros2 param get /sim_node initial_theta
+ros2 param get /sim_node cmd_timeout
+ros2 param get /sim_node max_linear_velocity
+ros2 param get /sim_node max_angular_velocity
+```
+
+### QoS Checks
+
+```bash
+ros2 topic info /cmd_vel --verbose
+ros2 topic info /robot_pose --verbose
+ros2 topic info /odom --verbose
+ros2 topic info /tf --verbose
+```
+
+---
+
 ## Documentation
 
 Additional documentation:
 
+* `docs/daily_documentation.md`
 * `docs/system_architecture.md`
-* `docs/debug_workflow.md`
-* `docs/regression_tests.md`
+* `docs/debugging_and_validation.md`
+* `docs/debugging_and_validation.md`
+* `docs/system_architecture.md`
+
+The daily engineering log tracks the roadmap from C++ fundamentals through ROS 2 launch, YAML parameters, launch arguments, and QoS profiles.
 
 ---
 
@@ -224,12 +406,43 @@ Additional documentation:
 This project demonstrates:
 
 * robotics simulation architecture
+* C++ simulation design
+* differential-drive kinematics
+* manipulator joint-state simulation
 * ROS 2 C++ node development
 * topic-based robot control
 * odometry publishing
 * TF frame broadcasting
+* launch-based runtime workflows
+* YAML runtime configuration
+* launch argument overrides
+* QoS profile design
 * parameterized runtime behavior
 * safety guards
 * debugging discipline
 * performance timing
 * regression testing
+* portfolio-ready engineering documentation
+
+---
+
+## Current Status
+
+| Area                      | Status              |
+| ------------------------- | ------------------- |
+| Standalone C++ simulator  | Complete foundation |
+| ROS 2 node integration    | Complete foundation |
+| Launch workflow           | Added               |
+| YAML configuration        | Added               |
+| Launch argument overrides | Added               |
+| QoS profiles              | Added               |
+| rosbag2 workflow          | Next                |
+| RViz visualization        | Planned             |
+| URDF/Xacro robot model    | Planned             |
+| Gazebo integration        | Planned             |
+
+Next planned milestone:
+
+```txt
+Day 65 — rosbag2 recording and replay
+```
