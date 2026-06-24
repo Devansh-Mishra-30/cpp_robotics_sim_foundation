@@ -653,7 +653,45 @@ The code explicitly configures `KeepLast(10)`. The ROS 2 CLI may display history
 
 ---
 
-## 21. Performance Timing
+---
+
+---
+
+## 21. Data Recording and Replay
+
+The simulator supports rosbag2 recording and replay for reproducible debugging and validation.
+
+Recorded topics:
+
+```txt
+/cmd_vel
+/robot_pose
+/odom
+/tf
+```
+
+Recording command:
+
+```bash
+ros2 bag record -o bags/day65_baseline /cmd_vel /robot_pose /odom /tf
+```
+
+Inspection command:
+
+```bash
+ros2 bag info bags/day65_baseline
+```
+
+Replay command:
+
+```bash
+ros2 bag play bags/day65_baseline
+```
+
+This allows the same command, state, odometry, and TF sequence to be inspected after the run and replayed for validation.
+
+
+## 22. Performance Timing
 
 The timer callback is measured using:
 
@@ -681,7 +719,7 @@ dt = 0.001 -> 1 ms budget
 
 ---
 
-## 22. Relationship Between Modules
+## 23. Relationship Between Modules
 
 The project is intentionally separated:
 
@@ -710,7 +748,7 @@ documentation
 
 ---
 
-## 23. Build Standalone C++ Project
+## 24. Build Standalone C++ Project
 
 ```bash
 cd standalone_cpp
@@ -724,7 +762,7 @@ cmake --build .
 
 ---
 
-## 24. Build ROS 2 Project
+## 25. Build ROS 2 Project
 
 ```bash
 cd ros2_ws
@@ -742,7 +780,7 @@ ros2 launch cpp_robotics_sim_ros sim.launch.py
 
 ---
 
-## 25. Verification Commands
+## 26. Verification Commands
 
 Check topics:
 
@@ -785,7 +823,7 @@ ros2 topic info /tf --verbose
 
 ---
 
-## 26. Validation and Regression
+## 27. Validation and Regression
 
 The simulator is validated using repeatable regression tests:
 
@@ -807,6 +845,9 @@ QoS inspection
 launch workflow
 YAML parameter loading
 launch argument overrides
+rosbag2 recording
+rosbag2 inspection
+rosbag2 replay
 ```
 
 These tests are documented in:
@@ -817,7 +858,7 @@ docs/debugging_and_validation.md
 
 ---
 
-## 27. Debug Workflow
+## 28. Debug Workflow
 
 Debugging commands and common failure modes are documented in:
 
@@ -834,7 +875,7 @@ First classify the failure, then test systematically.
 
 ---
 
-## 28. What This Project Demonstrates
+## 29. What This Project Demonstrates
 
 This project demonstrates:
 
@@ -855,10 +896,11 @@ This project demonstrates:
 * TF broadcasting
 * performance timing
 * engineering documentation
+* rosbag2 recording and replay
 
 ---
 
-## 29. Current Limitations
+## 30. Current Limitations
 
 Current limitations:
 
@@ -867,7 +909,6 @@ The manipulator module does not yet publish ROS 2 /joint_states.
 The manipulator module does not yet include forward kinematics.
 The differential-drive physics model is kinematic, not full rigid-body dynamics.
 The ROS 2 module currently focuses on mobile robot state, not manipulator state.
-rosbag2 recording/replay is next.
 RViz visualization is planned.
 URDF/Xacro robot description is planned.
 Gazebo integration is planned.
@@ -876,12 +917,11 @@ Sensor simulation is planned.
 
 ---
 
-## 30. Future Work
+## 31. Future Work
 
 Planned future work:
 
 ```txt
-Add rosbag2 recording and replay
 Add RViz visualization
 Add URDF/Xacro robot model
 Add ROS 2 /joint_states publisher
@@ -894,10 +934,10 @@ Add final portfolio screenshots, plots, and demo video/GIF
 
 ---
 
-## 31. Interview Summary
+## 32. Interview Summary
 
 In interview language:
 
 ```txt
-I built a modular C++ robotics simulation foundation with separate differential-drive and manipulator modules, then integrated the mobile robot simulation into ROS 2 using /cmd_vel, /robot_pose, /odom, and TF. The project includes launch files, YAML parameters, launch argument overrides, explicit QoS profiles, validation tests, joint limits, safety checks, performance timing, regression testing, and documentation.
+I built a modular C++ robotics simulation foundation with separate differential-drive and manipulator modules, then integrated the mobile robot simulation into ROS 2 using /cmd_vel, /robot_pose, /odom, and TF. The project includes launch files, YAML parameters, launch argument overrides, explicit QoS profiles, rosbag2 recording/replay, validation tests, joint limits, safety checks, performance timing, regression testing, and documentation.
 ```

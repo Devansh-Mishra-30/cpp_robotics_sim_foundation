@@ -48,6 +48,11 @@ ros2_ws/build/
 ros2_ws/install/
 ros2_ws/log/
 
+# rosbag2 recorded data
+bags/*
+!bags/README.md
+ros2_ws/bags/
+
 # OS files
 .DS_Store
 Thumbs.db

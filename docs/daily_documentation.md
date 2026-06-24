@@ -22,6 +22,7 @@ This project contains:
 * YAML runtime configuration
 * launch argument overrides
 * explicit QoS profiles
+* rosbag2 recording and replay workflow
 * regression testing
 * debugging workflow
 * performance timing
@@ -57,9 +58,8 @@ cpp_robotics_sim_foundation/
 └── docs/
     ├── daily_documentation.md
     ├── debugging_and_validation.md
-    ├── system_architecture.md
-    ├── debugging_and_validation.md
     └── system_architecture.md
+
 ```
 
 ---
@@ -663,6 +663,78 @@ Day 64 made the simulator’s ROS 2 communication behavior explicit using QoS pr
 
 ---
 
+# Day 65 — rosbag2 Recording and Replay
+
+## Goal
+
+Record and replay simulator topic data using rosbag2.
+
+## Deliverable
+
+Created a repeatable rosbag2 workflow for recording:
+
+| Topic | Purpose |
+|---|---|
+| `/cmd_vel` | Command input sent to the simulator |
+| `/robot_pose` | Simple 2D pose output |
+| `/odom` | Standard odometry output |
+| `/tf` | Transform data for `odom -> base_link` |
+
+## Recording Command
+
+```bash
+ros2 bag record -o bags/day65_baseline /cmd_vel /robot_pose /odom /tf
+```
+
+## Motion Commands Used During Recording
+
+```bash
+ros2 topic pub --once /cmd_vel geometry_msgs/msg/Twist "{linear: {x: 0.3}, angular: {z: 0.2}}"
+sleep 1
+ros2 topic pub --once /cmd_vel geometry_msgs/msg/Twist "{linear: {x: 0.4}, angular: {z: -0.2}}"
+sleep 1
+ros2 topic pub --once /cmd_vel geometry_msgs/msg/Twist "{linear: {x: 0.0}, angular: {z: 0.0}}"
+```
+
+## Bag Inspection
+
+```bash
+ros2 bag info bags/day65_baseline
+```
+
+Expected topics:
+
+```txt
+/cmd_vel
+/robot_pose
+/odom
+/tf
+```
+
+## Replay Command
+
+```bash
+ros2 bag play bags/day65_baseline
+```
+
+## Verification During Replay
+
+```bash
+ros2 topic echo --once /robot_pose
+ros2 topic echo --once /odom
+ros2 run tf2_ros tf2_echo odom base_link
+```
+
+## Why This Matters
+
+rosbag2 makes simulation behavior reproducible. Instead of only watching terminal output live, I can record command input, pose output, odometry, and TF data, then replay the same run later for debugging, validation, and portfolio evidence.
+
+## Interview Explanation
+
+Day 65 added rosbag2 recording and replay to the simulator workflow. I recorded `/cmd_vel`, `/robot_pose`, `/odom`, and `/tf` so the simulator’s command input and state outputs can be inspected after a run. This is useful for robotics debugging because it preserves evidence of what commands were sent, what state was published, and whether odometry and TF behaved consistently.
+
+---
+
 # Current Verification Workflow
 
 Use this after meaningful source, launch, config, or documentation changes.
@@ -718,6 +790,23 @@ ros2 topic info /cmd_vel --verbose
 ros2 topic info /robot_pose --verbose
 ros2 topic info /odom --verbose
 ros2 topic info /tf --verbose
+```
+
+## rosbag2 Checks
+
+```bash
+ros2 bag record -o bags/day65_baseline /cmd_vel /robot_pose /odom /tf
+ros2 bag info bags/day65_baseline
+ros2 bag play bags/day65_baseline
+```
+
+Expected recorded topics:
+
+```txt
+/cmd_vel
+/robot_pose
+/odom
+/tf
 ```
 
 ---
@@ -776,10 +865,11 @@ ros2_ws/log/
 |   61 | Complete              | ROS 2 launch file                           |
 |   62 | Complete              | YAML parameter config                       |
 |   63 | Complete              | Launch argument overrides                   |
-|   64 | Complete after commit | Explicit QoS profiles                       |
+|   64 | Complete              | Explicit QoS profiles                       |
+|   65 | Complete              | rosbag2 recording and replay workflow       |
 
 Next planned day:
 
 ```txt
-Day 65 — rosbag2 recording and replay
+Day 66 — RViz2 visualization
 ```
