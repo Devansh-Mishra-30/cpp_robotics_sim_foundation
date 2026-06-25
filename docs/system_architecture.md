@@ -1125,6 +1125,49 @@ Add final portfolio screenshots, plots, and demo video/GIF
 
 ---
 
+## User-Facing Usage Layer
+
+Day 69 adds a user-facing usage documentation layer to the project.
+
+This layer explains how another engineer should interact with the ROS 2 simulator:
+
+```txt
+build the workspace
+launch the simulator
+publish /cmd_vel commands
+inspect /robot_pose
+inspect /odom
+inspect /tf
+inspect /diagnostics
+open RViz2
+record/replay rosbag2 data
+run launch regression
+```
+
+This does not change the runtime architecture. It makes the architecture easier to operate, validate, and explain.
+
+## Usage Architecture Flow
+
+```txt
+developer or reviewer
+        ↓
+README usage quickstart
+        ↓
+build + source workspace
+        ↓
+ros2 launch cpp_robotics_sim_ros sim.launch.py
+        ↓
+publish /cmd_vel
+        ↓
+inspect /robot_pose, /odom, /tf, /diagnostics
+        ↓
+RViz2 / rosbag2 / launch regression
+```
+
+## Why This Layer Matters
+
+Robotics simulation projects must be reproducible. Usage documentation turns the system from personal code into an engineering artifact that another person can build, run, inspect, and validate.
+
 ## 35. Interview Summary
 
 In interview language:

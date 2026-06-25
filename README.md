@@ -17,6 +17,180 @@ scripts/         -> Regression and validation scripts
 docs/            -> Architecture, debugging, regression, integration, and daily documentation
 ```
 
+---
+
+## ROS 2 Usage Quickstart
+
+This section shows the shortest path to build, launch, command, inspect, visualize, and validate the ROS 2 simulator.
+
+### 1. Build the ROS 2 Workspace
+
+```bash
+cd "/mnt/c/Self study/PRACTICE C++/Cdev/01_joint_basics/ros2_ws"
+
+rm -rf build install log
+
+source /opt/ros/jazzy/setup.bash
+colcon build --cmake-args -DBUILD_TESTING=OFF
+source install/setup.bash
+```
+
+### 2. Launch the Simulator
+
+```bash
+ros2 launch cpp_robotics_sim_ros sim.launch.py
+```
+
+Expected runtime interfaces:
+
+```txt
+/cmd_vel
+/robot_pose
+/odom
+/tf
+/diagnostics
+```
+
+### 3. Send a Motion Command
+
+In a second terminal:
+
+```bash
+cd "/mnt/c/Self study/PRACTICE C++/Cdev/01_joint_basics/ros2_ws"
+
+source /opt/ros/jazzy/setup.bash
+source install/setup.bash
+
+ros2 topic pub -r 10 /cmd_vel geometry_msgs/msg/Twist "{linear: {x: 0.3}, angular: {z: 0.2}}"
+```
+
+Expected behavior:
+
+```txt
+robot pose updates
+odom publishes updated state
+TF updates odom -> base_link
+diagnostics reports OK while commands are fresh
+```
+
+### 4. Inspect Robot State
+
+```bash
+ros2 topic echo --once /robot_pose
+ros2 topic echo --once /odom
+ros2 run tf2_ros tf2_echo odom base_link
+```
+
+### 5. Check Diagnostics
+
+```bash
+ros2 topic echo --once /diagnostics
+ros2 topic info /diagnostics --verbose
+```
+
+Expected message type:
+
+```txt
+diagnostic_msgs/msg/DiagnosticArray
+```
+
+Expected status behavior:
+
+```txt
+level: 0  -> Simulator running
+level: 1  -> cmd_vel timeout active
+```
+
+### 6. Check Parameters
+
+```bash
+ros2 param get /sim_node dt
+ros2 param get /sim_node initial_x
+ros2 param get /sim_node initial_y
+ros2 param get /sim_node initial_theta
+ros2 param get /sim_node cmd_timeout
+ros2 param get /sim_node max_linear_velocity
+ros2 param get /sim_node max_angular_velocity
+```
+
+### 7. Launch with Runtime Overrides
+
+```bash
+ros2 launch cpp_robotics_sim_ros sim.launch.py initial_x:=2.0 initial_y:=1.0 initial_theta:=0.5 dt:=0.05 cmd_timeout:=1.0 max_linear_velocity:=0.2 max_angular_velocity:=0.4
+```
+
+Verify overrides:
+
+```bash
+ros2 param get /sim_node initial_x
+ros2 param get /sim_node initial_y
+ros2 param get /sim_node initial_theta
+ros2 param get /sim_node dt
+ros2 param get /sim_node cmd_timeout
+ros2 param get /sim_node max_linear_velocity
+ros2 param get /sim_node max_angular_velocity
+```
+
+### 8. Open RViz2
+
+```bash
+rviz2 -d "$(ros2 pkg prefix cpp_robotics_sim_ros)/share/cpp_robotics_sim_ros/rviz/sim_debug.rviz"
+```
+
+Expected RViz setup:
+
+```txt
+Fixed Frame: odom
+Displays: Grid, TF, Odometry
+Odometry Topic: /odom
+```
+
+### 9. Record a rosbag2 Run
+
+```bash
+mkdir -p bags
+ros2 bag record -o bags/day65_baseline /cmd_vel /robot_pose /odom /tf
+```
+
+Inspect:
+
+```bash
+ros2 bag info bags/day65_baseline
+```
+
+Replay:
+
+```bash
+ros2 bag play bags/day65_baseline
+```
+
+### 10. Run Launch Regression
+
+From the repository root:
+
+```bash
+cd "/mnt/c/Self study/PRACTICE C++/Cdev/01_joint_basics"
+./scripts/day68_launch_regression.sh
+```
+
+Expected result:
+
+```txt
+========== PASS: Day 68 launch regression succeeded ==========
+```
+
+### Common Usage Flow
+
+```txt
+build workspace
+source ROS 2
+launch simulator
+publish /cmd_vel
+inspect /robot_pose, /odom, /tf, /diagnostics
+open RViz2
+run launch regression before commit
+```
+
 ### Standalone C++ Modules
 
 The standalone C++ project is split into two main simulation modules:
@@ -766,5 +940,5 @@ This project demonstrates:
 Next planned milestone:
 
 ```txt
-Day 69 — ROS 2 Usage Documentation
+Day 70 — Topic Interface Documentation
 ```

@@ -1030,6 +1030,97 @@ Day 68 added a launch regression script for the ROS 2 simulator. The script laun
 
 ---
 
+# Day 69 — ROS 2 Usage Documentation
+
+## Goal
+
+Add clear user-facing ROS 2 usage documentation for the simulator.
+
+## Deliverable
+
+Updated the project README with a ROS 2 usage quickstart covering:
+
+```txt
+workspace build
+simulator launch
+/cmd_vel command publishing
+/robot_pose inspection
+/odom inspection
+/tf inspection
+/diagnostics inspection
+parameter checks
+launch argument overrides
+RViz2 visualization
+rosbag2 recording/replay
+launch regression script
+```
+
+## Why This Matters
+
+A robotics project should not only work on the developer's machine. It should be easy for another engineer, recruiter, interviewer, or future teammate to build, run, inspect, and validate.
+
+Day 69 turns the README into a practical usage guide instead of only a project description.
+
+## Usage Flow Documented
+
+```txt
+build workspace
+source ROS 2 environment
+launch simulator
+publish velocity command
+inspect pose, odometry, TF, and diagnostics
+open RViz2
+record or replay rosbag2 data
+run launch regression before commit
+```
+
+## Key Commands Added
+
+Build:
+
+```bash
+cd "/mnt/c/Self study/PRACTICE C++/Cdev/01_joint_basics/ros2_ws"
+
+rm -rf build install log
+
+source /opt/ros/jazzy/setup.bash
+colcon build --cmake-args -DBUILD_TESTING=OFF
+source install/setup.bash
+```
+
+Launch:
+
+```bash
+ros2 launch cpp_robotics_sim_ros sim.launch.py
+```
+
+Command:
+
+```bash
+ros2 topic pub -r 10 /cmd_vel geometry_msgs/msg/Twist "{linear: {x: 0.3}, angular: {z: 0.2}}"
+```
+
+Inspect:
+
+```bash
+ros2 topic echo --once /robot_pose
+ros2 topic echo --once /odom
+ros2 run tf2_ros tf2_echo odom base_link
+ros2 topic echo --once /diagnostics
+```
+
+Run regression:
+
+```bash
+./scripts/day68_launch_regression.sh
+```
+
+## Interview Explanation
+
+Day 69 improved the project’s user-facing documentation. I added a ROS 2 usage quickstart that explains how to build the workspace, launch the simulator, publish commands, inspect pose, odometry, TF, diagnostics, use RViz2, record rosbag2 data, and run the launch regression script. This makes the project easier for another engineer to reproduce and validate.
+
+---
+
 # Current Verification Workflow
 
 Use this after meaningful source, launch, config, or documentation changes.
@@ -1251,10 +1342,11 @@ ros2_ws/log/
 |   66 | Complete | RViz2 visualization config                  |
 |   67 | Complete | Runtime diagnostics on `/diagnostics`       |
 |   68 | Complete | Launch regression script                    |
+|   69 | Complete | ROS 2 usage quickstart documentation        |
 
 Next planned day:
 
 ```txt
-Day 69 — ROS 2 Usage Documentation
+Day 70 — Topic Interface Documentation
 ```
 

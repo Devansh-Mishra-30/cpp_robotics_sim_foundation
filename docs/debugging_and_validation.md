@@ -73,6 +73,89 @@ Common failures:
 
 ---
 
+---
+
+## ROS 2 Usage Validation Flow
+
+This is the standard user-facing validation flow after building the simulator.
+
+## i. Launch Simulator
+
+```bash
+ros2 launch cpp_robotics_sim_ros sim.launch.py
+```
+
+Expected:
+
+```txt
+/sim_node starts
+/cmd_vel exists
+/robot_pose publishes
+/odom publishes
+/tf publishes
+/diagnostics publishes
+```
+
+## ii. Publish Command
+
+```bash
+ros2 topic pub -r 10 /cmd_vel geometry_msgs/msg/Twist "{linear: {x: 0.3}, angular: {z: 0.2}}"
+```
+
+Expected:
+
+```txt
+robot moves while command stream is active
+robot stops after command stream ends and timeout expires
+```
+
+## iii. Inspect Runtime Outputs
+
+```bash
+ros2 topic echo --once /robot_pose
+ros2 topic echo --once /odom
+ros2 run tf2_ros tf2_echo odom base_link
+ros2 topic echo --once /diagnostics
+```
+
+Expected:
+
+```txt
+/robot_pose contains x, y, theta
+/odom contains odom frame and base_link child frame
+/tf contains odom -> base_link
+/diagnostics contains sim_node status and key-value fields
+```
+
+## iv. Run Regression Script
+
+```bash
+cd "/mnt/c/Self study/PRACTICE C++/Cdev/01_joint_basics"
+./scripts/day68_launch_regression.sh
+```
+
+Expected:
+
+```txt
+========== PASS: Day 68 launch regression succeeded ==========
+```
+
+## check. Usage Validation Pass Criteria
+
+```txt
+simulator launches
+topics exist
+commands are accepted
+pose publishes
+odom publishes
+TF publishes
+diagnostics publishes
+RViz2 config loads
+launch regression passes
+```
+---
+
+
 ## 3. Launch Validation
 
 Launch simulator:
