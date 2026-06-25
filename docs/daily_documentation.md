@@ -24,6 +24,7 @@ This project contains:
 * explicit QoS profiles
 * rosbag2 recording and replay workflow
 * RViz2 visualization workflow
+* runtime diagnostics on `/diagnostics`
 * regression testing
 * debugging workflow
 * performance timing
@@ -830,6 +831,147 @@ Day 66 added RViz2 visualization to the simulator workflow. I created a saved RV
 
 ---
 
+# Day 67 — Diagnostics
+
+## Goal
+
+Add runtime diagnostics to the ROS 2 simulator.
+
+## Deliverable
+
+Added a `/diagnostics` publisher using:
+
+```txt
+diagnostic_msgs/msg/DiagnosticArray
+diagnostic_msgs/msg/DiagnosticStatus
+diagnostic_msgs/msg/KeyValue
+```
+
+The simulator now publishes structured runtime health/status information for the node.
+
+## Diagnostic Topic
+
+```txt
+/diagnostics
+```
+
+## Diagnostic Fields
+
+The diagnostic message reports:
+
+| Field                      | Meaning                            |
+| -------------------------- | ---------------------------------- |
+| `dt`                       | Simulation timestep                |
+| `cmd_timeout`              | Command timeout threshold          |
+| `time_since_cmd`           | Time since last `/cmd_vel`         |
+| `timeout_active`           | Whether command timeout is active  |
+| `linear_velocity`          | Current linear velocity            |
+| `angular_velocity`         | Current angular velocity           |
+| `max_linear_velocity`      | Linear velocity clamp limit        |
+| `max_angular_velocity`     | Angular velocity clamp limit       |
+| `pose_x`                   | Current x position                 |
+| `pose_y`                   | Current y position                 |
+| `pose_theta`               | Current heading                    |
+| `callback_time_ms`         | Current callback runtime           |
+| `average_callback_time_ms` | Average callback runtime           |
+| `max_callback_time_ms`     | Worst callback runtime             |
+| `timing_budget_ms`         | Allowed callback budget from `dt`  |
+| `callback_count`           | Number of timer callbacks executed |
+
+## Status Levels
+
+```txt
+OK   = simulator running with fresh command input
+WARN = cmd_vel timeout active
+```
+
+## Verification Commands
+
+```bash
+ros2 topic list | grep diagnostics
+ros2 topic echo --once /diagnostics
+ros2 topic info /diagnostics --verbose
+```
+
+## OK-State Test
+
+Run a continuous command:
+
+```bash
+ros2 topic pub -r 10 /cmd_vel geometry_msgs/msg/Twist "{linear: {x: 0.3}, angular: {z: 0.2}}"
+```
+
+Then check diagnostics:
+
+```bash
+ros2 topic echo --once /diagnostics
+```
+
+Expected:
+
+```txt
+level: 0
+message: Simulator running
+timeout_active: false
+```
+
+## WARN-State Test
+
+Stop the `/cmd_vel` publisher and wait longer than `cmd_timeout`.
+
+Then check diagnostics:
+
+```bash
+ros2 topic echo --once /diagnostics
+```
+
+Expected:
+
+```txt
+level: 1
+message: cmd_vel timeout active
+timeout_active: true
+```
+
+## Why This Matters
+
+Diagnostics make the simulator easier to debug and validate. Instead of relying only on terminal logs, the node now publishes structured runtime health information that can be inspected, recorded, monitored, and extended later for system-level debugging.
+
+## Interview Explanation
+
+Day 67 added a `/diagnostics` publisher to the ROS 2 simulator using `diagnostic_msgs/msg/DiagnosticArray`. The diagnostics report node health, command timeout status, velocity limits, current pose, and callback timing. The diagnostic status changes from OK to WARN when `/cmd_vel` becomes stale, which makes runtime health visible through a standard ROS 2 topic.
+
+---
+
+## Diagnostics Checks
+
+```bash
+ros2 topic list | grep diagnostics
+ros2 topic echo --once /diagnostics
+ros2 topic info /diagnostics --verbose
+```
+
+Expected topic:
+
+```txt
+/diagnostics
+```
+
+Expected message type:
+
+```txt
+diagnostic_msgs/msg/DiagnosticArray
+```
+
+Expected health states:
+
+```txt
+OK   when fresh /cmd_vel commands are being received
+WARN when cmd_vel timeout is active
+```
+
+---
+
 # Current Verification Workflow
 
 Use this after meaningful source, launch, config, or documentation changes.
@@ -998,9 +1140,10 @@ ros2_ws/log/
 |   64 | Complete              | Explicit QoS profiles                       |
 |   65 | Complete              | rosbag2 recording and replay workflow       |
 |   66 | Complete              | RViz2 visualization config                  |
+|   67 | Complete              | Runtime diagnostics on `/diagnostics`       |
 
 Next planned day:
 
 ```txt
-Day 66 — RViz2 visualization
+Day 68 — Launch Regression
 ```

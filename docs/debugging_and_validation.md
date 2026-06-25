@@ -553,8 +553,134 @@ saved RViz config reloads from installed package path
 | saved config missing after rebuild | `rviz/` folder not installed                   | check `install(DIRECTORY launch config rviz ...)` in `CMakeLists.txt` |
 | RViz opens but robot does not move | no active `/cmd_vel` command                   | publish `/cmd_vel` at a continuous rate                               |
 
+---
 
-## 13. Regression Test Checklist
+## 13. Diagnostics Validation Workflow
+
+The simulator publishes runtime health information on `/diagnostics`.
+
+## Topic Check
+
+```bash
+ros2 topic list | grep diagnostics
+```
+
+Expected:
+
+```txt
+/diagnostics
+```
+
+## Echo Diagnostics
+
+```bash
+ros2 topic echo --once /diagnostics
+```
+
+Expected message type:
+
+```txt
+diagnostic_msgs/msg/DiagnosticArray
+```
+
+Expected diagnostic status fields:
+
+```txt
+name: sim_node
+hardware_id: cpp_robotics_sim_ros
+level: 0 or 1
+message: Simulator running or cmd_vel timeout active
+```
+
+Expected key-value fields:
+
+```txt
+dt
+cmd_timeout
+time_since_cmd
+timeout_active
+linear_velocity
+angular_velocity
+max_linear_velocity
+max_angular_velocity
+pose_x
+pose_y
+pose_theta
+callback_time_ms
+average_callback_time_ms
+max_callback_time_ms
+timing_budget_ms
+callback_count
+```
+
+## OK-State Test
+
+Publish continuous command input:
+
+```bash
+ros2 topic pub -r 10 /cmd_vel geometry_msgs/msg/Twist "{linear: {x: 0.3}, angular: {z: 0.2}}"
+```
+
+Then check diagnostics:
+
+```bash
+ros2 topic echo --once /diagnostics
+```
+
+Pass criteria:
+
+```txt
+level: 0
+message: Simulator running
+timeout_active: false
+```
+
+## WARN-State Test
+
+Stop the command publisher and wait longer than `cmd_timeout`.
+
+Then check diagnostics:
+
+```bash
+ros2 topic echo --once /diagnostics
+```
+
+Pass criteria:
+
+```txt
+level: 1
+message: cmd_vel timeout active
+timeout_active: true
+```
+
+## QoS Check
+
+```bash
+ros2 topic info /diagnostics --verbose
+```
+
+Expected:
+
+```txt
+Type: diagnostic_msgs/msg/DiagnosticArray
+Reliability: RELIABLE
+Durability: VOLATILE
+```
+
+## Common Diagnostics Failures
+
+| Failure                                | Likely Cause                               | First Check                              |
+| -------------------------------------- | ------------------------------------------ | ---------------------------------------- |
+| `/diagnostics` missing                 | Publisher not created or node not running  | `ros2 topic list`                        |
+| Build cannot find diagnostic messages  | Missing dependency                         | Check `package.xml` and `CMakeLists.txt` |
+| Diagnostics topic exists but no values | `publishDiagnostics()` not called          | Check `timerCallback()`                  |
+| Always WARN                            | No fresh `/cmd_vel` command                | Publish continuous `/cmd_vel`            |
+| Always OK                              | Timeout logic not connected to diagnostics | Check `timeout_active`                   |
+| Timing budget wrong                    | Wrong variable used                        | Use `dt_ * 1000.0`                       |
+| Missing key-value fields               | Fields not pushed into `status.values`     | Check `makeKeyValue(...)` calls          |
+
+
+## 14. Regression Test Checklist
 
 Run this checklist after meaningful simulator changes.
 
@@ -576,10 +702,22 @@ Run this checklist after meaningful simulator changes.
 | rosbag2 record | `ros2 bag record`                                | Bag is created                                  |
 | rosbag2 info   | `ros2 bag info`                                  | Expected topics recorded                        |
 | rosbag2 replay | `ros2 bag play`                                  | Pose/odom/TF replay                             |
+## Regression Checklist Additions
+
+Add these to the regression checklist:
+
+```txt
+/diagnostics publishing
+diagnostics message type is DiagnosticArray
+diagnostics OK state
+diagnostics WARN timeout state
+diagnostic key-value fields
+diagnostics QoS inspection
+```
 
 ---
 
-## 14. Common Failure Modes
+## Common Failure Modes
 
 | Failure                    | Likely Cause                                | First Check                              |
 | -------------------------- | ------------------------------------------- | ---------------------------------------- |
@@ -598,7 +736,7 @@ Run this checklist after meaningful simulator changes.
 
 ---
 
-## 15. Standalone C++ Validation
+## Standalone C++ Validation
 
 Build standalone simulator on Linux / WSL:
 
@@ -638,7 +776,7 @@ Delete build/ before switching environments.
 
 ---
 
-## 16. Git Validation
+## Git Validation
 
 Before every commit:
 
@@ -681,7 +819,7 @@ Expected:
 
 ---
 
-## 17. Commit Gate
+## Commit Gate
 
 A commit is allowed only if:
 

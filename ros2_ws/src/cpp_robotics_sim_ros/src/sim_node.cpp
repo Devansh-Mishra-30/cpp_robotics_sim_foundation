@@ -4,6 +4,7 @@
 #include <cmath>
 #include <algorithm>
 #include <stdexcept>
+#include <string>
 
 #include "geometry_msgs/msg/pose2_d.hpp"
 #include "geometry_msgs/msg/twist.hpp"
@@ -11,6 +12,9 @@
 #include "nav_msgs/msg/odometry.hpp"
 #include "geometry_msgs/msg/transform_stamped.hpp"
 #include "tf2_ros/transform_broadcaster.hpp"
+#include "diagnostic_msgs/msg/diagnostic_array.hpp"
+#include "diagnostic_msgs/msg/diagnostic_status.hpp"
+#include "diagnostic_msgs/msg/key_value.hpp"
 
 class SimNode : public rclcpp::Node {
 public:
@@ -57,7 +61,9 @@ public:
         pose_publisher_ = create_publisher<geometry_msgs::msg::Pose2D>("/robot_pose", state_qos
         );
 
-        odom_publisher_ = this->create_publisher<nav_msgs::msg::Odometry>("/odom", command_qos);
+        odom_publisher_ = this->create_publisher<nav_msgs::msg::Odometry>("/odom", state_qos);
+
+        diagnostics_publisher_ = this->create_publisher<diagnostic_msgs::msg::DiagnosticArray>("/diagnostics", state_qos);
 
         tf_broadcaster_ = std::make_unique<tf2_ros::TransformBroadcaster>(*this);
 
@@ -74,7 +80,7 @@ public:
 
         );
 
-        RCLCPP_INFO(get_logger(), "Day 56 ROS 2 simulator with regression scenarios completed");
+        RCLCPP_INFO(get_logger(), "Day 67 ROS 2 simulator with diagnostics enabled");
     }
 private:
 
@@ -129,7 +135,9 @@ private:
 
         double time_since_cmd = (this->now() - last_cmd_time_).seconds();
 
-        if (time_since_cmd > cmd_timeout_) {
+        bool timeout_active = time_since_cmd > cmd_timeout_;
+
+        if (timeout_active) {
             linear_velocity_ = 0.0;
             angular_velocity_ = 0.0;
 
@@ -174,6 +182,8 @@ private:
             average_callback_time_ms,
             max_callback_time_ms_,
             dt_ * 1000.0);
+
+        publishDiagnostics(time_since_cmd, timeout_active, callback_time_ms, average_callback_time_ms);
     }
 
     void publishOdometry() {
@@ -218,13 +228,66 @@ private:
         transform_msg.transform.rotation.w = std::cos(pose_.theta / 2.0);
 
         tf_broadcaster_->sendTransform(transform_msg);
+    }
 
+    diagnostic_msgs::msg::KeyValue makeKeyValue(
+        const std::string& key,
+        const std::string& value
+    ) const {
+        diagnostic_msgs::msg::KeyValue key_value;
+        key_value.key = key;
+        key_value.value = value;
+        return key_value;
+    }
 
+    void publishDiagnostics(
+        double time_since_cmd,
+        bool timeout_active,
+        double callback_time_ms,
+        double average_callback_time_ms
+    ) {
+        diagnostic_msgs::msg::DiagnosticArray diagnostics_msg;
+        diagnostics_msg.header.stamp = this->now();
+
+        diagnostic_msgs::msg::DiagnosticStatus status;
+        status.name = "sim_node";
+        status.hardware_id = "cpp_robotics_sim_ros";
+
+        if (timeout_active) {
+            status.level = diagnostic_msgs::msg::DiagnosticStatus::WARN;
+            status.message = "cmd_vel timeout active";
+        }
+        else {
+            status.level = diagnostic_msgs::msg::DiagnosticStatus::OK;
+            status.message = "Simulator running";
+        }
+
+        status.values.push_back(makeKeyValue("dt", std::to_string(dt_)));
+        status.values.push_back(makeKeyValue("cmd_timeout", std::to_string(cmd_timeout_)));
+        status.values.push_back(makeKeyValue("time_since_cmd", std::to_string(time_since_cmd)));
+        status.values.push_back(makeKeyValue("timeout_active", timeout_active ? "true" : "false"));
+        status.values.push_back(makeKeyValue("linear_velocity", std::to_string(linear_velocity_)));
+        status.values.push_back(makeKeyValue("angular_velocity", std::to_string(angular_velocity_)));
+        status.values.push_back(makeKeyValue("max_linear_velocity", std::to_string(max_linear_velocity_)));
+        status.values.push_back(makeKeyValue("max_angular_velocity", std::to_string(max_angular_velocity_)));
+        status.values.push_back(makeKeyValue("pose_x", std::to_string(pose_.x)));
+        status.values.push_back(makeKeyValue("pose_y", std::to_string(pose_.y)));
+        status.values.push_back(makeKeyValue("pose_theta", std::to_string(pose_.theta)));
+        status.values.push_back(makeKeyValue("callback_time_ms", std::to_string(callback_time_ms)));
+        status.values.push_back(makeKeyValue("average_callback_time_ms", std::to_string(average_callback_time_ms)));
+        status.values.push_back(makeKeyValue("max_callback_time_ms", std::to_string(max_callback_time_ms_)));
+        status.values.push_back(makeKeyValue("timing_budget_ms", std::to_string(dt_ * 1000.0)));
+        status.values.push_back(makeKeyValue("callback_count", std::to_string(callback_count_)));
+
+        diagnostics_msg.status.push_back(status);
+
+        diagnostics_publisher_->publish(diagnostics_msg);
     }
 
     rclcpp::Publisher<geometry_msgs::msg::Pose2D>::SharedPtr pose_publisher_;
     rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr odom_publisher_;
     rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr cmd_subscriber_;
+    rclcpp::Publisher<diagnostic_msgs::msg::DiagnosticArray>::SharedPtr diagnostics_publisher_;
     rclcpp::TimerBase::SharedPtr timer_;
     geometry_msgs::msg::Pose2D pose_{};
     std::unique_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;

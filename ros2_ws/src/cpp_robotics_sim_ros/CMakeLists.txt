@@ -12,6 +12,7 @@ find_package(std_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(tf2_ros REQUIRED)
+find_package(diagnostic_msgs REQUIRED)
 
 add_executable(sim_node src/sim_node.cpp)
 
@@ -20,7 +21,8 @@ rclcpp
 std_msgs
 geometry_msgs
 nav_msgs
-tf2_ros)
+tf2_ros
+diagnostic_msgs)
 
 install(TARGETS
 sim_node

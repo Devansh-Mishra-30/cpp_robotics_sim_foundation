@@ -89,6 +89,8 @@ The daily engineering log tracks the roadmap from C++ fundamentals through ROS 2
 * Explicit ROS 2 QoS profiles for `/cmd_vel`, `/robot_pose`, and `/odom`
 * rosbag2 recording and replay workflow for `/cmd_vel`, `/robot_pose`, `/odom`, and `/tf`
 * RViz2 visualization workflow with saved `sim_debug.rviz` config
+* `/diagnostics` publisher using `diagnostic_msgs/msg/DiagnosticArray`
+* Runtime diagnostic reporting for timeout state, velocity limits, pose, and callback timing
 * Runtime parameters for timestep, initial pose, timeout, and velocity limits
 * Velocity clamping using `std::clamp`
 * Command timeout safety
@@ -101,12 +103,13 @@ The daily engineering log tracks the roadmap from C++ fundamentals through ROS 2
 
 ## ROS 2 Topics
 
-| Topic         | Type                       | Purpose                 |
-| ------------- | -------------------------- | ----------------------- |
-| `/cmd_vel`    | `geometry_msgs/msg/Twist`  | Velocity command input  |
-| `/robot_pose` | `geometry_msgs/msg/Pose2D` | Simple 2D robot pose    |
-| `/odom`       | `nav_msgs/msg/Odometry`    | Standard robot odometry |
-| `/tf`         | `tf2_msgs/msg/TFMessage`   | Transform tree data     |
+| Topic         | Type                                  | Purpose                                  |
+| ------------- | ------------------------------------- | ---------------------------------------- |
+| `/cmd_vel`    | `geometry_msgs/msg/Twist`             | Velocity command input                   |
+| `/robot_pose` | `geometry_msgs/msg/Pose2D`            | Simple 2D robot pose                     |
+| `/odom`       | `nav_msgs/msg/Odometry`               | Standard robot odometry                  |
+| `/tf`         | `tf2_msgs/msg/TFMessage`              | Transform tree data                      |
+| `/diagnostics`| `diagnostic_msgs/msg/DiagnosticArray` | Runtime health and simulator diagnostics |
 
 ---
 
@@ -402,6 +405,86 @@ Odometry display updates from /odom
 
 ---
 
+## Diagnostics
+
+The simulator publishes structured runtime diagnostics on:
+
+```txt
+/diagnostics
+
+Message type:
+
+diagnostic_msgs/msg/DiagnosticArray
+
+Check diagnostics:
+
+ros2 topic echo --once /diagnostics
+
+Inspect diagnostics QoS:
+
+ros2 topic info /diagnostics --verbose
+
+The diagnostic report includes:
+
+dt
+cmd_timeout
+time_since_cmd
+timeout_active
+linear_velocity
+angular_velocity
+max_linear_velocity
+max_angular_velocity
+pose_x
+pose_y
+pose_theta
+callback_time_ms
+average_callback_time_ms
+max_callback_time_ms
+timing_budget_ms
+callback_count
+
+The diagnostic status is:
+
+OK   when simulator is running with fresh command input
+WARN when cmd_vel timeout is active
+
+OK-state test:
+
+ros2 topic pub -r 10 /cmd_vel geometry_msgs/msg/Twist "{linear: {x: 0.3}, angular: {z: 0.2}}"
+ros2 topic echo --once /diagnostics
+
+WARN-state test:
+
+ros2 topic echo --once /diagnostics
+
+Run the WARN-state test after stopping /cmd_vel and waiting longer than cmd_timeout.
+
+
+### Add to Verification Workflow
+
+Paste this after RViz2 checks or QoS checks:
+
+```
+### Diagnostics Checks
+
+```bash
+ros2 topic list | grep diagnostics
+ros2 topic echo --once /diagnostics
+ros2 topic info /diagnostics --verbose
+
+Expected topic:
+
+/diagnostics
+
+Expected message type:
+
+diagnostic_msgs/msg/DiagnosticArray
+
+Expected status behavior:
+
+level: 0  -> Simulator running
+level: 1  -> cmd_vel timeout active
+
 ## Performance Timing
 
 The simulator prints callback timing:
@@ -576,11 +659,12 @@ This project demonstrates:
 | QoS profiles              | Added               |
 | rosbag2 workflow          | Added               |
 | RViz visualization        | Added               |
+| Diagnostics               | Added               |
 | URDF/Xacro robot model    | Planned             |
 | Gazebo integration        | Planned             |
 
 Next planned milestone:
 
 ```txt
-Day 67 — Diagnostics
+Day 68 — Launch Regression
 ```
