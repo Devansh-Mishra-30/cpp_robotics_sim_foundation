@@ -26,6 +26,7 @@ This project contains:
 * RViz2 visualization workflow
 * runtime diagnostics on `/diagnostics`
 * regression testing
+* launch regression script
 * debugging workflow
 * performance timing
 * project documentation
@@ -54,8 +55,13 @@ cpp_robotics_sim_foundation/
 │       │   └── sim.launch.py
 │       ├── src/
 │       │   └── sim_node.cpp
+│       ├── rviz/
+│       │   └── sim_debug.rviz
 │       ├── CMakeLists.txt
 │       └── package.xml
+│
+├── scripts/
+│   └── day68_launch_regression.sh
 │
 └── docs/
     ├── daily_documentation.md
@@ -972,6 +978,58 @@ WARN when cmd_vel timeout is active
 
 ---
 
+# Day 68 — Launch Regression
+
+## Goal
+
+Create a repeatable launch regression workflow for the ROS 2 simulator.
+
+## Deliverable
+
+Added a launch regression script:
+
+```txt
+scripts/day68_launch_regression.sh
+```
+
+The script validates that the simulator launches correctly and that the core ROS 2 runtime interfaces are alive.
+
+## What the Script Checks
+
+| Check | Purpose |
+|---|---|
+| Default launch | Confirms `ros2 launch cpp_robotics_sim_ros sim.launch.py` starts successfully |
+| Topic existence | Verifies `/cmd_vel`, `/robot_pose`, `/odom`, `/tf`, and `/diagnostics` |
+| Default parameters | Confirms expected parameters are loaded |
+| State outputs | Confirms `/robot_pose`, `/odom`, `/tf`, and `/diagnostics` publish |
+| Command response | Confirms `/cmd_vel` input does not break runtime behavior |
+| Diagnostics type/QoS | Confirms `/diagnostics` uses `diagnostic_msgs/msg/DiagnosticArray` with expected QoS |
+| Launch overrides | Confirms launch arguments override runtime parameters |
+| Override runtime check | Confirms the node still publishes state after override launch |
+
+## Run Command
+
+```bash
+cd "/mnt/c/Self study/PRACTICE C++/Cdev/01_joint_basics"
+./scripts/day68_launch_regression.sh
+```
+
+## Pass Criteria
+
+```txt
+========== PASS: Day 68 launch regression succeeded ==========
+```
+
+## Why This Matters
+
+Launch regression testing gives the project a repeatable validation gate. Instead of manually checking topics, parameters, diagnostics, odometry, TF, and launch overrides after every change, the script verifies the critical ROS 2 runtime behavior in one command.
+
+## Interview Explanation
+
+Day 68 added a launch regression script for the ROS 2 simulator. The script launches the node, verifies expected topics, checks parameters, validates odometry, TF, diagnostics, command response, QoS, and launch argument overrides. This makes the simulator easier to maintain because future changes can be tested against a repeatable regression workflow before committing.
+
+---
+
 # Current Verification Workflow
 
 Use this after meaningful source, launch, config, or documentation changes.
@@ -1027,6 +1085,41 @@ ros2 topic info /cmd_vel --verbose
 ros2 topic info /robot_pose --verbose
 ros2 topic info /odom --verbose
 ros2 topic info /tf --verbose
+ros2 topic info /diagnostics --verbose
+```
+
+Expected for `/cmd_vel`, `/robot_pose`, `/odom`, and `/diagnostics`:
+
+```txt
+Reliability: RELIABLE
+Durability: VOLATILE
+```
+
+## Diagnostics Checks
+
+```bash
+ros2 topic list | grep diagnostics
+ros2 topic echo --once /diagnostics
+ros2 topic info /diagnostics --verbose
+```
+
+Expected topic:
+
+```txt
+/diagnostics
+```
+
+Expected message type:
+
+```txt
+diagnostic_msgs/msg/DiagnosticArray
+```
+
+Expected health states:
+
+```txt
+OK   when fresh /cmd_vel commands are being received
+WARN when cmd_vel timeout is active
 ```
 
 ## rosbag2 Checks
@@ -1037,13 +1130,24 @@ ros2 bag info bags/day65_baseline
 ros2 bag play bags/day65_baseline
 ```
 
+Expected recorded topics:
+
+```txt
+/cmd_vel
+/robot_pose
+/odom
+/tf
+```
+
 ## RViz2 Checks
+
+Open RViz from source config:
 
 ```bash
 rviz2 -d src/cpp_robotics_sim_ros/rviz/sim_debug.rviz
 ```
 
-Installed config check:
+Open RViz from installed config:
 
 ```bash
 rviz2 -d "$(ros2 pkg prefix cpp_robotics_sim_ros)/share/cpp_robotics_sim_ros/rviz/sim_debug.rviz"
@@ -1071,14 +1175,19 @@ TF display updates
 Odometry display updates
 ```
 
+## Launch Regression Check
 
-Expected recorded topics:
+Run the automated regression script from the repository root:
+
+```bash
+cd "/mnt/c/Self study/PRACTICE C++/Cdev/01_joint_basics"
+./scripts/day68_launch_regression.sh
+```
+
+Expected:
 
 ```txt
-/cmd_vel
-/robot_pose
-/odom
-/tf
+========== PASS: Day 68 launch regression succeeded ==========
 ```
 
 ---
@@ -1131,19 +1240,21 @@ ros2_ws/log/
 
 # Current Status
 
-|  Day | Status                | Main Deliverable                            |
-| ---: | --------------------- | ------------------------------------------- |
-| 1–60 | Complete              | Standalone C++ + ROS 2 simulator foundation |
-|   61 | Complete              | ROS 2 launch file                           |
-|   62 | Complete              | YAML parameter config                       |
-|   63 | Complete              | Launch argument overrides                   |
-|   64 | Complete              | Explicit QoS profiles                       |
-|   65 | Complete              | rosbag2 recording and replay workflow       |
-|   66 | Complete              | RViz2 visualization config                  |
-|   67 | Complete              | Runtime diagnostics on `/diagnostics`       |
+|  Day | Status   | Main Deliverable                            |
+| ---: | -------- | ------------------------------------------- |
+| 1–60 | Complete | Standalone C++ + ROS 2 simulator foundation |
+|   61 | Complete | ROS 2 launch file                           |
+|   62 | Complete | YAML parameter config                       |
+|   63 | Complete | Launch argument overrides                   |
+|   64 | Complete | Explicit QoS profiles                       |
+|   65 | Complete | rosbag2 recording and replay workflow       |
+|   66 | Complete | RViz2 visualization config                  |
+|   67 | Complete | Runtime diagnostics on `/diagnostics`       |
+|   68 | Complete | Launch regression script                    |
 
 Next planned day:
 
 ```txt
-Day 68 — Launch Regression
+Day 69 — ROS 2 Usage Documentation
 ```
+

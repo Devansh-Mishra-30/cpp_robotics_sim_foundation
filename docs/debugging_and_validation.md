@@ -27,6 +27,9 @@ odometry failure
 TF failure
 QoS mismatch
 rosbag2 recording/replay failure
+RViz2 visualization failure
+diagnostics failure
+launch regression failure
 performance/timing issue
 Git/repository hygiene issue
 ```
@@ -59,12 +62,14 @@ install/setup.bash exists
 
 Common failures:
 
-| Symptom                  | Likely Cause                | Fix                                                       |
-| ------------------------ | --------------------------- | --------------------------------------------------------- |
-| `package not found`      | workspace not sourced       | `source install/setup.bash`                               |
-| `launch file not found`  | launch folder not installed | check `install(DIRECTORY launch ...)` in `CMakeLists.txt` |
-| config file not found    | config folder not installed | check `install(DIRECTORY config ...)`                     |
-| old behavior after edits | stale build/install folders | `rm -rf build install log`, rebuild, re-source            |
+| Symptom | Likely Cause | Fix |
+|---|---|---|
+| `package not found` | workspace not sourced | `source install/setup.bash` |
+| `launch file not found` | launch folder not installed | check `install(DIRECTORY launch ...)` in `CMakeLists.txt` |
+| config file not found | config folder not installed | check `install(DIRECTORY config ...)` in `CMakeLists.txt` |
+| RViz config missing | rviz folder not installed | check `install(DIRECTORY launch config rviz ...)` in `CMakeLists.txt` |
+| old behavior after edits | stale build/install folders | `rm -rf build install log`, rebuild, re-source |
+| diagnostics headers missing | missing dependency | check `diagnostic_msgs` in `package.xml` and `CMakeLists.txt` |
 
 ---
 
@@ -85,16 +90,18 @@ no launch import error
 /robot_pose publishes
 /odom publishes
 /tf publishes
+/diagnostics publishes
 ```
 
 Common launch failures:
 
-| Symptom                                  | Likely Cause                       | Fix                                       |
-| ---------------------------------------- | ---------------------------------- | ----------------------------------------- |
-| `ModuleNotFoundError: launch_ros.action` | wrong import name                  | use `from launch_ros.actions import Node` |
-| launch file cannot find YAML             | config not installed               | install `config/` in `CMakeLists.txt`     |
-| parameters do not change                 | edited source YAML but not rebuilt | rebuild and check installed YAML          |
-| node exits immediately                   | invalid parameter                  | check `dt`, timeout, velocity limits      |
+| Symptom | Likely Cause | Fix |
+|---|---|---|
+| `ModuleNotFoundError: launch_ros.action` | wrong import name | use `from launch_ros.actions import Node` |
+| launch file cannot find YAML | config not installed | install `config/` in `CMakeLists.txt` |
+| parameters do not change | edited source YAML but not rebuilt | rebuild and check installed YAML |
+| node exits immediately | invalid parameter | check `dt`, timeout, velocity limits |
+| `/diagnostics` missing after launch | node not rebuilt or publisher missing | rebuild and check `sim_node.cpp` |
 
 ---
 
@@ -113,6 +120,7 @@ Expected topics:
 /robot_pose
 /odom
 /tf
+/diagnostics
 ```
 
 Check pose:
@@ -125,6 +133,12 @@ Check odometry:
 
 ```bash
 ros2 topic echo --once /odom
+```
+
+Check diagnostics:
+
+```bash
+ros2 topic echo --once /diagnostics
 ```
 
 Check command subscriber:
@@ -144,9 +158,10 @@ Pass criteria:
 
 ```txt
 /cmd_vel has one subscriber
-/robot_pose publishes Pose2D
-/odom publishes Odometry
-/tf publishes TFMessage
+/robot_pose publishes geometry_msgs/msg/Pose2D
+/odom publishes nav_msgs/msg/Odometry
+/tf publishes tf2_msgs/msg/TFMessage
+/diagnostics publishes diagnostic_msgs/msg/DiagnosticArray
 ```
 
 ---
@@ -185,6 +200,8 @@ Pass criteria:
 ```txt
 robot continues moving while commands arrive
 robot stops after commands stop and timeout expires
+diagnostics show OK while fresh commands are arriving
+diagnostics show WARN after command timeout becomes active
 ```
 
 ---
@@ -351,11 +368,11 @@ yaw quaternion changes with theta
 
 Common TF failures:
 
-| Symptom                    | Likely Cause               | Fix                                      |
-| -------------------------- | -------------------------- | ---------------------------------------- |
-| `Invalid frame ID`         | TF not broadcasting        | check `publishTransform()`               |
-| `odom` missing             | wrong parent frame         | verify transform header                  |
-| `base_link` missing        | wrong child frame          | verify child frame ID                    |
+| Symptom | Likely Cause | Fix |
+|---|---|---|
+| `Invalid frame ID` | TF not broadcasting | check `publishTransform()` |
+| `odom` missing | wrong parent frame | verify transform header |
+| `base_link` missing | wrong child frame | verify child frame ID |
 | TF exists but odom differs | pose/odom/TF inconsistency | compare pose, odom, and transform values |
 
 ---
@@ -369,9 +386,10 @@ ros2 topic info /cmd_vel --verbose
 ros2 topic info /robot_pose --verbose
 ros2 topic info /odom --verbose
 ros2 topic info /tf --verbose
+ros2 topic info /diagnostics --verbose
 ```
 
-Expected for `/cmd_vel`, `/robot_pose`, and `/odom`:
+Expected for `/cmd_vel`, `/robot_pose`, `/odom`, and `/diagnostics`:
 
 ```txt
 Reliability: RELIABLE
@@ -392,6 +410,7 @@ Pass criteria:
 /cmd_vel subscription exists
 /robot_pose publisher exists
 /odom publisher exists
+/diagnostics publisher exists
 reliability shows RELIABLE
 durability shows VOLATILE
 robot still moves from /cmd_vel
@@ -471,6 +490,12 @@ bag replay republishes robot state topics
 TF can be inspected during replay
 ```
 
+Optional Day 67+ diagnostics recording:
+
+```bash
+ros2 bag record -o bags/day67_diagnostics /cmd_vel /robot_pose /odom /tf /diagnostics
+```
+
 Important Git rule:
 
 ```txt
@@ -480,13 +505,11 @@ Commit only bags/README.md.
 
 ---
 
----
-
 ## 12. RViz2 Validation Workflow
 
 RViz2 is used to visually validate odometry and TF behavior.
 
-## Launch Simulator
+### Launch Simulator
 
 ```bash
 cd "/mnt/c/Self study/PRACTICE C++/Cdev/01_joint_basics/ros2_ws"
@@ -497,7 +520,7 @@ source install/setup.bash
 ros2 launch cpp_robotics_sim_ros sim.launch.py
 ```
 
-## Open RViz from Source Config
+### Open RViz from Source Config
 
 ```bash
 cd "/mnt/c/Self study/PRACTICE C++/Cdev/01_joint_basics/ros2_ws"
@@ -508,13 +531,13 @@ source install/setup.bash
 rviz2 -d src/cpp_robotics_sim_ros/rviz/sim_debug.rviz
 ```
 
-## Open RViz from Installed Config
+### Open RViz from Installed Config
 
 ```bash
 rviz2 -d "$(ros2 pkg prefix cpp_robotics_sim_ros)/share/cpp_robotics_sim_ros/rviz/sim_debug.rviz"
 ```
 
-## Expected RViz Settings
+### Expected RViz Settings
 
 ```txt
 Fixed Frame: odom
@@ -522,13 +545,13 @@ Displays: Grid, TF, Odometry
 Odometry Topic: /odom
 ```
 
-## Motion Test
+### Motion Test
 
 ```bash
 ros2 topic pub -r 10 /cmd_vel geometry_msgs/msg/Twist "{linear: {x: 0.3}, angular: {z: 0.2}}"
 ```
 
-## Pass Criteria
+### Pass Criteria
 
 ```txt
 RViz opens without errors
@@ -542,16 +565,16 @@ saved RViz config reloads from source path
 saved RViz config reloads from installed package path
 ```
 
-## Common RViz Failures
+### Common RViz Failures
 
-| Failure                            | Likely Cause                                   | First Check                                                           |
-| ---------------------------------- | ---------------------------------------------- | --------------------------------------------------------------------- |
-| Fixed frame error                  | wrong fixed frame                              | set Fixed Frame to `odom`                                             |
-| No TF frames                       | simulator not running or TF not publishing     | `ros2 run tf2_ros tf2_echo odom base_link`                            |
-| No odometry display                | wrong topic selected                           | set Odometry topic to `/odom`                                         |
-| `/odom` not in dropdown            | simulator not running or workspace not sourced | `ros2 topic list`                                                     |
-| saved config missing after rebuild | `rviz/` folder not installed                   | check `install(DIRECTORY launch config rviz ...)` in `CMakeLists.txt` |
-| RViz opens but robot does not move | no active `/cmd_vel` command                   | publish `/cmd_vel` at a continuous rate                               |
+| Failure | Likely Cause | First Check |
+|---|---|---|
+| Fixed frame error | wrong fixed frame | set Fixed Frame to `odom` |
+| No TF frames | simulator not running or TF not publishing | `ros2 run tf2_ros tf2_echo odom base_link` |
+| No odometry display | wrong topic selected | set Odometry topic to `/odom` |
+| `/odom` not in dropdown | simulator not running or workspace not sourced | `ros2 topic list` |
+| saved config missing after rebuild | `rviz/` folder not installed | check `install(DIRECTORY launch config rviz ...)` in `CMakeLists.txt` |
+| RViz opens but robot does not move | no active `/cmd_vel` command | publish `/cmd_vel` at a continuous rate |
 
 ---
 
@@ -559,7 +582,7 @@ saved RViz config reloads from installed package path
 
 The simulator publishes runtime health information on `/diagnostics`.
 
-## Topic Check
+### Topic Check
 
 ```bash
 ros2 topic list | grep diagnostics
@@ -571,7 +594,7 @@ Expected:
 /diagnostics
 ```
 
-## Echo Diagnostics
+### Echo Diagnostics
 
 ```bash
 ros2 topic echo --once /diagnostics
@@ -613,7 +636,7 @@ timing_budget_ms
 callback_count
 ```
 
-## OK-State Test
+### OK-State Test
 
 Publish continuous command input:
 
@@ -635,7 +658,7 @@ message: Simulator running
 timeout_active: false
 ```
 
-## WARN-State Test
+### WARN-State Test
 
 Stop the command publisher and wait longer than `cmd_timeout`.
 
@@ -653,7 +676,7 @@ message: cmd_vel timeout active
 timeout_active: true
 ```
 
-## QoS Check
+### QoS Check
 
 ```bash
 ros2 topic info /diagnostics --verbose
@@ -667,76 +690,136 @@ Reliability: RELIABLE
 Durability: VOLATILE
 ```
 
-## Common Diagnostics Failures
+### Common Diagnostics Failures
 
-| Failure                                | Likely Cause                               | First Check                              |
-| -------------------------------------- | ------------------------------------------ | ---------------------------------------- |
-| `/diagnostics` missing                 | Publisher not created or node not running  | `ros2 topic list`                        |
-| Build cannot find diagnostic messages  | Missing dependency                         | Check `package.xml` and `CMakeLists.txt` |
-| Diagnostics topic exists but no values | `publishDiagnostics()` not called          | Check `timerCallback()`                  |
-| Always WARN                            | No fresh `/cmd_vel` command                | Publish continuous `/cmd_vel`            |
-| Always OK                              | Timeout logic not connected to diagnostics | Check `timeout_active`                   |
-| Timing budget wrong                    | Wrong variable used                        | Use `dt_ * 1000.0`                       |
-| Missing key-value fields               | Fields not pushed into `status.values`     | Check `makeKeyValue(...)` calls          |
+| Failure | Likely Cause | First Check |
+|---|---|---|
+| `/diagnostics` missing | publisher not created or node not running | `ros2 topic list` |
+| build cannot find diagnostic messages | missing dependency | check `package.xml` and `CMakeLists.txt` |
+| diagnostics topic exists but no values | `publishDiagnostics()` not called | check `timerCallback()` |
+| always WARN | no fresh `/cmd_vel` command | publish continuous `/cmd_vel` |
+| always OK | timeout logic not connected to diagnostics | check `timeout_active` |
+| timing budget wrong | wrong variable used | use `dt_ * 1000.0` |
+| missing key-value fields | fields not pushed into `status.values` | check `makeKeyValue(...)` calls |
 
+---
 
-## 14. Regression Test Checklist
+## 14. Launch Regression Workflow
+
+The launch regression script validates the core ROS 2 runtime behavior in one command.
+
+### Script
+
+```txt
+scripts/day68_launch_regression.sh
+```
+
+### Run
+
+```bash
+cd "/mnt/c/Self study/PRACTICE C++/Cdev/01_joint_basics"
+./scripts/day68_launch_regression.sh
+```
+
+### What It Validates
+
+```txt
+default launch starts successfully
+/cmd_vel exists
+/robot_pose exists
+/odom exists
+/tf exists
+/diagnostics exists
+default parameters load correctly
+/robot_pose publishes
+/odom publishes
+/tf publishes
+/diagnostics publishes
+/cmd_vel command is accepted
+/diagnostics type is DiagnosticArray
+/diagnostics QoS is reliable and volatile
+launch argument overrides work
+overridden launch still publishes pose
+```
+
+### Pass Criteria
+
+```txt
+========== PASS: Day 68 launch regression succeeded ==========
+```
+
+### Common Launch Regression Failures
+
+| Failure | Likely Cause | First Check |
+|---|---|---|
+| launch exits early | node crash or invalid parameters | check launch log printed by script |
+| missing `/diagnostics` | diagnostics publisher missing or package not rebuilt | `ros2 topic list` |
+| parameter check fails | YAML or launch override mismatch | `ros2 param get /sim_node <param>` |
+| topic echo times out | publisher not active or node not running | `ros2 topic list` |
+| diagnostics QoS fails | wrong QoS used for diagnostics publisher | check `state_qos` in `sim_node.cpp` |
+| override test fails | launch argument not wired correctly | check `sim.launch.py` |
+| script cannot source workspace | build/install missing | rebuild and source `install/setup.bash` |
+| `/usr/bin/env: bash\r` error | Windows CRLF line endings | convert script to LF line endings |
+| `AMENT_TRACE_SETUP_FILES: unbound variable` | Bash strict unset-variable mode conflicts with ROS setup | use `set -eo pipefail` instead of `set -euo pipefail` |
+
+---
+
+## 15. Regression Test Checklist
 
 Run this checklist after meaningful simulator changes.
 
-| Test           | Command / Method                                 | Expected Result                                 |
-| -------------- | ------------------------------------------------ | ----------------------------------------------- |
-| Build          | `colcon build --cmake-args -DBUILD_TESTING=OFF`  | Build passes                                    |
-| Launch         | `ros2 launch cpp_robotics_sim_ros sim.launch.py` | Node starts                                     |
-| Topic list     | `ros2 topic list`                                | `/cmd_vel`, `/robot_pose`, `/odom`, `/tf` exist |
-| Pose output    | `ros2 topic echo --once /robot_pose`             | Pose message appears                            |
-| Odom output    | `ros2 topic echo --once /odom`                   | Odometry message appears                        |
-| TF output      | `tf2_echo odom base_link`                        | Transform appears                               |
-| Command motion | publish `/cmd_vel`                               | Pose changes                                    |
-| Timeout        | stop `/cmd_vel`                                  | Robot stops after timeout                       |
-| Clamp positive | send large positive command                      | Velocity clamps to max                          |
-| Clamp negative | send large negative command                      | Velocity clamps to negative max                 |
-| Params         | `ros2 param get`                                 | Expected values appear                          |
-| Launch args    | override launch arguments                        | Overridden values appear                        |
-| QoS            | `ros2 topic info --verbose`                      | Reliable/volatile appears                       |
-| rosbag2 record | `ros2 bag record`                                | Bag is created                                  |
-| rosbag2 info   | `ros2 bag info`                                  | Expected topics recorded                        |
-| rosbag2 replay | `ros2 bag play`                                  | Pose/odom/TF replay                             |
-## Regression Checklist Additions
-
-Add these to the regression checklist:
-
-```txt
-/diagnostics publishing
-diagnostics message type is DiagnosticArray
-diagnostics OK state
-diagnostics WARN timeout state
-diagnostic key-value fields
-diagnostics QoS inspection
-```
+| Test | Command / Method | Expected Result |
+|---|---|---|
+| Build | `colcon build --cmake-args -DBUILD_TESTING=OFF` | Build passes |
+| Launch | `ros2 launch cpp_robotics_sim_ros sim.launch.py` | Node starts |
+| Topic list | `ros2 topic list` | `/cmd_vel`, `/robot_pose`, `/odom`, `/tf`, `/diagnostics` exist |
+| Pose output | `ros2 topic echo --once /robot_pose` | Pose message appears |
+| Odom output | `ros2 topic echo --once /odom` | Odometry message appears |
+| TF output | `tf2_echo odom base_link` | Transform appears |
+| Diagnostics output | `ros2 topic echo --once /diagnostics` | DiagnosticArray message appears |
+| Command motion | publish `/cmd_vel` | Pose changes |
+| Timeout | stop `/cmd_vel` | Robot stops after timeout |
+| Diagnostics OK state | publish continuous `/cmd_vel` | diagnostics level is OK |
+| Diagnostics WARN state | stop `/cmd_vel` and wait | diagnostics level is WARN |
+| Clamp positive | send large positive command | Velocity clamps to max |
+| Clamp negative | send large negative command | Velocity clamps to negative max |
+| Params | `ros2 param get` | Expected values appear |
+| Launch args | override launch arguments | Overridden values appear |
+| QoS | `ros2 topic info --verbose` | Reliable/volatile appears |
+| rosbag2 record | `ros2 bag record` | Bag is created |
+| rosbag2 info | `ros2 bag info` | Expected topics recorded |
+| rosbag2 replay | `ros2 bag play` | Pose/odom/TF replay |
+| RViz2 | open saved RViz config | Grid, TF, and Odometry display correctly |
+| Launch regression | `./scripts/day68_launch_regression.sh` | Regression script passes |
 
 ---
 
-## Common Failure Modes
+## 16. Common Failure Modes
 
-| Failure                    | Likely Cause                                | First Check                              |
-| -------------------------- | ------------------------------------------- | ---------------------------------------- |
-| No `/robot_pose`           | node not running or publisher failed        | `ros2 node list`, `ros2 topic list`      |
-| No `/cmd_vel` subscriber   | node not launched                           | `ros2 topic info /cmd_vel`               |
-| Robot does not move        | no command or command timeout               | publish `/cmd_vel` continuously          |
-| Robot moves forever        | timeout logic broken                        | stop commands and wait                   |
-| Parameters not changing    | YAML/install mismatch                       | check installed YAML                     |
-| Launch override ignored    | parameter dictionary order wrong            | dictionary must come after `params_file` |
-| TF missing                 | transform broadcaster issue                 | `tf2_echo odom base_link`                |
-| Odom exists but TF missing | odom publisher works, TF broadcaster failed | inspect `publishTransform()`             |
-| Bag missing topics         | topics not active during recording          | start simulator before recording         |
-| Bag replay empty           | wrong bag path or no messages recorded      | `ros2 bag info`                          |
-| Build uses wrong cache     | stale build folder                          | `rm -rf build install log`               |
-| Generated files in Git     | `.gitignore` missing rule                   | check `git status`                       |
+| Failure | Likely Cause | First Check |
+|---|---|---|
+| No `/robot_pose` | node not running or publisher failed | `ros2 node list`, `ros2 topic list` |
+| No `/cmd_vel` subscriber | node not launched | `ros2 topic info /cmd_vel` |
+| No `/diagnostics` | diagnostics publisher missing or not rebuilt | `ros2 topic list` |
+| Robot does not move | no command or command timeout | publish `/cmd_vel` continuously |
+| Robot moves forever | timeout logic broken | stop commands and wait |
+| Parameters not changing | YAML/install mismatch | check installed YAML |
+| Launch override ignored | parameter dictionary order wrong | dictionary must come after `params_file` |
+| TF missing | transform broadcaster issue | `tf2_echo odom base_link` |
+| Odom exists but TF missing | odom publisher works, TF broadcaster failed | inspect `publishTransform()` |
+| Bag missing topics | topics not active during recording | start simulator before recording |
+| Bag replay empty | wrong bag path or no messages recorded | `ros2 bag info` |
+| RViz config missing after build | rviz directory not installed | check CMake install block |
+| Diagnostics always WARN | no fresh command input | publish `/cmd_vel` at 10 Hz |
+| Diagnostics always OK | timeout logic not connected | inspect timeout condition |
+| Launch regression script fails with `bash\r` | CRLF line endings | convert shell script to LF |
+| Launch regression script fails with unset variable | `set -u` conflicts with ROS setup | use `set -eo pipefail` |
+| Build uses wrong cache | stale build folder | `rm -rf build install log` |
+| Generated files in Git | `.gitignore` missing rule | check `git status` |
 
 ---
 
-## Standalone C++ Validation
+## 17. Standalone C++ Validation
 
 Build standalone simulator on Linux / WSL:
 
@@ -776,7 +859,7 @@ Delete build/ before switching environments.
 
 ---
 
-## Git Validation
+## 18. Git Validation
 
 Before every commit:
 
@@ -803,12 +886,13 @@ ros2_ws/install/
 ros2_ws/log/
 standalone_cpp/build/
 bags/day65_baseline/
+bags/day67_diagnostics/
 ```
 
 Check if generated files are tracked:
 
 ```bash
-git ls-files | grep -E "(^build/|^install/|^log/|^ros2_ws/build/|^ros2_ws/install/|^ros2_ws/log/|^standalone_cpp/build/|^bags/day65_baseline/)"
+git ls-files | grep -E "(^build/|^install/|^log/|^ros2_ws/build/|^ros2_ws/install/|^ros2_ws/log/|^standalone_cpp/build/|^bags/day65_baseline/|^bags/day67_diagnostics/)"
 ```
 
 Expected:
@@ -819,7 +903,7 @@ Expected:
 
 ---
 
-## Commit Gate
+## 19. Commit Gate
 
 A commit is allowed only if:
 
@@ -829,25 +913,27 @@ launch works
 required topics publish
 parameters are correct
 TF works
+diagnostics work
+launch regression passes when applicable
 changed workflow is documented
 generated files are ignored
 git diff --cached --name-only shows only intended files
 ```
 
-For Day 65, expected staged files:
+For Day 68, expected staged files:
 
 ```txt
-.gitignore
 README.md
-bags/README.md
 docs/daily_documentation.md
 docs/debugging_and_validation.md
+scripts/day68_launch_regression.sh
 ```
 
 Do not stage:
 
 ```txt
 bags/day65_baseline/
+bags/day67_diagnostics/
 ros2_ws/build/
 ros2_ws/install/
 ros2_ws/log/

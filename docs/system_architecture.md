@@ -1,6 +1,6 @@
 # System Architecture — C++ / ROS 2 Robotics Simulation Foundation
 
-This document explains how the standalone C++ simulator, differential-drive module, manipulator module, and ROS 2 simulator are organized and connected.
+This document explains how the standalone C++ simulator, differential-drive module, manipulator module, ROS 2 simulator, diagnostics layer, visualization workflow, and launch regression workflow are organized and connected.
 
 ---
 
@@ -11,11 +11,11 @@ This repository demonstrates a robotics simulation foundation built in stages:
 1. Standalone C++ robotics simulation fundamentals
 2. Differential-drive mobile robot simulation
 3. Manipulator joint-state simulation
-4. ROS 2 C++ integration using standard robot topics, odometry, TF, launch files, YAML parameters, launch arguments, and QoS profiles
+4. ROS 2 C++ integration using standard robot topics, odometry, TF, launch files, YAML parameters, launch arguments, QoS profiles, rosbag2, RViz2, diagnostics, and launch regression testing
 
 The goal is to show both low-level C++ simulation logic and ROS 2 robotics system integration.
 
-The project is intentionally built as an engineering artifact, not just a code exercise. It includes modular structure, runtime configuration, validation checks, debugging workflow, regression testing, performance timing, and documentation.
+The project is intentionally built as an engineering artifact, not just a code exercise. It includes modular structure, runtime configuration, validation checks, debugging workflow, regression testing, performance timing, visualization, diagnostics, and documentation.
 
 ---
 
@@ -39,10 +39,15 @@ cpp_robotics_sim_foundation/
 │       │   └── sim_params.yaml
 │       ├── launch/
 │       │   └── sim.launch.py
+│       ├── rviz/
+│       │   └── sim_debug.rviz
 │       ├── src/
 │       │   └── sim_node.cpp
 │       ├── CMakeLists.txt
 │       └── package.xml
+│
+├── scripts/
+│   └── day68_launch_regression.sh
 │
 └── docs/
     ├── daily_documentation.md
@@ -50,11 +55,12 @@ cpp_robotics_sim_foundation/
     └── debugging_and_validation.md
 ```
 
-The repository has three main layers:
+The repository has four main layers:
 
 ```txt
 standalone_cpp/  = pure C++ simulation modules
 ros2_ws/         = ROS 2 C++ simulator integration
+scripts/         = repeatable validation and regression scripts
 docs/            = architecture, debugging, validation, and daily documentation
 ```
 
@@ -67,24 +73,21 @@ docs/            = architecture, debugging, validation, and daily documentation
                          /cmd_vel
                             |
                             v
-                 +----------------------+
-                 |       sim_node       |
-                 |----------------------|
-                 | cmdVelCallback()     |
-                 | timerCallback()      |
-                 | validateParameters() |
-                 | publishOdometry()    |
-                 | publishTransform()   |
-                 +----------------------+
-                    |          |        |
-                    |          |        |
-                    v          v        v
-          /robot_pose       /odom      /tf
-       Pose2D message   Odometry   odom -> base_link
-                           |
-                           v
-                    position, velocity,
-                    quaternion orientation
+                 +-------------------------+
+                 |        sim_node         |
+                 |-------------------------|
+                 | cmdVelCallback()        |
+                 | timerCallback()         |
+                 | validateParameters()    |
+                 | publishOdometry()       |
+                 | publishTransform()      |
+                 | publishDiagnostics()    |
+                 +-------------------------+
+                    |        |        |        |
+                    |        |        |        |
+                    v        v        v        v
+          /robot_pose     /odom     /tf   /diagnostics
+        Pose2D msg     Odometry   TF     DiagnosticArray
 ```
 
 Frame tree:
@@ -94,7 +97,7 @@ odom
   └── base_link
 ```
 
-The simulator models a planar mobile robot controlled through `/cmd_vel`. It accepts velocity commands, updates robot pose using planar kinematics, publishes robot state, publishes odometry, and broadcasts the transform between `odom` and `base_link`.
+The simulator models a planar mobile robot controlled through `/cmd_vel`. It accepts velocity commands, applies command timeout and velocity clamping, updates robot pose using planar kinematics, publishes robot state, publishes odometry, broadcasts the transform between `odom` and `base_link`, and reports runtime diagnostics.
 
 ---
 
@@ -256,13 +259,10 @@ The ROS 2 simulator uses:
 /robot_pose
 /odom
 /tf
+/diagnostics
 ```
 
-The node receives velocity commands, updates robot pose, publishes odometry, and broadcasts the transform:
-
-```txt
-odom -> base_link
-```
+The node receives velocity commands, updates robot pose, publishes odometry, broadcasts the `odom -> base_link` transform, and publishes structured runtime diagnostics.
 
 This demonstrates how standalone simulation logic can be exposed through standard ROS 2 robotics interfaces.
 
@@ -301,7 +301,8 @@ integrate robot pose
 publish /robot_pose
 publish /odom
 broadcast odom -> base_link transform
-report runtime diagnostics and timing
+publish /diagnostics
+report runtime timing
 ```
 
 ---
@@ -312,26 +313,28 @@ report runtime diagnostics and timing
 /cmd_vel
    │
    ▼
-+----------------+
-|    sim_node    |
-|                |
-|  cmd callback  |
-|  timer update  |
-|  pose update   |
-|  odom publish  |
-|  TF broadcast  |
-+----------------+
-   │       │       │
-   ▼       ▼       ▼
-/robot_pose   /odom   /tf
++---------------------+
+|      sim_node       |
+|                     |
+|  cmd callback       |
+|  timer update       |
+|  pose update        |
+|  odom publish       |
+|  TF broadcast       |
+|  diagnostics publish|
++---------------------+
+   │        │        │          │
+   ▼        ▼        ▼          ▼
+/robot_pose /odom    /tf   /diagnostics
 ```
 
-| Topic         | Type                       | Direction | Purpose                                  |
-| ------------- | -------------------------- | --------- | ---------------------------------------- |
-| `/cmd_vel`    | `geometry_msgs/msg/Twist`  | Input     | Velocity command input                   |
-| `/robot_pose` | `geometry_msgs/msg/Pose2D` | Output    | Simple 2D robot pose for quick debugging |
-| `/odom`       | `nav_msgs/msg/Odometry`    | Output    | Standard robot odometry                  |
-| `/tf`         | `tf2_msgs/msg/TFMessage`   | Output    | Transform tree data                      |
+| Topic | Type | Direction | Purpose |
+|---|---|---|---|
+| `/cmd_vel` | `geometry_msgs/msg/Twist` | Input | Velocity command input |
+| `/robot_pose` | `geometry_msgs/msg/Pose2D` | Output | Simple 2D robot pose for quick debugging |
+| `/odom` | `nav_msgs/msg/Odometry` | Output | Standard robot odometry |
+| `/tf` | `tf2_msgs/msg/TFMessage` | Output | Transform tree data |
+| `/diagnostics` | `diagnostic_msgs/msg/DiagnosticArray` | Output | Runtime health and simulator diagnostics |
 
 ---
 
@@ -427,6 +430,38 @@ This means the robot body frame `base_link` is located and oriented relative to 
 
 ---
 
+### `/diagnostics`
+
+Type:
+
+```txt
+diagnostic_msgs/msg/DiagnosticArray
+```
+
+The diagnostics message reports:
+
+```txt
+command timeout state
+current command age
+current linear and angular velocity
+velocity limits
+current pose
+callback timing
+average callback time
+max callback time
+timing budget
+callback count
+```
+
+Diagnostic status behavior:
+
+```txt
+OK   when command input is fresh
+WARN when cmd_vel timeout is active
+```
+
+---
+
 ## 13. Frame Tree
 
 ```txt
@@ -466,6 +501,8 @@ publish /robot_pose
 publish /odom
    ↓
 broadcast odom -> base_link TF
+   ↓
+publish /diagnostics
 ```
 
 This separates asynchronous command input from fixed-rate simulation updates.
@@ -621,14 +658,15 @@ This allows stable default configuration through YAML while still supporting fas
 
 ## 20. QoS Design
 
-The simulator uses explicit QoS profiles for command and state topics.
+The simulator uses explicit QoS profiles for command, state, and diagnostics topics.
 
-| Topic         | Endpoint                                      | QoS Choice                        | Reason                                                                                                |
-| ------------- | --------------------------------------------- | --------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| `/cmd_vel`    | Subscriber                                    | reliable, volatile, keep_last(10) | Commands should be delivered reliably, but stale commands should not be replayed to late subscribers. |
-| `/robot_pose` | Publisher                                     | reliable, volatile, keep_last(10) | Low-rate simulator pose output should be reliable for debugging and validation.                       |
-| `/odom`       | Publisher                                     | reliable, volatile, keep_last(10) | Odometry is important state output for RViz, rosbag2, and validation.                                 |
-| `/tf`         | Publisher via `tf2_ros::TransformBroadcaster` | handled by tf2 broadcaster        | Standard TF broadcaster manages transform publication.                                                |
+| Topic | Endpoint | QoS Choice | Reason |
+|---|---|---|---|
+| `/cmd_vel` | Subscriber | reliable, volatile, keep_last(10) | Commands should be delivered reliably, but stale commands should not be replayed to late subscribers. |
+| `/robot_pose` | Publisher | reliable, volatile, keep_last(10) | Low-rate simulator pose output should be reliable for debugging and validation. |
+| `/odom` | Publisher | reliable, volatile, keep_last(10) | Odometry is important state output for RViz, rosbag2, and validation. |
+| `/diagnostics` | Publisher | reliable, volatile, keep_last(10) | Diagnostics should be available reliably for runtime health checks. |
+| `/tf` | Publisher via `tf2_ros::TransformBroadcaster` | handled by tf2 broadcaster | Standard TF broadcaster manages transform publication. |
 
 Code pattern:
 
@@ -642,7 +680,7 @@ const auto state_qos = rclcpp::QoS(rclcpp::KeepLast(10))
     .durability_volatile();
 ```
 
-Expected QoS inspection for `/cmd_vel`, `/robot_pose`, and `/odom`:
+Expected QoS inspection for `/cmd_vel`, `/robot_pose`, `/odom`, and `/diagnostics`:
 
 ```txt
 Reliability: RELIABLE
@@ -653,15 +691,11 @@ The code explicitly configures `KeepLast(10)`. The ROS 2 CLI may display history
 
 ---
 
----
-
----
-
 ## 21. Data Recording and Replay
 
 The simulator supports rosbag2 recording and replay for reproducible debugging and validation.
 
-Recorded topics:
+Recorded topics for the Day 65 baseline:
 
 ```txt
 /cmd_vel
@@ -690,8 +724,134 @@ ros2 bag play bags/day65_baseline
 
 This allows the same command, state, odometry, and TF sequence to be inspected after the run and replayed for validation.
 
+---
 
-## 22. Performance Timing
+## 22. RViz2 Visualization Layer
+
+The simulator includes a saved RViz2 configuration:
+
+```txt
+ros2_ws/src/cpp_robotics_sim_ros/rviz/sim_debug.rviz
+```
+
+RViz2 visualizes:
+
+```txt
+Grid
+TF
+Odometry on /odom
+```
+
+The fixed frame is:
+
+```txt
+odom
+```
+
+The visualization layer helps confirm that the `odom -> base_link` TF relationship and `/odom` output are behaving correctly during motion.
+
+---
+
+## 23. Diagnostics Layer
+
+The diagnostics layer publishes structured runtime health data on:
+
+```txt
+/diagnostics
+```
+
+Message type:
+
+```txt
+diagnostic_msgs/msg/DiagnosticArray
+```
+
+The diagnostics layer reports:
+
+```txt
+simulation timestep
+command timeout threshold
+time since last command
+timeout active state
+current command velocities
+velocity limits
+current pose
+latest callback time
+average callback time
+max callback time
+timing budget
+callback count
+```
+
+This layer turns simulator health into a ROS 2 topic instead of only terminal logs.
+
+---
+
+## 24. Launch Regression Layer
+
+Day 68 adds a launch regression layer around the ROS 2 simulator architecture.
+
+The regression script is:
+
+```txt
+scripts/day68_launch_regression.sh
+```
+
+This script does not change the robot simulation model. Instead, it validates that the runtime architecture still works after changes.
+
+## What the Regression Layer Checks
+
+```txt
+ROS 2 package launch
+node startup
+topic availability
+parameter loading
+pose publishing
+odometry publishing
+TF broadcasting
+diagnostics publishing
+QoS/type inspection
+command input path
+launch argument override path
+```
+
+## Architecture Role
+
+```txt
+source code / launch / config changes
+        ↓
+clean build
+        ↓
+ros2 launch cpp_robotics_sim_ros sim.launch.py
+        ↓
+runtime ROS 2 graph
+        ↓
+topics, parameters, TF, odom, diagnostics
+        ↓
+day68_launch_regression.sh validates expected behavior
+```
+
+## Why This Layer Matters
+
+The launch regression script acts as a repeatable system-level validation gate. It confirms that the ROS 2 runtime interfaces are still alive and correctly connected before a change is committed.
+
+This helps prevent silent breakages in:
+
+```txt
+launch files
+YAML parameters
+topic names
+publisher/subscriber setup
+TF output
+odometry output
+diagnostics output
+QoS configuration
+launch argument overrides
+```
+
+---
+
+## 25. Performance Timing
 
 The timer callback is measured using:
 
@@ -719,7 +879,7 @@ dt = 0.001 -> 1 ms budget
 
 ---
 
-## 23. Relationship Between Modules
+## 26. Relationship Between Modules
 
 The project is intentionally separated:
 
@@ -732,9 +892,12 @@ mobile robot pose and trajectory update
 
 ROS 2 module:
 standard robotics communication layer
+
+Diagnostics/regression layer:
+runtime health monitoring and repeatable validation
 ```
 
-They are connected conceptually because all three use the same simulation engineering principles:
+They are connected conceptually because all layers use the same simulation engineering principles:
 
 ```txt
 state representation
@@ -744,11 +907,12 @@ safety limits
 validation
 debugging
 documentation
+regression testing
 ```
 
 ---
 
-## 24. Build Standalone C++ Project
+## 27. Build Standalone C++ Project
 
 ```bash
 cd standalone_cpp
@@ -762,7 +926,7 @@ cmake --build .
 
 ---
 
-## 25. Build ROS 2 Project
+## 28. Build ROS 2 Project
 
 ```bash
 cd ros2_ws
@@ -780,7 +944,7 @@ ros2 launch cpp_robotics_sim_ros sim.launch.py
 
 ---
 
-## 26. Verification Commands
+## 29. Verification Commands
 
 Check topics:
 
@@ -806,6 +970,13 @@ Check TF:
 ros2 run tf2_ros tf2_echo odom base_link
 ```
 
+Check diagnostics:
+
+```bash
+ros2 topic echo --once /diagnostics
+ros2 topic info /diagnostics --verbose
+```
+
 Send command:
 
 ```bash
@@ -818,14 +989,27 @@ Check QoS:
 ros2 topic info /cmd_vel --verbose
 ros2 topic info /robot_pose --verbose
 ros2 topic info /odom --verbose
+ros2 topic info /diagnostics --verbose
 ros2 topic info /tf --verbose
+```
+
+Run launch regression:
+
+```bash
+./scripts/day68_launch_regression.sh
+```
+
+Expected:
+
+```txt
+========== PASS: Day 68 launch regression succeeded ==========
 ```
 
 ---
 
-## 27. Validation and Regression
+## 30. Validation and Regression
 
-The simulator is validated using repeatable regression tests:
+The simulator is validated using repeatable checks:
 
 ```txt
 zero command
@@ -839,6 +1023,7 @@ continuous command
 invalid parameter rejection
 /odom publishing
 /tf publishing
+/diagnostics publishing
 odom/TF consistency
 performance timing
 QoS inspection
@@ -848,6 +1033,8 @@ launch argument overrides
 rosbag2 recording
 rosbag2 inspection
 rosbag2 replay
+RViz2 visualization
+launch regression script
 ```
 
 These tests are documented in:
@@ -858,7 +1045,7 @@ docs/debugging_and_validation.md
 
 ---
 
-## 28. Debug Workflow
+## 31. Debug Workflow
 
 Debugging commands and common failure modes are documented in:
 
@@ -875,7 +1062,7 @@ First classify the failure, then test systematically.
 
 ---
 
-## 29. What This Project Demonstrates
+## 32. What This Project Demonstrates
 
 This project demonstrates:
 
@@ -894,13 +1081,16 @@ This project demonstrates:
 * explicit QoS profiles
 * odometry publishing
 * TF broadcasting
+* diagnostics publishing
+* RViz2 visualization
 * performance timing
 * engineering documentation
 * rosbag2 recording and replay
+* launch regression validation
 
 ---
 
-## 30. Current Limitations
+## 33. Current Limitations
 
 Current limitations:
 
@@ -909,35 +1099,36 @@ The manipulator module does not yet publish ROS 2 /joint_states.
 The manipulator module does not yet include forward kinematics.
 The differential-drive physics model is kinematic, not full rigid-body dynamics.
 The ROS 2 module currently focuses on mobile robot state, not manipulator state.
-RViz visualization is planned.
 URDF/Xacro robot description is planned.
 Gazebo integration is planned.
 Sensor simulation is planned.
+ros2_control integration is planned.
 ```
 
 ---
 
-## 31. Future Work
+## 34. Future Work
 
 Planned future work:
 
 ```txt
-Add RViz visualization
 Add URDF/Xacro robot model
+Add robot_state_publisher workflow
 Add ROS 2 /joint_states publisher
 Add Gazebo simulation
 Add sensor topics
 Add noise and uncertainty models
+Add ros2_control/controller-manager integration
 Add unit tests and CI
 Add final portfolio screenshots, plots, and demo video/GIF
 ```
 
 ---
 
-## 32. Interview Summary
+## 35. Interview Summary
 
 In interview language:
 
 ```txt
-I built a modular C++ robotics simulation foundation with separate differential-drive and manipulator modules, then integrated the mobile robot simulation into ROS 2 using /cmd_vel, /robot_pose, /odom, and TF. The project includes launch files, YAML parameters, launch argument overrides, explicit QoS profiles, rosbag2 recording/replay, validation tests, joint limits, safety checks, performance timing, regression testing, and documentation.
+I built a modular C++ robotics simulation foundation with separate differential-drive and manipulator modules, then integrated the mobile robot simulation into ROS 2 using /cmd_vel, /robot_pose, /odom, TF, and /diagnostics. The project includes launch files, YAML parameters, launch argument overrides, explicit QoS profiles, rosbag2 recording/replay, RViz2 visualization, validation tests, joint limits, safety checks, performance timing, launch regression testing, and documentation.
 ```

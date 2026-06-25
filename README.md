@@ -1,6 +1,6 @@
 # C++ / ROS 2 Robotics Simulation Foundation
 
-This repository contains a C++ and ROS 2 robotics simulation project focused on mobile robot state updates, differential-drive kinematics, ROS 2 messaging, odometry, TF frames, runtime configuration, launch workflows, QoS profiles, safety validation, performance timing, debugging, and regression testing.
+This repository contains a C++ and ROS 2 robotics simulation project focused on mobile robot state updates, differential-drive kinematics, ROS 2 messaging, odometry, TF frames, runtime configuration, launch workflows, QoS profiles, safety validation, diagnostics, performance timing, debugging, visualization, and regression testing.
 
 The project started as a standalone C++ robotics simulation foundation and was extended into a ROS 2 C++ simulator.
 
@@ -8,11 +8,12 @@ The project started as a standalone C++ robotics simulation foundation and was e
 
 ## Project Structure
 
-This repository is organized into three main layers:
+This repository is organized into four main layers:
 
 ```txt
 standalone_cpp/  -> Pure C++ robotics simulation modules
 ros2_ws/         -> ROS 2 C++ simulator integration
+scripts/         -> Regression and validation scripts
 docs/            -> Architecture, debugging, regression, integration, and daily documentation
 ```
 
@@ -51,11 +52,20 @@ It exposes the mobile robot simulation through standard ROS 2 interfaces:
 /robot_pose
 /odom
 /tf
+/diagnostics
 ```
 
-The ROS 2 node subscribes to velocity commands, updates pose, publishes odometry, and broadcasts the `odom -> base_link` transform.
+The ROS 2 node subscribes to velocity commands, updates pose, publishes odometry, broadcasts the `odom -> base_link` transform, and publishes runtime diagnostics.
 
----
+### Regression Scripts
+
+The scripts layer contains repeatable validation workflows:
+
+```txt
+scripts/day68_launch_regression.sh
+```
+
+The Day 68 launch regression script validates that the ROS 2 runtime stack still launches correctly and publishes the expected topics, parameters, TF, odometry, and diagnostics.
 
 ### Documentation
 
@@ -67,7 +77,8 @@ docs/system_architecture.md
 docs/debugging_and_validation.md
 ```
 
-The daily engineering log tracks the roadmap from C++ fundamentals through ROS 2 launch, YAML parameters, launch arguments, QoS profiles, rosbag2 recording/replay, and RViz2 visualization.
+The daily engineering log tracks the roadmap from C++ fundamentals through ROS 2 launch, YAML parameters, launch arguments, QoS profiles, rosbag2 recording/replay, RViz2 visualization, diagnostics, and launch regression.
+
 ---
 
 ## Current Features
@@ -83,14 +94,15 @@ The daily engineering log tracks the roadmap from C++ fundamentals through ROS 2
 * `/robot_pose` publisher using `geometry_msgs/msg/Pose2D`
 * `/odom` publisher using `nav_msgs/msg/Odometry`
 * `/tf` broadcaster for `odom -> base_link`
+* `/diagnostics` publisher using `diagnostic_msgs/msg/DiagnosticArray`
+* Runtime diagnostic reporting for timeout state, velocity limits, pose, and callback timing
 * ROS 2 launch workflow using `sim.launch.py`
 * YAML runtime configuration using `config/sim_params.yaml`
 * Launch argument overrides for initial pose, timestep, timeout, and velocity limits
-* Explicit ROS 2 QoS profiles for `/cmd_vel`, `/robot_pose`, and `/odom`
+* Explicit ROS 2 QoS profiles for `/cmd_vel`, `/robot_pose`, `/odom`, and `/diagnostics`
 * rosbag2 recording and replay workflow for `/cmd_vel`, `/robot_pose`, `/odom`, and `/tf`
 * RViz2 visualization workflow with saved `sim_debug.rviz` config
-* `/diagnostics` publisher using `diagnostic_msgs/msg/DiagnosticArray`
-* Runtime diagnostic reporting for timeout state, velocity limits, pose, and callback timing
+* Launch regression script for repeatable ROS 2 runtime validation
 * Runtime parameters for timestep, initial pose, timeout, and velocity limits
 * Velocity clamping using `std::clamp`
 * Command timeout safety
@@ -103,13 +115,13 @@ The daily engineering log tracks the roadmap from C++ fundamentals through ROS 2
 
 ## ROS 2 Topics
 
-| Topic         | Type                                  | Purpose                                  |
-| ------------- | ------------------------------------- | ---------------------------------------- |
-| `/cmd_vel`    | `geometry_msgs/msg/Twist`             | Velocity command input                   |
-| `/robot_pose` | `geometry_msgs/msg/Pose2D`            | Simple 2D robot pose                     |
-| `/odom`       | `nav_msgs/msg/Odometry`               | Standard robot odometry                  |
-| `/tf`         | `tf2_msgs/msg/TFMessage`              | Transform tree data                      |
-| `/diagnostics`| `diagnostic_msgs/msg/DiagnosticArray` | Runtime health and simulator diagnostics |
+| Topic | Type | Purpose |
+|---|---|---|
+| `/cmd_vel` | `geometry_msgs/msg/Twist` | Velocity command input |
+| `/robot_pose` | `geometry_msgs/msg/Pose2D` | Simple 2D robot pose |
+| `/odom` | `nav_msgs/msg/Odometry` | Standard robot odometry |
+| `/tf` | `tf2_msgs/msg/TFMessage` | Transform tree data |
+| `/diagnostics` | `diagnostic_msgs/msg/DiagnosticArray` | Runtime health and simulator diagnostics |
 
 ---
 
@@ -279,14 +291,15 @@ Rotation: Quaternion [0.000, 0.000, z, w]
 
 ## Check QoS
 
-The simulator uses explicit QoS profiles for command and state topics.
+The simulator uses explicit QoS profiles for command, state, and diagnostics topics.
 
-| Topic         | Endpoint   | QoS                                        |
-| ------------- | ---------- | ------------------------------------------ |
-| `/cmd_vel`    | Subscriber | reliable, volatile, keep_last(10)          |
-| `/robot_pose` | Publisher  | reliable, volatile, keep_last(10)          |
-| `/odom`       | Publisher  | reliable, volatile, keep_last(10)          |
-| `/tf`         | Publisher  | handled by `tf2_ros::TransformBroadcaster` |
+| Topic | Endpoint | QoS |
+|---|---|---|
+| `/cmd_vel` | Subscriber | reliable, volatile, keep_last(10) |
+| `/robot_pose` | Publisher | reliable, volatile, keep_last(10) |
+| `/odom` | Publisher | reliable, volatile, keep_last(10) |
+| `/diagnostics` | Publisher | reliable, volatile, keep_last(10) |
+| `/tf` | Publisher | handled by `tf2_ros::TransformBroadcaster` |
 
 Inspect QoS:
 
@@ -294,10 +307,11 @@ Inspect QoS:
 ros2 topic info /cmd_vel --verbose
 ros2 topic info /robot_pose --verbose
 ros2 topic info /odom --verbose
+ros2 topic info /diagnostics --verbose
 ros2 topic info /tf --verbose
 ```
 
-Expected for `/cmd_vel`, `/robot_pose`, and `/odom`:
+Expected for `/cmd_vel`, `/robot_pose`, `/odom`, and `/diagnostics`:
 
 ```txt
 Reliability: RELIABLE
@@ -355,10 +369,8 @@ Launch the simulator:
 
 ```bash
 cd ros2_ws
-
 source /opt/ros/jazzy/setup.bash
 source install/setup.bash
-
 ros2 launch cpp_robotics_sim_ros sim.launch.py
 ```
 
@@ -411,21 +423,29 @@ The simulator publishes structured runtime diagnostics on:
 
 ```txt
 /diagnostics
+```
 
 Message type:
 
+```txt
 diagnostic_msgs/msg/DiagnosticArray
+```
 
 Check diagnostics:
 
+```bash
 ros2 topic echo --once /diagnostics
+```
 
 Inspect diagnostics QoS:
 
+```bash
 ros2 topic info /diagnostics --verbose
+```
 
 The diagnostic report includes:
 
+```txt
 dt
 cmd_timeout
 time_since_cmd
@@ -442,48 +462,47 @@ average_callback_time_ms
 max_callback_time_ms
 timing_budget_ms
 callback_count
+```
 
 The diagnostic status is:
 
+```txt
 OK   when simulator is running with fresh command input
 WARN when cmd_vel timeout is active
+```
 
 OK-state test:
 
+```bash
 ros2 topic pub -r 10 /cmd_vel geometry_msgs/msg/Twist "{linear: {x: 0.3}, angular: {z: 0.2}}"
 ros2 topic echo --once /diagnostics
+```
+
+Expected OK-state behavior:
+
+```txt
+level: 0
+message: Simulator running
+timeout_active: false
+```
 
 WARN-state test:
 
-ros2 topic echo --once /diagnostics
-
-Run the WARN-state test after stopping /cmd_vel and waiting longer than cmd_timeout.
-
-
-### Add to Verification Workflow
-
-Paste this after RViz2 checks or QoS checks:
-
-```
-### Diagnostics Checks
-
 ```bash
-ros2 topic list | grep diagnostics
 ros2 topic echo --once /diagnostics
-ros2 topic info /diagnostics --verbose
+```
 
-Expected topic:
+Run the WARN-state test after stopping `/cmd_vel` and waiting longer than `cmd_timeout`.
 
-/diagnostics
+Expected WARN-state behavior:
 
-Expected message type:
+```txt
+level: 1
+message: cmd_vel timeout active
+timeout_active: true
+```
 
-diagnostic_msgs/msg/DiagnosticArray
-
-Expected status behavior:
-
-level: 0  -> Simulator running
-level: 1  -> cmd_vel timeout active
+---
 
 ## Performance Timing
 
@@ -505,6 +524,43 @@ Examples:
 dt = 0.1   -> 100 ms budget
 dt = 0.01  -> 10 ms budget
 dt = 0.001 -> 1 ms budget
+```
+
+---
+
+## Launch Regression
+
+The project includes a repeatable launch regression script:
+
+```txt
+scripts/day68_launch_regression.sh
+```
+
+Run it from the repository root:
+
+```bash
+./scripts/day68_launch_regression.sh
+```
+
+The script validates:
+
+```txt
+default launch
+required ROS 2 topics
+default parameters
+robot pose output
+odometry output
+TF output
+diagnostics output
+command response
+diagnostics QoS/type
+launch argument overrides
+```
+
+Expected result:
+
+```txt
+========== PASS: Day 68 launch regression succeeded ==========
 ```
 
 ---
@@ -563,10 +619,36 @@ ros2 param get /sim_node max_angular_velocity
 ros2 topic info /cmd_vel --verbose
 ros2 topic info /robot_pose --verbose
 ros2 topic info /odom --verbose
+ros2 topic info /diagnostics --verbose
 ros2 topic info /tf --verbose
 ```
 
----
+### Diagnostics Checks
+
+```bash
+ros2 topic list | grep diagnostics
+ros2 topic echo --once /diagnostics
+ros2 topic info /diagnostics --verbose
+```
+
+Expected topic:
+
+```txt
+/diagnostics
+```
+
+Expected message type:
+
+```txt
+diagnostic_msgs/msg/DiagnosticArray
+```
+
+Expected status behavior:
+
+```txt
+level: 0  -> Simulator running
+level: 1  -> cmd_vel timeout active
+```
 
 ### rosbag2 Checks
 
@@ -607,6 +689,20 @@ Displays: Grid, TF, Odometry
 Odometry Topic: /odom
 ```
 
+### Launch Regression Check
+
+From the repository root:
+
+```bash
+./scripts/day68_launch_regression.sh
+```
+
+Expected:
+
+```txt
+========== PASS: Day 68 launch regression succeeded ==========
+```
+
 ---
 
 ## Documentation
@@ -617,7 +713,8 @@ Additional documentation:
 * `docs/system_architecture.md`
 * `docs/debugging_and_validation.md`
 
-The daily engineering log tracks the roadmap from C++ fundamentals through ROS 2 launch, YAML parameters, launch arguments, QoS profiles, rosbag2 recording/replay, and RViz2 visualization.
+The daily engineering log tracks the roadmap from C++ fundamentals through ROS 2 launch, YAML parameters, launch arguments, QoS profiles, rosbag2 recording/replay, RViz2 visualization, diagnostics, and launch regression.
+
 ---
 
 ## Engineering Focus
@@ -632,12 +729,14 @@ This project demonstrates:
 * topic-based robot control
 * odometry publishing
 * TF frame broadcasting
+* diagnostics publishing
 * launch-based runtime workflows
 * YAML runtime configuration
 * launch argument overrides
 * QoS profile design
 * rosbag2 recording and replay
 * RViz2 visual debugging
+* launch regression testing
 * parameterized runtime behavior
 * safety guards
 * debugging discipline
@@ -649,22 +748,23 @@ This project demonstrates:
 
 ## Current Status
 
-| Area                      | Status              |
-| ------------------------- | ------------------- |
-| Standalone C++ simulator  | Complete foundation |
-| ROS 2 node integration    | Complete foundation |
-| Launch workflow           | Added               |
-| YAML configuration        | Added               |
-| Launch argument overrides | Added               |
-| QoS profiles              | Added               |
-| rosbag2 workflow          | Added               |
-| RViz visualization        | Added               |
-| Diagnostics               | Added               |
-| URDF/Xacro robot model    | Planned             |
-| Gazebo integration        | Planned             |
+| Area | Status |
+|---|---|
+| Standalone C++ simulator | Complete foundation |
+| ROS 2 node integration | Complete foundation |
+| Launch workflow | Added |
+| YAML configuration | Added |
+| Launch argument overrides | Added |
+| QoS profiles | Added |
+| rosbag2 workflow | Added |
+| RViz2 visualization | Added |
+| Diagnostics | Added |
+| Launch regression | Added |
+| URDF/Xacro robot model | Planned |
+| Gazebo integration | Planned |
 
 Next planned milestone:
 
 ```txt
-Day 68 — Launch Regression
+Day 69 — ROS 2 Usage Documentation
 ```
