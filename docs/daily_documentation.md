@@ -1121,6 +1121,82 @@ Day 69 improved the project’s user-facing documentation. I added a ROS 2 usage
 
 ---
 
+# Day 70 — Topic Interface Documentation
+
+## Goal
+
+Create a clear ROS 2 topic interface reference for the simulator.
+
+## Deliverable
+
+Added:
+
+```txt
+docs/topic_interface_reference.md
+```
+
+The document explains each ROS 2 topic used by the simulator:
+
+```txt
+/cmd_vel
+/robot_pose
+/odom
+/tf
+/diagnostics
+```
+
+## What Was Documented
+
+For each topic, the documentation defines:
+
+```txt
+topic direction
+message type
+purpose
+important fields
+QoS behavior
+validation commands
+expected output
+common failure modes
+```
+
+## Why This Matters
+
+Robotics systems are interface-driven. A node is only useful if another engineer can understand what it subscribes to, what it publishes, what message types it uses, and how to validate those interfaces.
+
+Day 70 turns the simulator topics into a documented interface contract.
+
+## Interface Contract
+
+```txt
+/cmd_vel provides command input
+/robot_pose provides simple 2D debug state
+/odom provides ROS-standard odometry
+/tf provides odom -> base_link transform
+/diagnostics provides runtime health and timeout status
+```
+
+## Validation Command Summary
+
+```bash
+ros2 topic list
+ros2 topic type /cmd_vel
+ros2 topic type /robot_pose
+ros2 topic type /odom
+ros2 topic type /tf
+ros2 topic type /diagnostics
+ros2 topic echo --once /robot_pose
+ros2 topic echo --once /odom
+ros2 topic echo --once /diagnostics
+ros2 run tf2_ros tf2_echo odom base_link
+```
+
+## Interview Explanation
+
+Day 70 added a ROS 2 topic interface reference. It documents each topic’s direction, message type, fields, QoS behavior, validation commands, and common failure modes. This makes the simulator easier to integrate, debug, and explain because the runtime communication contract is clearly defined.
+
+---
+
 # Current Verification Workflow
 
 Use this after meaningful source, launch, config, or documentation changes.
@@ -1343,10 +1419,11 @@ ros2_ws/log/
 |   67 | Complete | Runtime diagnostics on `/diagnostics`       |
 |   68 | Complete | Launch regression script                    |
 |   69 | Complete | ROS 2 usage quickstart documentation        |
+|   70 | Complete | ROS 2 topic interface reference             |
 
 Next planned day:
 
 ```txt
-Day 70 — Topic Interface Documentation
+Day 71 - URDF integration
 ```
 

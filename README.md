@@ -277,6 +277,7 @@ The daily engineering log tracks the roadmap from C++ fundamentals through ROS 2
 * rosbag2 recording and replay workflow for `/cmd_vel`, `/robot_pose`, `/odom`, and `/tf`
 * RViz2 visualization workflow with saved `sim_debug.rviz` config
 * Launch regression script for repeatable ROS 2 runtime validation
+* ROS 2 topic interface reference for `/cmd_vel`, `/robot_pose`, `/odom`, `/tf`, and `/diagnostics`
 * Runtime parameters for timestep, initial pose, timeout, and velocity limits
 * Velocity clamping using `std::clamp`
 * Command timeout safety
@@ -286,6 +287,29 @@ The daily engineering log tracks the roadmap from C++ fundamentals through ROS 2
 * Daily engineering documentation
 
 ---
+
+---
+
+## Topic Interface Reference
+
+A detailed topic interface reference is available at:
+
+```txt
+docs/topic_interface_reference.md
+```
+
+It documents:
+
+```txt
+topic direction
+message type
+important fields
+QoS behavior
+frame relationships
+validation commands
+common interface failures
+interview explanation
+```
 
 ## ROS 2 Topics
 
@@ -886,6 +910,7 @@ Additional documentation:
 * `docs/daily_documentation.md`
 * `docs/system_architecture.md`
 * `docs/debugging_and_validation.md`
+* `docs/topic_interface_reference.md`
 
 The daily engineering log tracks the roadmap from C++ fundamentals through ROS 2 launch, YAML parameters, launch arguments, QoS profiles, rosbag2 recording/replay, RViz2 visualization, diagnostics, and launch regression.
 
@@ -940,5 +965,5 @@ This project demonstrates:
 Next planned milestone:
 
 ```txt
-Day 70 — Topic Interface Documentation
+Day 71 — URDF integration
 ```

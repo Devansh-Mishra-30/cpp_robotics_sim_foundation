@@ -338,6 +338,53 @@ report runtime timing
 
 ---
 
+---
+
+## Topic Interface Documentation Layer
+
+Day 70 adds a dedicated topic interface reference:
+
+```txt
+docs/topic_interface_reference.md
+```
+
+This document defines the runtime communication contract for the ROS 2 simulator.
+
+It documents:
+
+```txt
+/cmd_vel input contract
+/robot_pose output contract
+/odom output contract
+/tf frame contract
+/diagnostics health/status contract
+QoS behavior
+validation commands
+common interface failures
+```
+
+This layer does not change the runtime architecture. It makes the architecture easier to integrate, test, debug, and explain.
+
+## Interface Contract Summary
+
+```txt
+/cmd_vel
+  external command source -> sim_node
+
+/robot_pose
+  sim_node -> simple 2D pose debugging
+
+/odom
+  sim_node -> ROS-standard odometry
+
+/tf
+  sim_node -> odom to base_link transform
+
+/diagnostics
+  sim_node -> runtime health and timeout status
+```
+
+
 ## 11. Inputs
 
 ### `/cmd_vel`

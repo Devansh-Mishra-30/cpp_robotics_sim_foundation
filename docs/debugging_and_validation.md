@@ -190,6 +190,38 @@ Common launch failures:
 
 ## 4. Topic Validation
 
+---
+
+## Topic Interface Reference Check
+
+The full topic interface contract is documented in:
+
+```txt
+docs/topic_interface_reference.md
+```
+
+Use it when validating:
+
+```txt
+topic names
+message types
+important fields
+QoS behavior
+frame IDs
+diagnostics behavior
+common interface failures
+```
+
+Quick interface check:
+
+```bash
+ros2 topic type /cmd_vel
+ros2 topic type /robot_pose
+ros2 topic type /odom
+ros2 topic type /tf
+ros2 topic type /diagnostics
+```
+
 List active topics:
 
 ```bash
