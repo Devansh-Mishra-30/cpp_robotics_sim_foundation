@@ -33,6 +33,7 @@ launch
 config
 rviz
 urdf
+xacro
 DESTINATION share/${PROJECT_NAME})
 
 if(BUILD_TESTING)
