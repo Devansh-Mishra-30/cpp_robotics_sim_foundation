@@ -1,8 +1,8 @@
 # C++ / ROS 2 Robotics Simulation Foundation
 
-This repository contains a C++ and ROS 2 robotics simulation project focused on mobile robot state updates, differential-drive kinematics, ROS 2 messaging, odometry, TF frames, runtime configuration, launch workflows, QoS profiles, safety validation, diagnostics, performance timing, debugging, visualization, and regression testing.
+This repository contains a C++ and ROS 2 robotics simulation project focused on mobile robot state updates, differential-drive kinematics, ROS 2 messaging, odometry, TF frames, runtime configuration, launch workflows, QoS profiles, safety validation, diagnostics, performance timing, debugging, visualization, regression testing, URDF/Xacro robot modeling, RViz RobotModel visualization, and Gazebo spawning.
 
-The project started as a standalone C++ robotics simulation foundation and was extended into a ROS 2 C++ simulator.
+The project started as a standalone C++ robotics simulation foundation and was extended into a ROS 2 C++ simulator with robot description and Gazebo integration.
 
 ---
 
@@ -12,9 +12,56 @@ This repository is organized into four main layers:
 
 ```txt
 standalone_cpp/  -> Pure C++ robotics simulation modules
-ros2_ws/         -> ROS 2 C++ simulator integration
+ros2_ws/         -> ROS 2 C++ simulator, robot model, RViz, and Gazebo integration
 scripts/         -> Regression and validation scripts
-docs/            -> Architecture, debugging, regression, integration, and daily documentation
+docs/            -> Architecture, debugging, regression, integration, topic interface, and daily documentation
+```
+
+Current structure:
+
+```txt
+cpp_robotics_sim_foundation/
+├── standalone_cpp/
+│   ├── include/
+│   │   ├── differential_drive/
+│   │   └── manipulator/
+│   ├── src/
+│   │   ├── differential_drive/
+│   │   ├── manipulator/
+│   │   └── main.cpp
+│   └── CMakeLists.txt
+│
+├── ros2_ws/
+│   └── src/cpp_robotics_sim_ros/
+│       ├── config/
+│       │   └── sim_params.yaml
+│       ├── launch/
+│       │   ├── sim.launch.py
+│       │   ├── description.launch.py
+│       │   ├── robot_model_viz.launch.py
+│       │   └── gazebo_spawn.launch.py
+│       ├── rviz/
+│       │   ├── sim_debug.rviz
+│       │   └── diffbot_robot_model.rviz
+│       ├── src/
+│       │   └── sim_node.cpp
+│       ├── urdf/
+│       │   └── diffbot.urdf
+│       ├── xacro/
+│       │   └── diffbot.xacro
+│       ├── worlds/
+│       │   └── empty_diffbot_world.sdf
+│       ├── CMakeLists.txt
+│       └── package.xml
+│
+├── scripts/
+│   └── day68_launch_regression.sh
+│
+└── docs/
+    ├── daily_documentation.md
+    ├── system_architecture.md
+    ├── debugging_and_validation.md
+    └── topic_interface_reference.md
 ```
 
 ---
@@ -22,6 +69,8 @@ docs/            -> Architecture, debugging, regression, integration, and daily 
 ## ROS 2 Usage Quickstart
 
 This section shows the shortest path to build, launch, command, inspect, visualize, and validate the ROS 2 simulator.
+
+---
 
 ### 1. Build the ROS 2 Workspace
 
@@ -34,6 +83,14 @@ source /opt/ros/jazzy/setup.bash
 colcon build --cmake-args -DBUILD_TESTING=OFF
 source install/setup.bash
 ```
+
+Expected:
+
+```txt
+Summary: 1 package finished
+```
+
+---
 
 ### 2. Launch the Simulator
 
@@ -50,6 +107,14 @@ Expected runtime interfaces:
 /tf
 /diagnostics
 ```
+
+Expected node:
+
+```txt
+/sim_node
+```
+
+---
 
 ### 3. Send a Motion Command
 
@@ -73,6 +138,16 @@ TF updates odom -> base_link
 diagnostics reports OK while commands are fresh
 ```
 
+Stop the command publisher with:
+
+```txt
+Ctrl+C
+```
+
+After command timeout expires, the robot should stop.
+
+---
+
 ### 4. Inspect Robot State
 
 ```bash
@@ -80,6 +155,17 @@ ros2 topic echo --once /robot_pose
 ros2 topic echo --once /odom
 ros2 run tf2_ros tf2_echo odom base_link
 ```
+
+Expected:
+
+```txt
+/robot_pose contains x, y, theta
+/odom contains header.frame_id = odom
+/odom contains child_frame_id = base_link
+tf2_echo shows odom -> base_link
+```
+
+---
 
 ### 5. Check Diagnostics
 
@@ -101,6 +187,8 @@ level: 0  -> Simulator running
 level: 1  -> cmd_vel timeout active
 ```
 
+---
+
 ### 6. Check Parameters
 
 ```bash
@@ -112,6 +200,20 @@ ros2 param get /sim_node cmd_timeout
 ros2 param get /sim_node max_linear_velocity
 ros2 param get /sim_node max_angular_velocity
 ```
+
+Default values:
+
+```txt
+dt = 0.1
+initial_x = 0.0
+initial_y = 0.0
+initial_theta = 0.0
+cmd_timeout = 0.5
+max_linear_velocity = 0.5
+max_angular_velocity = 0.8
+```
+
+---
 
 ### 7. Launch with Runtime Overrides
 
@@ -131,7 +233,21 @@ ros2 param get /sim_node max_linear_velocity
 ros2 param get /sim_node max_angular_velocity
 ```
 
-### 8. Open RViz2
+Expected:
+
+```txt
+initial_x = 2.0
+initial_y = 1.0
+initial_theta = 0.5
+dt = 0.05
+cmd_timeout = 1.0
+max_linear_velocity = 0.2
+max_angular_velocity = 0.4
+```
+
+---
+
+### 8. Open RViz2 Odometry / TF Visualization
 
 ```bash
 rviz2 -d "$(ros2 pkg prefix cpp_robotics_sim_ros)/share/cpp_robotics_sim_ros/rviz/sim_debug.rviz"
@@ -144,6 +260,15 @@ Fixed Frame: odom
 Displays: Grid, TF, Odometry
 Odometry Topic: /odom
 ```
+
+Expected frame tree:
+
+```txt
+odom
+  └── base_link
+```
+
+---
 
 ### 9. Record a rosbag2 Run
 
@@ -164,6 +289,19 @@ Replay:
 ros2 bag play bags/day65_baseline
 ```
 
+Expected recorded topics:
+
+```txt
+/cmd_vel
+/robot_pose
+/odom
+/tf
+```
+
+Actual bag data is stored locally under `bags/` and should not be committed to Git.
+
+---
+
 ### 10. Run Launch Regression
 
 From the repository root:
@@ -179,21 +317,266 @@ Expected result:
 ========== PASS: Day 68 launch regression succeeded ==========
 ```
 
-### Common Usage Flow
+---
+
+## Robot Model, RViz RobotModel, and Gazebo Usage
+
+The project includes a differential-drive robot description and Gazebo spawn workflow.
+
+Robot description files:
 
 ```txt
-build workspace
-source ROS 2
-launch simulator
-publish /cmd_vel
-inspect /robot_pose, /odom, /tf, /diagnostics
-open RViz2
-run launch regression before commit
+ros2_ws/src/cpp_robotics_sim_ros/urdf/diffbot.urdf
+ros2_ws/src/cpp_robotics_sim_ros/xacro/diffbot.xacro
 ```
 
-### Standalone C++ Modules
+The URDF/Xacro model defines:
 
-The standalone C++ project is split into two main simulation modules:
+```txt
+base_link
+├── left_wheel_link
+├── right_wheel_link
+└── caster_link
+```
+
+Joints:
+
+```txt
+left_wheel_joint   continuous
+right_wheel_joint  continuous
+caster_joint       fixed
+```
+
+---
+
+### 1. Launch Robot Description Stack
+
+```bash
+ros2 launch cpp_robotics_sim_ros description.launch.py
+```
+
+Expected nodes:
+
+```txt
+/robot_state_publisher
+/joint_state_publisher
+```
+
+Expected topics:
+
+```txt
+/robot_description
+/joint_states
+/tf
+/tf_static
+```
+
+Check robot description:
+
+```bash
+ros2 param get /robot_state_publisher robot_description > /tmp/robot_description.txt
+
+grep -E "base_link|left_wheel_link|right_wheel_link|caster_link" /tmp/robot_description.txt
+grep -E "left_wheel_joint|right_wheel_joint|caster_joint" /tmp/robot_description.txt
+```
+
+Check joint states:
+
+```bash
+ros2 topic echo /joint_states --once
+```
+
+Expected joint names:
+
+```txt
+left_wheel_joint
+right_wheel_joint
+```
+
+Check fixed transform:
+
+```bash
+ros2 topic echo /tf_static --qos-durability transient_local --qos-reliability reliable --once
+```
+
+Expected fixed transform:
+
+```txt
+base_link -> caster_link
+```
+
+Check wheel transforms:
+
+```bash
+ros2 run tf2_ros tf2_echo base_link left_wheel_link
+ros2 run tf2_ros tf2_echo base_link right_wheel_link
+```
+
+---
+
+### 2. Launch RViz RobotModel Visualization
+
+```bash
+ros2 launch cpp_robotics_sim_ros robot_model_viz.launch.py
+```
+
+This launch file starts:
+
+```txt
+sim_node
+robot_state_publisher
+joint_state_publisher
+rviz2
+```
+
+Expected RViz displays:
+
+```txt
+Grid
+TF
+RobotModel
+Odometry
+```
+
+Expected RViz fixed frame:
+
+```txt
+odom
+```
+
+Expected RobotModel source:
+
+```txt
+/robot_description
+```
+
+Expected extended frame tree:
+
+```txt
+odom
+  └── base_link
+      ├── left_wheel_link
+      ├── right_wheel_link
+      └── caster_link
+```
+
+Motion test:
+
+```bash
+ros2 topic pub --once /cmd_vel geometry_msgs/msg/Twist "{linear: {x: 0.3}, angular: {z: 0.4}}"
+```
+
+Expected behavior:
+
+```txt
+RViz displays the robot body, wheels, caster, TF frames, and odometry
+robot moves relative to odom when /cmd_vel is published
+```
+
+---
+
+### 3. Launch Gazebo Spawn Workflow
+
+```bash
+ros2 launch cpp_robotics_sim_ros gazebo_spawn.launch.py
+```
+
+Expected Gazebo result:
+
+```txt
+Gazebo Sim opens
+ground plane appears
+diffbot appears in the world
+spawn_diffbot exits cleanly
+```
+
+Gazebo world file:
+
+```txt
+ros2_ws/src/cpp_robotics_sim_ros/worlds/empty_diffbot_world.sdf
+```
+
+Check ROS-side topics:
+
+```bash
+ros2 topic list | grep -E "robot_description|joint_states|tf|clock"
+```
+
+Expected ROS-side topics:
+
+```txt
+/robot_description
+/joint_states
+/tf
+/tf_static
+```
+
+Check Gazebo topics:
+
+```bash
+gz topic -l | grep world
+```
+
+Expected:
+
+```txt
+/world/empty_diffbot_world/...
+```
+
+Current Gazebo scope:
+
+```txt
+Robot can spawn in Gazebo
+Ground plane appears
+Robot model appears
+Robot is not yet driven by ros2_control
+Robot is not yet driven by a Gazebo diff-drive plugin
+Gazebo odometry is not yet bridged back to ROS
+Sensors are not yet simulated
+```
+
+---
+
+## Transform Ownership
+
+The project follows a strict TF ownership rule:
+
+```txt
+sim_node owns:
+  odom -> base_link
+
+robot_state_publisher owns:
+  base_link -> left_wheel_link
+  base_link -> right_wheel_link
+  base_link -> caster_link
+```
+
+This prevents duplicate TF publishers for the same transform.
+
+Original simulator frame tree:
+
+```txt
+odom
+  └── base_link
+```
+
+Extended robot-description frame tree:
+
+```txt
+odom
+  └── base_link
+      ├── left_wheel_link
+      ├── right_wheel_link
+      └── caster_link
+```
+
+---
+
+## Standalone C++ Modules
+
+The standalone C++ project is split into two main simulation modules.
+
+Differential-drive module:
 
 ```txt
 standalone_cpp/include/differential_drive/
@@ -201,6 +584,8 @@ standalone_cpp/src/differential_drive/
 ```
 
 This module contains the differential-drive mobile robot simulation, including wheel-speed conversion, pose updates, trajectory metrics, validation scenarios, and target tracking.
+
+Manipulator module:
 
 ```txt
 standalone_cpp/include/manipulator/
@@ -211,7 +596,9 @@ This module contains the manipulator joint-state simulation, including joint pos
 
 `standalone_cpp/src/main.cpp` is the combined demo runner that executes both the differential-drive and manipulator demos.
 
-### ROS 2 Integration
+---
+
+## ROS 2 Integration
 
 The ROS 2 layer is located at:
 
@@ -231,7 +618,19 @@ It exposes the mobile robot simulation through standard ROS 2 interfaces:
 
 The ROS 2 node subscribes to velocity commands, updates pose, publishes odometry, broadcasts the `odom -> base_link` transform, and publishes runtime diagnostics.
 
-### Regression Scripts
+The robot description layer adds:
+
+```txt
+/robot_description
+/joint_states
+/tf_static
+```
+
+These interfaces allow RViz and Gazebo tools to understand the robot structure.
+
+---
+
+## Regression Scripts
 
 The scripts layer contains repeatable validation workflows:
 
@@ -241,7 +640,22 @@ scripts/day68_launch_regression.sh
 
 The Day 68 launch regression script validates that the ROS 2 runtime stack still launches correctly and publishes the expected topics, parameters, TF, odometry, and diagnostics.
 
-### Documentation
+Run:
+
+```bash
+cd "/mnt/c/Self study/PRACTICE C++/Cdev/01_joint_basics"
+./scripts/day68_launch_regression.sh
+```
+
+Expected:
+
+```txt
+========== PASS: Day 68 launch regression succeeded ==========
+```
+
+---
+
+## Documentation
 
 See:
 
@@ -249,9 +663,10 @@ See:
 docs/daily_documentation.md
 docs/system_architecture.md
 docs/debugging_and_validation.md
+docs/topic_interface_reference.md
 ```
 
-The daily engineering log tracks the roadmap from C++ fundamentals through ROS 2 launch, YAML parameters, launch arguments, QoS profiles, rosbag2 recording/replay, RViz2 visualization, diagnostics, and launch regression.
+The daily engineering log tracks the roadmap from C++ fundamentals through ROS 2 launch, YAML parameters, launch arguments, QoS profiles, rosbag2 recording/replay, RViz2 visualization, diagnostics, launch regression, URDF/Xacro robot modeling, robot state publishing, joint state publishing, RViz RobotModel visualization, and Gazebo spawning.
 
 ---
 
@@ -277,7 +692,7 @@ The daily engineering log tracks the roadmap from C++ fundamentals through ROS 2
 * rosbag2 recording and replay workflow for `/cmd_vel`, `/robot_pose`, `/odom`, and `/tf`
 * RViz2 visualization workflow with saved `sim_debug.rviz` config
 * Launch regression script for repeatable ROS 2 runtime validation
-* ROS 2 topic interface reference for `/cmd_vel`, `/robot_pose`, `/odom`, `/tf`, and `/diagnostics`
+* ROS 2 topic interface reference for `/cmd_vel`, `/robot_pose`, `/odom`, `/tf`, `/diagnostics`, `/robot_description`, `/joint_states`, and `/tf_static`
 * Runtime parameters for timestep, initial pose, timeout, and velocity limits
 * Velocity clamping using `std::clamp`
 * Command timeout safety
@@ -285,8 +700,12 @@ The daily engineering log tracks the roadmap from C++ fundamentals through ROS 2
 * Performance timing using `std::chrono::steady_clock`
 * Debug workflow documentation
 * Daily engineering documentation
-
----
+* Static URDF model for the differential-drive robot
+* Parameterized Xacro model for reusable robot description
+* `robot_state_publisher` launch workflow
+* `joint_state_publisher` integration for wheel joints
+* RViz RobotModel visualization with `diffbot_robot_model.rviz`
+* Gazebo Sim world and robot spawn workflow
 
 ---
 
@@ -311,26 +730,45 @@ common interface failures
 interview explanation
 ```
 
+---
+
 ## ROS 2 Topics
 
-| Topic | Type | Purpose |
-|---|---|---|
-| `/cmd_vel` | `geometry_msgs/msg/Twist` | Velocity command input |
-| `/robot_pose` | `geometry_msgs/msg/Pose2D` | Simple 2D robot pose |
-| `/odom` | `nav_msgs/msg/Odometry` | Standard robot odometry |
-| `/tf` | `tf2_msgs/msg/TFMessage` | Transform tree data |
-| `/diagnostics` | `diagnostic_msgs/msg/DiagnosticArray` | Runtime health and simulator diagnostics |
+| Topic                | Type                                  | Producer                            | Purpose                                  |
+| -------------------- | ------------------------------------- | ----------------------------------- | ---------------------------------------- |
+| `/cmd_vel`           | `geometry_msgs/msg/Twist`             | external command source             | Velocity command input                   |
+| `/robot_pose`        | `geometry_msgs/msg/Pose2D`            | `sim_node`                          | Simple 2D robot pose                     |
+| `/odom`              | `nav_msgs/msg/Odometry`               | `sim_node`                          | Standard robot odometry                  |
+| `/tf`                | `tf2_msgs/msg/TFMessage`              | `sim_node`, `robot_state_publisher` | Transform tree data                      |
+| `/tf_static`         | `tf2_msgs/msg/TFMessage`              | `robot_state_publisher`             | Fixed transform tree data                |
+| `/diagnostics`       | `diagnostic_msgs/msg/DiagnosticArray` | `sim_node`                          | Runtime health and simulator diagnostics |
+| `/robot_description` | `std_msgs/msg/String`                 | `robot_state_publisher`             | Robot model XML                          |
+| `/joint_states`      | `sensor_msgs/msg/JointState`          | `joint_state_publisher`             | Joint positions for robot links          |
 
 ---
 
 ## Frame Relationship
+
+Original simulator relationship:
 
 ```txt
 odom
   └── base_link
 ```
 
+Extended robot model relationship:
+
+```txt
+odom
+  └── base_link
+      ├── left_wheel_link
+      ├── right_wheel_link
+      └── caster_link
+```
+
 The simulator publishes the pose of `base_link` relative to `odom`.
+
+`robot_state_publisher` publishes the robot link structure below `base_link`.
 
 ---
 
@@ -441,7 +879,8 @@ ros2 topic pub --once /cmd_vel geometry_msgs/msg/Twist "{linear: {x: 5.0}, angul
 Expected clamped output:
 
 ```txt
-linear.x=0.50, angular.z=0.80
+linear.x = 0.50
+angular.z = 0.80
 ```
 
 ---
@@ -470,9 +909,24 @@ ros2 topic echo --once /odom --field pose.pose.position
 ros2 topic echo --once /odom --field twist.twist
 ```
 
+Expected type:
+
+```txt
+nav_msgs/msg/Odometry
+```
+
+Expected frames:
+
+```txt
+header.frame_id: odom
+child_frame_id: base_link
+```
+
 ---
 
 ## Check TF
+
+Simulator transform:
 
 ```bash
 ros2 run tf2_ros tf2_echo odom base_link
@@ -485,19 +939,28 @@ Translation: [x, y, 0.000]
 Rotation: Quaternion [0.000, 0.000, z, w]
 ```
 
+Robot link transforms:
+
+```bash
+ros2 run tf2_ros tf2_echo base_link left_wheel_link
+ros2 run tf2_ros tf2_echo base_link right_wheel_link
+ros2 run tf2_ros tf2_echo base_link caster_link
+```
+
 ---
 
 ## Check QoS
 
 The simulator uses explicit QoS profiles for command, state, and diagnostics topics.
 
-| Topic | Endpoint | QoS |
-|---|---|---|
-| `/cmd_vel` | Subscriber | reliable, volatile, keep_last(10) |
-| `/robot_pose` | Publisher | reliable, volatile, keep_last(10) |
-| `/odom` | Publisher | reliable, volatile, keep_last(10) |
-| `/diagnostics` | Publisher | reliable, volatile, keep_last(10) |
-| `/tf` | Publisher | handled by `tf2_ros::TransformBroadcaster` |
+| Topic          | Endpoint   | QoS                                                                    |
+| -------------- | ---------- | ---------------------------------------------------------------------- |
+| `/cmd_vel`     | Subscriber | reliable, volatile, keep_last(10)                                      |
+| `/robot_pose`  | Publisher  | reliable, volatile, keep_last(10)                                      |
+| `/odom`        | Publisher  | reliable, volatile, keep_last(10)                                      |
+| `/diagnostics` | Publisher  | reliable, volatile, keep_last(10)                                      |
+| `/tf`          | Publisher  | handled by `tf2_ros::TransformBroadcaster` and `robot_state_publisher` |
+| `/tf_static`   | Publisher  | transient local behavior expected                                      |
 
 Inspect QoS:
 
@@ -551,7 +1014,7 @@ Expected recorded topics:
 /tf
 ```
 
-Actual bag data is stored locally under `bags/` and ignored by Git. Only `bags/README.md` is tracked.
+Actual bag data is stored locally under `bags/` and ignored by Git. Only `bags/README.md` should be tracked.
 
 ---
 
@@ -611,6 +1074,144 @@ Expected behavior:
 base_link moves relative to odom
 TF display updates
 Odometry display updates from /odom
+```
+
+---
+
+## RViz RobotModel Visualization
+
+The project includes a saved RobotModel RViz configuration:
+
+```txt
+ros2_ws/src/cpp_robotics_sim_ros/rviz/diffbot_robot_model.rviz
+```
+
+Launch the full robot visualization stack:
+
+```bash
+ros2 launch cpp_robotics_sim_ros robot_model_viz.launch.py
+```
+
+This starts:
+
+```txt
+sim_node
+robot_state_publisher
+joint_state_publisher
+rviz2
+```
+
+Expected RViz displays:
+
+```txt
+Grid
+TF
+RobotModel
+Odometry
+```
+
+Expected fixed frame:
+
+```txt
+odom
+```
+
+Expected RobotModel source:
+
+```txt
+/robot_description
+```
+
+Expected full frame tree:
+
+```txt
+odom
+  └── base_link
+      ├── left_wheel_link
+      ├── right_wheel_link
+      └── caster_link
+```
+
+---
+
+## Robot Description Validation
+
+Validate static URDF:
+
+```bash
+python3 - <<'PY'
+import xml.etree.ElementTree as ET
+ET.parse("ros2_ws/src/cpp_robotics_sim_ros/urdf/diffbot.urdf")
+print("PASS: URDF XML parsed successfully")
+PY
+```
+
+Generate URDF from Xacro:
+
+```bash
+source /opt/ros/jazzy/setup.bash
+xacro "ros2_ws/src/cpp_robotics_sim_ros/xacro/diffbot.xacro" > /tmp/diffbot_from_xacro.urdf
+```
+
+Validate generated URDF:
+
+```bash
+python3 - <<'PY'
+import xml.etree.ElementTree as ET
+ET.parse("/tmp/diffbot_from_xacro.urdf")
+print("PASS: Xacro generated valid URDF XML")
+PY
+```
+
+Inspect links and joints:
+
+```bash
+grep -E "base_link|left_wheel_link|right_wheel_link|caster_link" /tmp/diffbot_from_xacro.urdf
+grep -E "left_wheel_joint|right_wheel_joint|caster_joint" /tmp/diffbot_from_xacro.urdf
+```
+
+---
+
+## Gazebo Simulation
+
+The project includes a Gazebo Sim world:
+
+```txt
+ros2_ws/src/cpp_robotics_sim_ros/worlds/empty_diffbot_world.sdf
+```
+
+Launch Gazebo and spawn the robot:
+
+```bash
+ros2 launch cpp_robotics_sim_ros gazebo_spawn.launch.py
+```
+
+Expected:
+
+```txt
+Gazebo opens
+ground plane appears
+diffbot appears in the world
+spawn_diffbot exits cleanly
+```
+
+Day 76 Gazebo scope:
+
+```txt
+Gazebo world loads
+robot description is published
+robot is spawned from /robot_description
+robot appears in Gazebo
+```
+
+Not implemented yet:
+
+```txt
+ros2_control
+Gazebo differential-drive plugin
+/cmd_vel driving the Gazebo robot
+sensor simulation
+Gazebo-to-ROS odometry bridge
 ```
 
 ---
@@ -765,7 +1366,7 @@ Expected result:
 
 ## Verification Workflow
 
-Use this sequence after meaningful source, launch, config, or documentation changes.
+Use this sequence after meaningful source, launch, config, robot description, world, or documentation changes.
 
 ### Build
 
@@ -777,7 +1378,7 @@ colcon build --cmake-args -DBUILD_TESTING=OFF
 source install/setup.bash
 ```
 
-### Launch
+### Launch Simulator
 
 ```bash
 ros2 launch cpp_robotics_sim_ros sim.launch.py
@@ -848,6 +1449,57 @@ level: 0  -> Simulator running
 level: 1  -> cmd_vel timeout active
 ```
 
+### Robot Description Checks
+
+```bash
+ros2 launch cpp_robotics_sim_ros description.launch.py
+```
+
+Second terminal:
+
+```bash
+ros2 node list
+ros2 topic list | grep -E "robot_description|joint_states|tf|tf_static"
+
+ros2 param get /robot_state_publisher robot_description > /tmp/robot_description.txt
+
+grep -E "base_link|left_wheel_link|right_wheel_link|caster_link" /tmp/robot_description.txt
+grep -E "left_wheel_joint|right_wheel_joint|caster_joint" /tmp/robot_description.txt
+
+ros2 topic echo /joint_states --once
+ros2 topic echo /tf_static --qos-durability transient_local --qos-reliability reliable --once
+```
+
+### RViz RobotModel Checks
+
+```bash
+ros2 launch cpp_robotics_sim_ros robot_model_viz.launch.py
+```
+
+Expected:
+
+```txt
+RViz opens
+Grid display appears
+TF display appears
+RobotModel display appears
+Odometry display appears
+```
+
+### Gazebo Spawn Checks
+
+```bash
+ros2 launch cpp_robotics_sim_ros gazebo_spawn.launch.py
+```
+
+Expected:
+
+```txt
+Gazebo opens
+ground plane appears
+diffbot appears in the world
+```
+
 ### rosbag2 Checks
 
 ```bash
@@ -912,7 +1564,7 @@ Additional documentation:
 * `docs/debugging_and_validation.md`
 * `docs/topic_interface_reference.md`
 
-The daily engineering log tracks the roadmap from C++ fundamentals through ROS 2 launch, YAML parameters, launch arguments, QoS profiles, rosbag2 recording/replay, RViz2 visualization, diagnostics, and launch regression.
+The daily engineering log tracks the roadmap from C++ fundamentals through ROS 2 launch, YAML parameters, launch arguments, QoS profiles, rosbag2 recording/replay, RViz2 visualization, diagnostics, launch regression, URDF/Xacro robot modeling, RViz RobotModel visualization, and Gazebo spawning.
 
 ---
 
@@ -935,7 +1587,14 @@ This project demonstrates:
 * QoS profile design
 * rosbag2 recording and replay
 * RViz2 visual debugging
+* RViz RobotModel visualization
 * launch regression testing
+* URDF robot modeling
+* Xacro robot modeling
+* robot state publishing
+* joint state publishing
+* Gazebo world setup
+* Gazebo robot spawning
 * parameterized runtime behavior
 * safety guards
 * debugging discipline
@@ -947,23 +1606,31 @@ This project demonstrates:
 
 ## Current Status
 
-| Area | Status |
-|---|---|
-| Standalone C++ simulator | Complete foundation |
-| ROS 2 node integration | Complete foundation |
-| Launch workflow | Added |
-| YAML configuration | Added |
-| Launch argument overrides | Added |
-| QoS profiles | Added |
-| rosbag2 workflow | Added |
-| RViz2 visualization | Added |
-| Diagnostics | Added |
-| Launch regression | Added |
-| URDF/Xacro robot model | Planned |
-| Gazebo integration | Planned |
+| Area                              | Status              |
+| --------------------------------- | ------------------- |
+| Standalone C++ simulator          | Complete foundation |
+| ROS 2 node integration            | Complete foundation |
+| Launch workflow                   | Added               |
+| YAML configuration                | Added               |
+| Launch argument overrides         | Added               |
+| QoS profiles                      | Added               |
+| rosbag2 workflow                  | Added               |
+| RViz2 odometry/TF visualization   | Added               |
+| Diagnostics                       | Added               |
+| Launch regression                 | Added               |
+| Topic interface reference         | Added               |
+| URDF robot model                  | Added               |
+| Xacro robot description           | Added               |
+| `robot_state_publisher` workflow  | Added               |
+| `joint_state_publisher` workflow  | Added               |
+| RViz RobotModel visualization     | Added               |
+| Gazebo world and robot spawn      | Added               |
+| `ros2_control` integration        | Planned             |
+| Gazebo differential-drive control | Planned             |
+| Sensor simulation                 | Planned             |
 
 Next planned milestone:
 
 ```txt
-Day 71 — URDF integration
+Day 77 — ros2_control basics
 ```

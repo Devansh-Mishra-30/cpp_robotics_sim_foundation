@@ -34,6 +34,7 @@ config
 rviz
 urdf
 xacro
+worlds
 DESTINATION share/${PROJECT_NAME})
 
 if(BUILD_TESTING)
