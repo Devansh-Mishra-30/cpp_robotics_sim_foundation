@@ -36,6 +36,17 @@ def generate_launch_description():
         ]
     )
 
+    joint_state_publisher_node = Node(
+        package="joint_state_publisher",
+        executable="joint_state_publisher",
+        name="joint_state_publisher",
+        output="screen",
+        parameters=[
+            robot_description,
+            {"use_sim_time": use_sim_time}
+        ]
+    )
+
     return LaunchDescription([
         DeclareLaunchArgument(
             "model",
@@ -47,5 +58,6 @@ def generate_launch_description():
             default_value="false",
             description="Use simulation time if true"
         ),
-        robot_state_publisher_node
+        robot_state_publisher_node,
+        joint_state_publisher_node
     ])
