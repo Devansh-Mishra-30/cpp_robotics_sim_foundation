@@ -1,0 +1,188 @@
+<?xml version="1.0"?>
+<robot name="diffbot">
+
+	<!--
+    Coordinate convention:
+    x = forward
+    y = left
+    z = up
+
+    Architecture rule:
+    - sim_node owns odom -> base_link.
+    - URDF owns robot structure below base_link.
+  -->
+
+	<!-- ========================= -->
+	<!-- Materials                 -->
+	<!-- ========================= -->
+
+	<material name="body_blue">
+		<color rgba="0.10 0.30 0.80 1.0"/>
+	</material>
+
+	<material name="wheel_black">
+		<color rgba="0.02 0.02 0.02 1.0"/>
+	</material>
+
+	<material name="caster_gray">
+		<color rgba="0.50 0.50 0.50 1.0"/>
+	</material>
+
+	<!-- ========================= -->
+	<!-- Base Link                 -->
+	<!-- ========================= -->
+
+	<link name="base_link">
+		<visual>
+			<origin xyz="0 0 0.12" rpy="0 0 0"/>
+			<geometry>
+				<box size="0.45 0.30 0.12"/>
+			</geometry>
+			<material name="body_blue"/>
+		</visual>
+
+		<collision>
+			<origin xyz="0 0 0.12" rpy="0 0 0"/>
+			<geometry>
+				<box size="0.45 0.30 0.12"/>
+			</geometry>
+		</collision>
+
+		<inertial>
+			<origin xyz="0 0 0.12" rpy="0 0 0"/>
+			<mass value="5.0"/>
+			<inertia
+			  ixx="0.050"
+			  ixy="0.000"
+			  ixz="0.000"
+			  iyy="0.100"
+			  iyz="0.000"
+			  izz="0.100"/>
+		</inertial>
+	</link>
+
+	<!-- ========================= -->
+	<!-- Left Wheel                -->
+	<!-- ========================= -->
+
+	<link name="left_wheel_link">
+		<visual>
+			<!-- Cylinder axis is z by default. Rotate around x so wheel axis aligns with y. -->
+			<origin xyz="0 0 0" rpy="1.5708 0 0"/>
+			<geometry>
+				<cylinder radius="0.08" length="0.05"/>
+			</geometry>
+			<material name="wheel_black"/>
+		</visual>
+
+		<collision>
+			<origin xyz="0 0 0" rpy="1.5708 0 0"/>
+			<geometry>
+				<cylinder radius="0.08" length="0.05"/>
+			</geometry>
+		</collision>
+
+		<inertial>
+			<origin xyz="0 0 0" rpy="0 0 0"/>
+			<mass value="0.5"/>
+			<inertia
+			  ixx="0.001"
+			  ixy="0.000"
+			  ixz="0.000"
+			  iyy="0.001"
+			  iyz="0.000"
+			  izz="0.001"/>
+		</inertial>
+	</link>
+
+	<!-- ========================= -->
+	<!-- Right Wheel               -->
+	<!-- ========================= -->
+
+	<link name="right_wheel_link">
+		<visual>
+			<origin xyz="0 0 0" rpy="1.5708 0 0"/>
+			<geometry>
+				<cylinder radius="0.08" length="0.05"/>
+			</geometry>
+			<material name="wheel_black"/>
+		</visual>
+
+		<collision>
+			<origin xyz="0 0 0" rpy="1.5708 0 0"/>
+			<geometry>
+				<cylinder radius="0.08" length="0.05"/>
+			</geometry>
+		</collision>
+
+		<inertial>
+			<origin xyz="0 0 0" rpy="0 0 0"/>
+			<mass value="0.5"/>
+			<inertia
+			  ixx="0.001"
+			  ixy="0.000"
+			  ixz="0.000"
+			  iyy="0.001"
+			  iyz="0.000"
+			  izz="0.001"/>
+		</inertial>
+	</link>
+
+	<!-- ========================= -->
+	<!-- Caster                    -->
+	<!-- ========================= -->
+
+	<link name="caster_link">
+		<visual>
+			<origin xyz="0 0 0" rpy="0 0 0"/>
+			<geometry>
+				<sphere radius="0.035"/>
+			</geometry>
+			<material name="caster_gray"/>
+		</visual>
+
+		<collision>
+			<origin xyz="0 0 0" rpy="0 0 0"/>
+			<geometry>
+				<sphere radius="0.035"/>
+			</geometry>
+		</collision>
+
+		<inertial>
+			<origin xyz="0 0 0" rpy="0 0 0"/>
+			<mass value="0.1"/>
+			<inertia
+			  ixx="0.0001"
+			  ixy="0.0000"
+			  ixz="0.0000"
+			  iyy="0.0001"
+			  iyz="0.0000"
+			  izz="0.0001"/>
+		</inertial>
+	</link>
+
+	<!-- ========================= -->
+	<!-- Joints                    -->
+	<!-- ========================= -->
+
+	<joint name="left_wheel_joint" type="continuous">
+		<parent link="base_link"/>
+		<child link="left_wheel_link"/>
+		<origin xyz="0.0 0.18 0.08" rpy="0 0 0"/>
+		<axis xyz="0 1 0"/>
+	</joint>
+
+	<joint name="right_wheel_joint" type="continuous">
+		<parent link="base_link"/>
+		<child link="right_wheel_link"/>
+		<origin xyz="0.0 -0.18 0.08" rpy="0 0 0"/>
+		<axis xyz="0 1 0"/>
+	</joint>
+
+	<joint name="caster_joint" type="fixed">
+		<parent link="base_link"/>
+		<child link="caster_link"/>
+		<origin xyz="-0.17 0.0 0.035" rpy="0 0 0"/>
+	</joint>
+
+</robot>
