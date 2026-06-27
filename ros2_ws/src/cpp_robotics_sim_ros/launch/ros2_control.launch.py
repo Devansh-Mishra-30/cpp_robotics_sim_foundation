@@ -83,6 +83,23 @@ def generate_launch_description():
         ]
     )
 
+    diff_drive_controller_spawner = Node(
+        package="controller_manager",
+        executable="spawner",
+        name="diff_drive_controller_spawner",
+        output="screen",
+        arguments=[
+            "diff_drive_controller",
+            "--controller-manager",
+            "/controller_manager"
+        ]
+    )
+
+    delayed_diff_drive_controller = TimerAction(
+        period=8.0,
+        actions=[diff_drive_controller_spawner]
+    )
+
     delayed_spawn = TimerAction(
         period=3.0,
         actions=[spawn_diffbot]
@@ -108,5 +125,6 @@ def generate_launch_description():
         clock_bridge,
         description,
         delayed_spawn,
-        delayed_joint_state_broadcaster
+        delayed_joint_state_broadcaster,
+        delayed_diff_drive_controller
     ])
