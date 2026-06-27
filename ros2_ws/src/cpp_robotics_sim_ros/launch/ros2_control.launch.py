@@ -43,6 +43,19 @@ def generate_launch_description():
         ]
     )
 
+    scan_bridge = Node(
+        package="ros_gz_bridge",
+        executable="parameter_bridge",
+        name="scan_bridge",
+        output="screen",
+        arguments=[
+            "/scan@sensor_msgs/msg/LaserScan[gz.msgs.LaserScan"
+        ],
+        parameters=[
+            {"use_sim_time": use_sim_time}
+        ]
+    )
+
     description = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             PathJoinSubstitution([
@@ -123,6 +136,7 @@ def generate_launch_description():
         ),
         gazebo,
         clock_bridge,
+        scan_bridge,
         description,
         delayed_spawn,
         delayed_joint_state_broadcaster,
