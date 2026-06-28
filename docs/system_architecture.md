@@ -1,6 +1,6 @@
 # System Architecture — C++ / ROS 2 Robotics Simulation Foundation
 
-This document explains how the standalone C++ simulator, differential-drive module, manipulator module, ROS 2 simulator, diagnostics layer, visualization workflow, launch regression workflow, robot description stack, RViz RobotModel workflow, and Gazebo spawn workflow are organized and connected.
+This document explains how the standalone C++ simulator, differential-drive module, manipulator module, ROS 2 simulator, diagnostics layer, visualization workflow, launch regression workflow, robot description stack, RViz RobotModel workflow, Gazebo simulation workflow, ros2_control stack, differential-drive controller, simulated lidar sensor, ROS-Gazebo bridge, and Day 80 review architecture are organized and connected.
 
 ---
 
@@ -17,10 +17,13 @@ This repository demonstrates a robotics simulation foundation built in stages:
 7. Joint state publishing using `joint_state_publisher`
 8. RViz RobotModel visualization
 9. Gazebo Sim spawning using `ros_gz_sim`
+10. Gazebo control using `ros2_control`, `controller_manager`, and `diff_drive_controller`
+11. Simulated lidar sensor modeling and `/scan` bridging using `ros_gz_bridge`
+12. Day 80 system review and interview-ready architecture explanation
 
 The goal is to show both low-level C++ simulation logic and ROS 2 robotics system integration.
 
-The project is intentionally built as an engineering artifact, not just a code exercise. It includes modular structure, runtime configuration, validation checks, debugging workflow, regression testing, performance timing, visualization, diagnostics, robot modeling, Gazebo spawning, and documentation.
+The project is intentionally built as an engineering artifact, not just a code exercise. It includes modular structure, runtime configuration, validation checks, debugging workflow, regression testing, performance timing, visualization, diagnostics, robot modeling, Gazebo spawning, Gazebo control, simulated sensing, ROS-Gazebo bridging, and documentation.
 
 ---
 
@@ -41,12 +44,14 @@ cpp_robotics_sim_foundation/
 ├── ros2_ws/
 │   └── src/cpp_robotics_sim_ros/
 │       ├── config/
-│       │   └── sim_params.yaml
+│       │   ├── sim_params.yaml
+│       │   └── ros2_control.yaml
 │       ├── launch/
 │       │   ├── sim.launch.py
 │       │   ├── description.launch.py
 │       │   ├── robot_model_viz.launch.py
-│       │   └── gazebo_spawn.launch.py
+│       │   ├── gazebo_spawn.launch.py
+│       │   └── ros2_control.launch.py
 │       ├── rviz/
 │       │   ├── sim_debug.rviz
 │       │   └── diffbot_robot_model.rviz
@@ -75,7 +80,7 @@ The repository has four main layers:
 
 ```txt
 standalone_cpp/  = pure C++ simulation modules
-ros2_ws/         = ROS 2 C++ simulator, robot model, visualization, and Gazebo integration
+ros2_ws/         = ROS 2 C++ simulator, robot model, visualization, Gazebo, control, and sensor integration
 scripts/         = repeatable validation and regression scripts
 docs/            = architecture, debugging, validation, interface, and daily documentation
 ```
@@ -112,9 +117,16 @@ It accepts velocity commands, applies command timeout and velocity clamping, upd
 
 ---
 
-## 4. Extended Robot Architecture After Days 71–76
+## 4. Extended Robot Architecture Through Day 80
 
-The project now has a robot description and Gazebo spawn layer in addition to the original ROS 2 kinematic simulator.
+The project now has two related runtime stacks:
+
+1. A custom ROS 2 kinematic simulator stack driven by `sim_node`.
+2. A Gazebo physics simulation stack driven by `ros2_control` and `diff_drive_controller`.
+
+These stacks share the same robot concepts, frames, and documentation, but they should not both publish the same moving transform at the same time.
+
+### 4.1 Original Kinematic Simulator Stack
 
 ```txt
                          /cmd_vel
@@ -127,8 +139,13 @@ The project now has a robot description and Gazebo spawn layer in addition to th
         v                    v                         v
    /robot_pose             /odom                      /tf
                                                 odom -> base_link
+```
 
+In this stack, `sim_node` owns the robot motion model. It subscribes to `/cmd_vel`, updates planar pose using kinematics, publishes `/robot_pose`, publishes `/odom`, broadcasts `odom -> base_link`, and publishes `/diagnostics`.
 
+### 4.2 Robot Description and Visualization Stack
+
+```txt
        xacro/diffbot.xacro
                 |
                 v
@@ -140,8 +157,21 @@ The project now has a robot description and Gazebo spawn layer in addition to th
                 v
         /tf and /tf_static
         base_link -> robot links
+```
 
+The robot description stack defines the robot structure below `base_link`:
 
+```txt
+base_link
+├── left_wheel_link
+├── right_wheel_link
+├── caster_link
+└── lidar_link
+```
+
+### 4.3 Gazebo Spawn Stack
+
+```txt
        empty_diffbot_world.sdf
                 |
                 v
@@ -154,7 +184,60 @@ The project now has a robot description and Gazebo spawn layer in addition to th
         /robot_description
 ```
 
-The key transform ownership rule is:
+The Gazebo spawn workflow starts a world, publishes the Xacro-generated robot description, and inserts the robot model into the Gazebo physics environment.
+
+### 4.4 Gazebo Control Stack
+
+```txt
+/diff_drive_controller/cmd_vel
+          |
+          v
+ diff_drive_controller
+          |
+          v
+ wheel velocity commands
+          |
+          v
+    controller_manager
+          |
+          v
+    gz_ros2_control
+          |
+          v
+ Gazebo simulated joints
+          |
+          v
+ robot moves in Gazebo
+          |
+          v
+/diff_drive_controller/odom + /tf
+```
+
+The Gazebo control stack uses `ros2_control` to connect ROS controllers to simulated Gazebo joints.
+
+### 4.5 Sensor Stack
+
+```txt
+Gazebo gpu_lidar sensor on lidar_link
+          |
+          v
+Gazebo /scan topic
+          |
+          v
+ros_gz_bridge parameter_bridge
+          |
+          v
+ROS /scan topic
+          |
+          v
+RViz LaserScan display
+```
+
+The lidar sensor is simulated in Gazebo and bridged into ROS as `sensor_msgs/msg/LaserScan`.
+
+### 4.6 Transform Ownership Rule
+
+Kinematic simulator stack:
 
 ```txt
 sim_node owns:
@@ -164,9 +247,30 @@ robot_state_publisher owns:
   base_link -> left_wheel_link
   base_link -> right_wheel_link
   base_link -> caster_link
+  base_link -> lidar_link
 ```
 
-This prevents duplicate TF publishers for the same transform.
+Gazebo control stack:
+
+```txt
+diff_drive_controller owns:
+  odom -> base_link
+
+joint_state_broadcaster owns:
+  /joint_states
+
+robot_state_publisher owns:
+  base_link -> left_wheel_link
+  base_link -> right_wheel_link
+  base_link -> caster_link
+  base_link -> lidar_link
+```
+
+Important rule:
+
+```txt
+Do not run sim_node and diff_drive_controller together as publishers of odom -> base_link.
+```
 
 ---
 
@@ -450,7 +554,8 @@ This layer does not change the runtime architecture. It makes the architecture e
   sim_node -> ROS-standard odometry
 
 /tf
-  sim_node -> odom to base_link transform
+  sim_node -> odom to base_link transform in kinematic simulator stack
+  diff_drive_controller -> odom to base_link transform in Gazebo control stack
   robot_state_publisher -> robot link transforms below base_link
 
 /tf_static
@@ -463,7 +568,20 @@ This layer does not change the runtime architecture. It makes the architecture e
   Xacro-generated robot model XML
 
 /joint_states
-  joint_state_publisher -> wheel joint positions
+  joint_state_publisher -> wheel joint positions in visualization-only stack
+  joint_state_broadcaster -> wheel joint states in ros2_control stack
+
+/diff_drive_controller/cmd_vel
+  velocity command input to Gazebo diff-drive controller
+
+/diff_drive_controller/odom
+  odometry output from Gazebo diff-drive controller
+
+/scan
+  LaserScan output bridged from Gazebo lidar sensor
+
+/clock
+  simulation time bridged from Gazebo to ROS
 ```
 
 ---
@@ -619,21 +737,22 @@ odom
   └── base_link
 ```
 
-Extended frame tree after URDF/Xacro and robot state publishing:
+Extended frame tree after URDF/Xacro, robot state publishing, and lidar modeling:
 
 ```txt
 odom
   └── base_link
       ├── left_wheel_link
       ├── right_wheel_link
-      └── caster_link
+      ├── caster_link
+      └── lidar_link
 ```
 
 `odom` is the parent world/odometry frame.
 
 `base_link` is the moving robot body frame.
 
-`left_wheel_link`, `right_wheel_link`, and `caster_link` are robot structure frames below `base_link`.
+`left_wheel_link`, `right_wheel_link`, `caster_link`, and `lidar_link` are robot structure frames below `base_link`.
 
 Transform ownership:
 
@@ -645,6 +764,11 @@ robot_state_publisher:
   base_link -> left_wheel_link
   base_link -> right_wheel_link
   base_link -> caster_link
+  base_link -> lidar_link
+
+Gazebo control stack:
+  diff_drive_controller owns odom -> base_link
+  robot_state_publisher owns robot links below base_link
 ```
 
 ---
@@ -1302,21 +1426,417 @@ gazebo_spawn.launch.py
 
 Day 76 proves that the robot model can be inserted into a Gazebo physics world.
 
-Current Gazebo scope:
+Day 76 Gazebo spawn scope:
 
 ```txt
 Robot can spawn in Gazebo
 Ground plane appears
 Robot model appears
-Robot is not yet driven by ros2_control
-Robot is not yet driven by a Gazebo diff-drive plugin
-Gazebo odometry is not yet bridged back to ROS
-Sensors are not yet simulated
+```
+
+Current Day 80 Gazebo scope:
+
+```txt
+Robot spawns in Gazebo
+Robot drives through ros2_control and diff_drive_controller
+Controller odometry publishes on /diff_drive_controller/odom
+Gazebo lidar sensor publishes /scan through ros_gz_bridge
+RViz visualizes the Gazebo-driven robot when using simulation time
+```
+
+
+---
+
+## 34. ros2_control Hardware Interface Layer
+
+Day 77 adds a `ros2_control` block inside the Xacro model.
+
+The control model declares that the wheel joints expose:
+
+```txt
+left_wheel_joint:
+  command interface: velocity
+  state interfaces: position, velocity
+
+right_wheel_joint:
+  command interface: velocity
+  state interfaces: position, velocity
+```
+
+Architecture role:
+
+```txt
+diffbot.xacro ros2_control block
+        ↓
+generated robot_description
+        ↓
+gz_ros2_control plugin
+        ↓
+controller_manager
+        ↓
+controllers operate on hardware interfaces
+```
+
+`ros2_control` separates the controller logic from the hardware or simulator backend. In this project, Gazebo is the simulated hardware backend.
+
+---
+
+## 35. controller_manager Layer
+
+The `controller_manager` is created by the `gz_ros2_control` Gazebo plugin.
+
+Its role is to:
+
+```txt
+load controllers
+configure controllers
+activate controllers
+connect controllers to hardware interfaces
+report controller state through ros2 control CLI
+```
+
+Validation command:
+
+```bash
+ros2 control list_controllers
+```
+
+Expected through Day 80:
+
+```txt
+joint_state_broadcaster active
+diff_drive_controller active
 ```
 
 ---
 
-## 34. Performance Timing
+## 36. joint_state_broadcaster Layer
+
+`joint_state_broadcaster` belongs to the `ros2_control` stack.
+
+It reads simulated hardware state interfaces and publishes:
+
+```txt
+/joint_states
+```
+
+This is different from `joint_state_publisher`.
+
+```txt
+joint_state_publisher:
+  manual/simple visualization source for joint states
+
+joint_state_broadcaster:
+  ros2_control broadcaster that reads hardware/simulation state interfaces
+```
+
+In the Gazebo control stack, `joint_state_broadcaster` is the correct owner of `/joint_states`.
+
+---
+
+## 37. diff_drive_controller Layer
+
+Day 78 adds `diff_drive_controller`.
+
+Input topic:
+
+```txt
+/diff_drive_controller/cmd_vel
+```
+
+Message type:
+
+```txt
+geometry_msgs/msg/TwistStamped
+```
+
+Output topics:
+
+```txt
+/diff_drive_controller/odom
+/diff_drive_controller/cmd_vel_out
+/tf when enable_odom_tf is true
+```
+
+Configuration file:
+
+```txt
+ros2_ws/src/cpp_robotics_sim_ros/config/ros2_control.yaml
+```
+
+Important parameters:
+
+```txt
+left_wheel_names
+right_wheel_names
+wheel_separation
+wheel_radius
+odom_frame_id
+base_frame_id
+enable_odom_tf
+cmd_vel_timeout
+use_stamped_vel
+velocity limits
+```
+
+Control flow:
+
+```txt
+TwistStamped body command
+        ↓
+diff_drive_controller
+        ↓
+left and right wheel velocity commands
+        ↓
+gz_ros2_control
+        ↓
+Gazebo wheel joints
+        ↓
+robot moves in the physics simulator
+```
+
+---
+
+## 38. Differential-Drive Control Math
+
+For wheel radius `r`, wheel separation `L`, right wheel angular velocity `wr`, and left wheel angular velocity `wl`:
+
+```txt
+v = r / 2 * (wr + wl)
+omega = r / L * (wr - wl)
+```
+
+The inverse mapping from body velocity to wheel velocity is:
+
+```txt
+wr = (v + omega * L / 2) / r
+wl = (v - omega * L / 2) / r
+```
+
+Where:
+
+```txt
+v      = robot forward velocity
+omega  = yaw angular velocity
+r      = wheel radius
+L      = wheel separation
+wr     = right wheel angular velocity
+wl     = left wheel angular velocity
+```
+
+`diff_drive_controller` performs this conversion internally.
+
+---
+
+## 39. Gazebo Control Launch Layer
+
+Day 77-79 use:
+
+```txt
+ros2_ws/src/cpp_robotics_sim_ros/launch/ros2_control.launch.py
+```
+
+The launch file coordinates:
+
+```txt
+Gazebo Sim
+/clock bridge
+/scan bridge
+robot_state_publisher
+spawn_diffbot
+joint_state_broadcaster spawner
+diff_drive_controller spawner
+```
+
+It does not need `sim_node` because Gazebo and `diff_drive_controller` own robot motion in this stack.
+
+Launch command:
+
+```bash
+ros2 launch cpp_robotics_sim_ros ros2_control.launch.py
+```
+
+---
+
+## 40. Simulated Lidar Sensor Layer
+
+Day 79 adds a simulated lidar mounted on:
+
+```txt
+lidar_link
+```
+
+The lidar is attached by a fixed joint:
+
+```txt
+base_link -> lidar_link
+```
+
+Gazebo sensor type:
+
+```txt
+gpu_lidar
+```
+
+Sensor output:
+
+```txt
+Gazebo /scan
+```
+
+ROS bridged output:
+
+```txt
+ROS /scan
+sensor_msgs/msg/LaserScan
+```
+
+Sensor architecture:
+
+```txt
+lidar_link in Xacro
+        ↓
+Gazebo gpu_lidar sensor
+        ↓
+Gazebo Transport /scan
+        ↓
+ros_gz_bridge parameter_bridge
+        ↓
+ROS 2 /scan
+        ↓
+RViz LaserScan display
+```
+
+---
+
+## 41. ROS-Gazebo Bridge Layer
+
+`ros_gz_bridge` converts data between Gazebo Transport and ROS 2 topics.
+
+Current bridges:
+
+```txt
+/clock:
+  gz.msgs.Clock -> rosgraph_msgs/msg/Clock
+
+/scan:
+  gz.msgs.LaserScan -> sensor_msgs/msg/LaserScan
+```
+
+The bridge is needed because Gazebo and ROS 2 use different communication systems.
+
+Gazebo Transport is not the same as ROS 2 DDS topics. The bridge maps message types and forwards data between them.
+
+---
+
+## 42. Simulation Time Layer
+
+Gazebo publishes simulation time on `/clock`.
+
+ROS nodes and RViz must use simulation time when they are visualizing Gazebo-driven data.
+
+Required behavior:
+
+```txt
+Gazebo publishes /clock
+ros_gz_bridge bridges /clock into ROS
+RViz runs with use_sim_time:=true
+TF timestamps and RViz time agree
+```
+
+If RViz uses wall time while Gazebo uses sim time, RViz may show:
+
+```txt
+TF_OLD_DATA ignoring data from the past for frame base_link
+```
+
+Correct RViz launch command:
+
+```bash
+rviz2 --ros-args -p use_sim_time:=true
+```
+
+---
+
+## 43. RViz vs Gazebo Architecture
+
+RViz is a ROS visualization and debugging tool.
+
+Gazebo is a physics simulator.
+
+RViz does not simulate physics. It visualizes ROS topics and TF.
+
+Gazebo does simulate physics. It updates joint positions, robot motion, collisions, contacts, and sensors.
+
+In this project:
+
+```txt
+Gazebo:
+  simulates robot body, wheel joints, ground plane, obstacles, lidar sensor
+
+ros2_control:
+  connects ROS controllers to Gazebo's simulated joints
+
+RViz:
+  visualizes robot_description, TF, odometry, and LaserScan
+```
+
+---
+
+## 44. Day 80 Full System Architecture Summary
+
+Through Day 80, the complete robot modeling and simulation system is:
+
+```txt
+Xacro robot model
+        ↓
+robot_description
+        ↓
+robot_state_publisher
+        ↓
+TF tree below base_link
+
+Gazebo world + robot spawn
+        ↓
+Gazebo physics simulation
+        ↓
+gz_ros2_control
+        ↓
+controller_manager
+        ↓
+joint_state_broadcaster + diff_drive_controller
+        ↓
+Gazebo wheel joint motion
+        ↓
+/diff_drive_controller/odom + /tf
+
+Gazebo lidar sensor
+        ↓
+ros_gz_bridge
+        ↓
+/scan
+        ↓
+RViz LaserScan visualization
+```
+
+The user-facing Gazebo control validation command is:
+
+```bash
+ros2 topic pub -r 10 /diff_drive_controller/cmd_vel geometry_msgs/msg/TwistStamped "{twist: {linear: {x: 0.25}, angular: {z: 0.0}}}"
+```
+
+Expected result:
+
+```txt
+robot moves in Gazebo
+robot moves in RViz when sim time is enabled
+/diff_drive_controller/odom updates
+/scan remains active
+```
+
+---
+
+## 45. Performance Timing
 
 The timer callback is measured using:
 
@@ -1344,7 +1864,7 @@ dt = 0.001 -> 1 ms budget
 
 ---
 
-## 35. Relationship Between Modules
+## 46. Relationship Between Modules
 
 The project is intentionally separated:
 
@@ -1368,7 +1888,13 @@ Visualization layer:
 RViz TF/Odometry/RobotModel inspection
 
 Gazebo layer:
-physics-simulation world and robot spawn entry point
+physics-simulation world, robot spawn, joint motion, and sensor simulation
+
+ros2_control layer:
+controller_manager, hardware interfaces, joint_state_broadcaster, and diff_drive_controller
+
+bridge layer:
+/clock and /scan conversion between Gazebo Transport and ROS 2
 ```
 
 They are connected conceptually because all layers use the same simulation engineering principles:
@@ -1385,11 +1911,15 @@ regression testing
 frame ownership
 robot model structure
 simulation environment setup
+hardware interface abstraction
+controller ownership
+sensor topic bridging
+simulation time synchronization
 ```
 
 ---
 
-## 36. Build Standalone C++ Project
+## 47. Build Standalone C++ Project
 
 ```bash
 cd standalone_cpp
@@ -1403,7 +1933,7 @@ cmake --build .
 
 ---
 
-## 37. Build ROS 2 Project
+## 48. Build ROS 2 Project
 
 ```bash
 cd ros2_ws
@@ -1437,9 +1967,15 @@ Launch Gazebo spawn stack:
 ros2 launch cpp_robotics_sim_ros gazebo_spawn.launch.py
 ```
 
+Launch Gazebo control, diff-drive, and lidar stack:
+
+```bash
+ros2 launch cpp_robotics_sim_ros ros2_control.launch.py
+```
+
 ---
 
-## 38. Verification Commands
+## 49. Verification Commands
 
 Check simulator topics:
 
@@ -1516,6 +2052,34 @@ Check Gazebo topics:
 gz topic -l | grep world
 ```
 
+Check ros2_control controllers:
+
+```bash
+ros2 control list_controllers
+ros2 control list_hardware_interfaces
+```
+
+Check Gazebo control odometry:
+
+```bash
+ros2 topic echo /diff_drive_controller/odom --once
+ros2 run tf2_ros tf2_echo odom base_link
+```
+
+Check lidar sensor:
+
+```bash
+ros2 topic type /scan
+ros2 topic echo /scan --once
+ros2 run tf2_ros tf2_echo base_link lidar_link
+```
+
+Check simulation time:
+
+```bash
+ros2 topic echo /clock --once
+```
+
 Run launch regression:
 
 ```bash
@@ -1530,7 +2094,7 @@ Expected:
 
 ---
 
-## 39. Validation and Regression
+## 50. Validation and Regression
 
 The simulator is validated using repeatable checks:
 
@@ -1565,6 +2129,14 @@ joint_state_publisher validation
 RViz RobotModel validation
 Gazebo world validation
 Gazebo spawn validation
+ros2_control validation
+controller_manager validation
+joint_state_broadcaster validation
+diff_drive_controller validation
+Gazebo driving validation
+LaserScan /scan validation
+simulation time validation
+RViz/Gazebo synchronization validation
 ```
 
 These tests are documented in:
@@ -1575,7 +2147,7 @@ docs/debugging_and_validation.md
 
 ---
 
-## 40. Debug Workflow
+## 51. Debug Workflow
 
 Debugging commands and common failure modes are documented in:
 
@@ -1592,7 +2164,7 @@ First classify the failure, then test systematically.
 
 ---
 
-## 41. What This Project Demonstrates
+## 52. What This Project Demonstrates
 
 This project demonstrates:
 
@@ -1624,44 +2196,68 @@ This project demonstrates:
 * `joint_state_publisher` workflow
 * Gazebo Sim world setup
 * Gazebo robot spawning through `ros_gz_sim`
+* `ros2_control` hardware interface design
+* `controller_manager` workflow
+* `joint_state_broadcaster` integration
+* `diff_drive_controller` integration
+* Gazebo-driven differential-drive motion
+* simulated lidar sensor modeling
+* `/scan` LaserScan bridge using `ros_gz_bridge`
+* simulation time and `/clock` synchronization
+* RViz/Gazebo debugging
 
 ---
 
-## 42. Current Limitations
+## 53. Current Limitations
 
-Current limitations:
+Current limitations after Day 80:
 
 ```txt
 The manipulator module does not yet publish ROS 2 /joint_states.
 The manipulator module does not yet include forward kinematics.
-The differential-drive Gazebo model is spawned but not yet driven by ros2_control or a Gazebo diff-drive plugin.
-The ROS 2 kinematic sim_node and Gazebo physics model are not yet dynamically coupled.
-Sensor simulation is not yet added.
-ros2_control integration is not yet added.
-Gazebo-to-ROS odometry bridging is not yet added.
-Automated tests and CI are not yet added.
+The original ROS 2 kinematic sim_node and the Gazebo physics robot are separate runtime stacks.
+The project does not yet include Nav2 navigation.
+The project does not yet include SLAM, AMCL, or map-based localization.
+The project does not yet include EKF-based sensor fusion.
+The lidar exists, but perception algorithms are not yet consuming /scan.
+The simulation does not yet include controlled noise or uncertainty models.
+Automated unit tests and CI are not yet added.
+```
+
+Resolved by Day 80:
+
+```txt
+Gazebo robot spawning is complete.
+ros2_control integration is complete at the foundation level.
+diff_drive_controller drives the Gazebo robot.
+Gazebo lidar sensor simulation is added.
+/scan is bridged into ROS.
+RViz can visualize robot model, odometry, TF, and LaserScan with sim time.
 ```
 
 ---
 
-## 43. Future Work
+## 54. Future Work
 
 Planned future work:
 
 ```txt
-Add ros2_control/controller-manager integration
-Add Gazebo differential-drive plugin or ros2_control hardware interface
-Drive the Gazebo robot from /cmd_vel
-Add simulated lidar or camera topics
-Add noise and uncertainty models
-Add Gazebo-to-ROS odometry/sensor bridging
-Add unit tests and CI
+Day 81: Nav2 architecture concepts
+Add Nav2 bringup/configuration
+Use /scan for costmaps
+Add mapping with SLAM Toolbox
+Save and load maps
+Add AMCL localization
+Add robot_localization EKF concepts and configuration
+Add controlled odometry/sensor noise
+Add validation metrics and plots
+Add automated tests and CI
 Add final portfolio screenshots, plots, and demo video/GIF
 ```
 
 ---
 
-## 44. User-Facing Usage Layer
+## 55. User-Facing Usage Layer
 
 Day 69 adds a user-facing usage documentation layer to the project.
 
@@ -1680,7 +2276,7 @@ record/replay rosbag2 data
 run launch regression
 ```
 
-Days 71–76 extend usage documentation to include:
+Days 71-80 extend usage documentation to include:
 
 ```txt
 validate URDF
@@ -1692,13 +2288,20 @@ inspect /joint_states
 inspect /tf_static
 open RViz RobotModel visualization
 spawn the robot in Gazebo
+launch ros2_control stack
+inspect controller_manager
+inspect hardware interfaces
+drive Gazebo robot from diff_drive_controller command topic
+inspect /diff_drive_controller/odom
+inspect /scan LaserScan output
+open RViz with use_sim_time
 ```
 
 This does not change the runtime architecture. It makes the architecture easier to operate, validate, and explain.
 
 ---
 
-## 45. Usage Architecture Flow
+## 56. Usage Architecture Flow
 
 ```txt
 developer or reviewer
@@ -1758,9 +2361,29 @@ ros_gz_sim create spawns diffbot
 robot appears in Gazebo
 ```
 
+Gazebo control and sensor usage flow:
+
+```txt
+developer or reviewer
+        ↓
+ros2 launch cpp_robotics_sim_ros ros2_control.launch.py
+        ↓
+Gazebo opens and diffbot spawns
+        ↓
+controller_manager loads controllers
+        ↓
+diff_drive_controller accepts TwistStamped commands
+        ↓
+Gazebo robot moves
+        ↓
+/scan publishes LaserScan data
+        ↓
+RViz visualizes robot model, odometry, TF, and lidar with sim time
+```
+
 ---
 
-## 46. Why This Layer Matters
+## 57. Why This Layer Matters
 
 Robotics simulation projects must be reproducible.
 
@@ -1776,15 +2399,15 @@ The project now covers three levels of reproducibility:
    Topic interface reference, TF ownership rules, QoS definitions, and diagnostics.
 
 3. Simulation environment reproducibility:
-   URDF/Xacro model, RViz RobotModel config, Gazebo world file, and Gazebo spawn launch.
+   URDF/Xacro model, RViz RobotModel config, Gazebo world file, Gazebo spawn launch, ros2_control launch, controller YAML, and lidar sensor bridge.
 ```
 
 ---
 
-## 47. Interview Summary
+## 58. Interview Summary
 
 In interview language:
 
 ```txt
-I built a modular C++ robotics simulation foundation with separate differential-drive and manipulator modules, then integrated the mobile robot simulation into ROS 2 using /cmd_vel, /robot_pose, /odom, TF, and /diagnostics. The project includes launch files, YAML parameters, launch argument overrides, explicit QoS profiles, rosbag2 recording/replay, RViz visualization, runtime diagnostics, performance timing, launch regression testing, URDF/Xacro robot modeling, robot_state_publisher, joint_state_publisher, RViz RobotModel visualization, and a Gazebo Sim spawn workflow. The simulator owns odom -> base_link, while the robot description stack owns the robot structure below base_link.
+I built a modular C++ robotics simulation foundation with separate differential-drive and manipulator modules, then integrated the mobile robot simulation into ROS 2 using /cmd_vel, /robot_pose, /odom, TF, and /diagnostics. I extended the project into a robot modeling and simulation stack with URDF, Xacro, robot_state_publisher, joint state publishing, RViz RobotModel visualization, Gazebo spawning, ros2_control hardware interfaces, controller_manager, joint_state_broadcaster, diff_drive_controller, Gazebo-driven wheel motion, simulated lidar, /scan bridging through ros_gz_bridge, and simulation-time synchronization through /clock. In the custom kinematic simulator stack, sim_node owns odom -> base_link. In the Gazebo control stack, diff_drive_controller owns odom -> base_link, joint_state_broadcaster owns /joint_states, robot_state_publisher owns the robot link transforms below base_link, and RViz visualizes the resulting robot state, odometry, TF, and lidar data.
 ```

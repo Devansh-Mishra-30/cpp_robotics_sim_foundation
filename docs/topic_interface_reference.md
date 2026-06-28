@@ -1,14 +1,16 @@
 # ROS 2 Topic Interface Reference
 
-This document defines the ROS 2 topic interfaces used by the `cpp_robotics_sim_ros` simulator and robot description stack.
+This document defines the ROS 2 topic interfaces used by the `cpp_robotics_sim_ros` simulator, robot description stack, Gazebo `ros2_control` stack, differential-drive controller, and simulated lidar sensor workflow.
 
-The purpose of this document is to make the runtime interface clear enough that another engineer can understand what the simulator subscribes to, what it publishes, what message types are used, what fields matter, what node owns each transform, and how to validate each interface.
+The purpose of this document is to make the runtime interface clear enough that another engineer can understand what each stack subscribes to, what it publishes, what message types are used, what fields matter, what node owns each transform, and how to validate each interface through Day 80.
 
 ---
 
 ## 1. Interface Overview
 
-The simulator exposes a planar mobile robot through standard ROS 2 communication interfaces.
+The project has two related runtime interfaces.
+
+The original kinematic simulator stack exposes a planar mobile robot through `sim_node`:
 
 ```txt
 /cmd_vel
@@ -23,7 +25,7 @@ sim_node
 
 The node accepts velocity commands, updates the robot pose, publishes simple 2D pose, publishes standard odometry, broadcasts TF, and reports diagnostics.
 
-Days 71–76 extend the interface with robot description and visualization topics:
+The robot description stack exposes the robot structure:
 
 ```txt
 diffbot.xacro
@@ -36,17 +38,47 @@ robot_state_publisher  ←  /joint_states
 /tf_static
 ```
 
-The extended frame tree is:
+The Gazebo control and sensor stack exposes a physics-simulated robot:
+
+```txt
+/diff_drive_controller/cmd_vel
+   ↓
+diff_drive_controller
+   ↓
+ros2_control hardware interfaces
+   ↓
+gz_ros2_control
+   ↓
+Gazebo wheel joints
+   ↓
+/diff_drive_controller/odom
+/tf
+```
+
+The simulated lidar stack exposes sensor data:
+
+```txt
+Gazebo gpu_lidar
+   ↓
+Gazebo /scan
+   ↓
+ros_gz_bridge
+   ↓
+ROS /scan
+```
+
+The extended frame tree through Day 80 is:
 
 ```txt
 odom
   └── base_link
       ├── left_wheel_link
       ├── right_wheel_link
-      └── caster_link
+      ├── caster_link
+      └── lidar_link
 ```
 
-Transform ownership rule:
+Transform ownership rule for the kinematic simulator stack:
 
 ```txt
 sim_node owns:
@@ -56,43 +88,81 @@ robot_state_publisher owns:
   base_link -> left_wheel_link
   base_link -> right_wheel_link
   base_link -> caster_link
+  base_link -> lidar_link
+```
+
+Transform ownership rule for the Gazebo control stack:
+
+```txt
+diff_drive_controller owns:
+  odom -> base_link
+
+joint_state_broadcaster owns:
+  /joint_states
+
+robot_state_publisher owns:
+  base_link -> left_wheel_link
+  base_link -> right_wheel_link
+  base_link -> caster_link
+  base_link -> lidar_link
+```
+
+Important rule:
+
+```txt
+Do not run sim_node and diff_drive_controller together as simultaneous publishers of odom -> base_link.
 ```
 
 ---
 
 ## 2. Topic Summary
 
-| Topic                | Direction                       | Message Type                          | Producer                            | Consumer                                         | Purpose                             |
-| -------------------- | ------------------------------- | ------------------------------------- | ----------------------------------- | ------------------------------------------------ | ----------------------------------- |
-| `/cmd_vel`           | Input                           | `geometry_msgs/msg/Twist`             | external command source             | `sim_node`                                       | Velocity command input              |
-| `/robot_pose`        | Output                          | `geometry_msgs/msg/Pose2D`            | `sim_node`                          | CLI/debug tools                                  | Simple 2D pose debugging output     |
-| `/odom`              | Output                          | `nav_msgs/msg/Odometry`               | `sim_node`                          | RViz, validation tools, future navigation layers | Standard odometry output            |
-| `/tf`                | Output                          | `tf2_msgs/msg/TFMessage`              | `sim_node`, `robot_state_publisher` | RViz, TF tools                                   | Dynamic transform tree output       |
-| `/tf_static`         | Output                          | `tf2_msgs/msg/TFMessage`              | `robot_state_publisher`             | RViz, TF tools                                   | Fixed transform tree output         |
-| `/diagnostics`       | Output                          | `diagnostic_msgs/msg/DiagnosticArray` | `sim_node`                          | CLI/debug/monitoring tools                       | Runtime health and simulator status |
-| `/robot_description` | Output / parameter-backed topic | `std_msgs/msg/String`                 | `robot_state_publisher`             | RViz RobotModel, Gazebo spawn workflow           | Robot model XML                     |
-| `/joint_states`      | Output                          | `sensor_msgs/msg/JointState`          | `joint_state_publisher`             | `robot_state_publisher`                          | Joint positions for robot links     |
+| Topic | Direction | Message Type | Producer | Consumer | Purpose |
+|---|---|---|---|---|---|
+| `/cmd_vel` | Input | `geometry_msgs/msg/Twist` | external command source | `sim_node` | Velocity command input for the kinematic simulator stack |
+| `/robot_pose` | Output | `geometry_msgs/msg/Pose2D` | `sim_node` | CLI/debug tools | Simple 2D pose debugging output |
+| `/odom` | Output | `nav_msgs/msg/Odometry` | `sim_node` | RViz, validation tools, rosbag2 | Standard odometry output for the kinematic simulator stack |
+| `/tf` | Output | `tf2_msgs/msg/TFMessage` | `sim_node`, `robot_state_publisher`, `diff_drive_controller` | RViz, TF tools | Dynamic transform tree output |
+| `/tf_static` | Output | `tf2_msgs/msg/TFMessage` | `robot_state_publisher` | RViz, TF tools | Fixed transform tree output |
+| `/diagnostics` | Output | `diagnostic_msgs/msg/DiagnosticArray` | `sim_node` | CLI/debug/monitoring tools | Runtime health and simulator status |
+| `/robot_description` | Output / parameter-backed topic | `std_msgs/msg/String` | `robot_state_publisher` | RViz RobotModel, Gazebo spawn workflow, `controller_manager` | Robot model XML |
+| `/joint_states` | Output | `sensor_msgs/msg/JointState` | `joint_state_publisher` or `joint_state_broadcaster` | `robot_state_publisher` | Joint positions/velocities for robot links |
+| `/dynamic_joint_states` | Output | `control_msgs/msg/DynamicJointState` | `joint_state_broadcaster` | debugging/control tools | Detailed ros2_control joint interface states |
+| `/diff_drive_controller/cmd_vel` | Input | `geometry_msgs/msg/TwistStamped` | CLI/teleop/future navigation | `diff_drive_controller` | Velocity command input for Gazebo-driven robot |
+| `/diff_drive_controller/odom` | Output | `nav_msgs/msg/Odometry` | `diff_drive_controller` | RViz, validation tools, future navigation | Odometry output from Gazebo diff-drive controller |
+| `/diff_drive_controller/cmd_vel_out` | Output | `geometry_msgs/msg/TwistStamped` | `diff_drive_controller` | CLI/debug tools | Limited velocity command after controller limits |
+| `/scan` | Output | `sensor_msgs/msg/LaserScan` | `ros_gz_bridge` from Gazebo lidar | RViz, future Nav2/SLAM/costmaps | Simulated 2D lidar scan |
+| `/clock` | Output | `rosgraph_msgs/msg/Clock` | `ros_gz_bridge` from Gazebo | ROS nodes and RViz using sim time | Simulation time source |
+
+`controller_manager` also exposes ROS services used by the `ros2 control` CLI and controller spawners, but the main user-facing runtime interfaces in this document are topics.
 
 ---
 
 ## 3. QoS Summary
 
-| Topic                | Endpoint   | QoS                                                                    |
-| -------------------- | ---------- | ---------------------------------------------------------------------- |
-| `/cmd_vel`           | Subscriber | reliable, volatile, keep_last(10)                                      |
-| `/robot_pose`        | Publisher  | reliable, volatile, keep_last(10)                                      |
-| `/odom`              | Publisher  | reliable, volatile, keep_last(10)                                      |
-| `/diagnostics`       | Publisher  | reliable, volatile, keep_last(10)                                      |
-| `/tf`                | Publisher  | handled by `tf2_ros::TransformBroadcaster` and `robot_state_publisher` |
-| `/tf_static`         | Publisher  | transient local behavior expected for fixed transforms                 |
-| `/robot_description` | Publisher  | transient local behavior expected                                      |
-| `/joint_states`      | Publisher  | standard `joint_state_publisher` behavior                              |
+| Topic | Endpoint | QoS |
+|---|---|---|
+| `/cmd_vel` | `sim_node` subscriber | reliable, volatile, keep_last(10) |
+| `/robot_pose` | `sim_node` publisher | reliable, volatile, keep_last(10) |
+| `/odom` | `sim_node` publisher | reliable, volatile, keep_last(10) |
+| `/diagnostics` | `sim_node` publisher | reliable, volatile, keep_last(10) |
+| `/tf` | publisher | handled by TF broadcaster, `robot_state_publisher`, or `diff_drive_controller` |
+| `/tf_static` | publisher | transient local behavior expected for fixed transforms |
+| `/robot_description` | publisher/parameter | transient local behavior expected |
+| `/joint_states` | publisher | standard joint state publisher/broadcaster behavior |
+| `/diff_drive_controller/cmd_vel` | `diff_drive_controller` subscriber | controller default QoS; expects `TwistStamped` |
+| `/diff_drive_controller/odom` | `diff_drive_controller` publisher | controller default QoS |
+| `/diff_drive_controller/cmd_vel_out` | `diff_drive_controller` publisher | controller default QoS |
+| `/scan` | bridge publisher | sensor-style QoS; RViz may need Best Effort |
+| `/clock` | bridge publisher | simulation-time clock QoS |
 
-The state topics use reliable communication because they are low-rate simulator outputs used for debugging and validation.
+The kinematic simulator state topics use reliable communication because they are low-rate outputs used for debugging and validation.
 
 The durability for live simulator values is volatile because old commands or stale state should not be replayed automatically to late subscribers.
 
 `/tf_static` and `/robot_description` behave differently from live command/state topics because fixed transforms and robot model descriptions should be available to late subscribers.
+
+High-rate sensor topics such as `/scan` are commonly visualized with Best Effort reliability in RViz if a reliability mismatch appears.
 
 ---
 
@@ -388,11 +458,12 @@ odom remains consistent with odom -> base_link TF
 
 `/tf` publishes dynamic transform tree relationships.
 
-In this project, `/tf` has two sources:
+In this project, `/tf` can have different sources depending on the launch stack:
 
 ```txt
 sim_node
 robot_state_publisher
+diff_drive_controller
 ```
 
 ## Message Type
@@ -409,7 +480,13 @@ Output from tf2_ros::TransformBroadcaster and robot_state_publisher
 
 ## Transform Ownership
 
-`sim_node` owns:
+In the kinematic simulator stack, `sim_node` owns:
+
+```txt
+odom -> base_link
+```
+
+In the Gazebo control stack, `diff_drive_controller` owns:
 
 ```txt
 odom -> base_link
@@ -420,24 +497,23 @@ odom -> base_link
 ```txt
 base_link -> left_wheel_link
 base_link -> right_wheel_link
-```
-
-The fixed caster transform may appear through `/tf_static`:
-
-```txt
 base_link -> caster_link
+base_link -> lidar_link
 ```
+
+Fixed transforms appear through `/tf_static`.
 
 ## Frame Relationship
 
-Full expected tree after Days 71–76:
+Full expected tree after Days 71-80:
 
 ```txt
 odom
   └── base_link
       ├── left_wheel_link
       ├── right_wheel_link
-      └── caster_link
+      ├── caster_link
+      └── lidar_link
 ```
 
 ## Example Checks
@@ -478,6 +554,7 @@ child frame is base_link
 translation matches robot x/y
 rotation matches robot theta
 base_link -> wheel transforms exist when /joint_states is active
+base_link -> lidar_link transform exists after Day 79
 RViz2 can use odom as Fixed Frame
 ```
 
@@ -488,7 +565,8 @@ RViz2 can use odom as Fixed Frame
 | `odom` missing         | simulator not running or TF broadcaster broken | `ros2 node list`, `tf2_echo odom base_link`       |
 | `base_link` missing    | wrong child frame ID                           | inspect `publishTransform()`                      |
 | wheel frames missing   | `/joint_states` missing                        | `ros2 topic echo /joint_states --once`            |
-| duplicate TF warning   | two nodes publish same transform               | keep `odom -> base_link` owned only by `sim_node` |
+| duplicate TF warning   | two nodes publish same transform               | do not run `sim_node` and `diff_drive_controller` as `odom -> base_link` owners together |
+| `TF_OLD_DATA` warnings | RViz/Gazebo sim-time mismatch or stale nodes | restart stack, verify `/clock`, launch RViz with `use_sim_time:=true` |
 | RViz fixed frame error | TF tree incomplete                             | set Fixed Frame to `odom` and check TF            |
 
 ---
@@ -529,10 +607,11 @@ TF tools
 
 ## Expected Fixed Transform
 
-The current fixed transform is:
+Current fixed transforms include:
 
 ```txt
 base_link -> caster_link
+base_link -> lidar_link
 ```
 
 Expected values:
@@ -566,7 +645,8 @@ transforms:
 ```txt
 /tf_static exists
 base_link -> caster_link is published
-caster_link appears in RViz TF tree
+base_link -> lidar_link is published after Day 79
+caster_link and lidar_link appear in RViz TF tree
 late subscribers can receive the fixed transform
 ```
 
@@ -765,6 +845,7 @@ base_link
 left_wheel_link
 right_wheel_link
 caster_link
+lidar_link
 ```
 
 Expected joints:
@@ -773,6 +854,7 @@ Expected joints:
 left_wheel_joint
 right_wheel_joint
 caster_joint
+lidar_joint
 ```
 
 Expected joint types:
@@ -781,6 +863,7 @@ Expected joint types:
 left_wheel_joint   continuous
 right_wheel_joint  continuous
 caster_joint       fixed
+lidar_joint        fixed
 ```
 
 ## Validation Commands
@@ -796,8 +879,8 @@ Check parameter content:
 ```bash
 ros2 param get /robot_state_publisher robot_description > /tmp/robot_description.txt
 
-grep -E "base_link|left_wheel_link|right_wheel_link|caster_link" /tmp/robot_description.txt
-grep -E "left_wheel_joint|right_wheel_joint|caster_joint" /tmp/robot_description.txt
+grep -E "base_link|left_wheel_link|right_wheel_link|caster_link|lidar_link" /tmp/robot_description.txt
+grep -E "left_wheel_joint|right_wheel_joint|caster_joint|lidar_joint" /tmp/robot_description.txt
 ```
 
 Check topic existence:
@@ -819,6 +902,8 @@ Expected:
 robot_description parameter exists on /robot_state_publisher
 generated XML contains all expected links
 generated XML contains all expected joints
+generated XML contains ros2_control wheel interfaces
+generated XML contains lidar sensor configuration after Day 79
 RViz RobotModel can load the robot model
 Gazebo spawn can use the robot model
 ```
@@ -841,7 +926,11 @@ Gazebo spawn can use the robot model
 
 `/joint_states` publishes joint positions for the robot model joints.
 
-For this project, it is currently used to provide wheel joint states to `robot_state_publisher`.
+For this project, it provides wheel joint states to `robot_state_publisher`.
+
+In the visualization-only stack, `/joint_states` comes from `joint_state_publisher`.
+
+In the Gazebo `ros2_control` stack, `/joint_states` comes from `joint_state_broadcaster`.
 
 ## Message Type
 
@@ -852,7 +941,7 @@ sensor_msgs/msg/JointState
 ## Direction
 
 ```txt
-Output from joint_state_publisher
+Output from `joint_state_publisher` or `joint_state_broadcaster`, depending on launch stack
 ```
 
 ## Producer
@@ -893,7 +982,7 @@ position:
 - 0.0
 ```
 
-The exact numeric values may vary if the joint state publisher is configured differently later.
+The exact numeric values may vary. In the Gazebo control stack, values come from simulated hardware state interfaces through `joint_state_broadcaster`.
 
 ## Validation Criteria
 
@@ -915,9 +1004,339 @@ base_link -> right_wheel_link transform exists
 | wheel transforms missing  | robot_state_publisher not receiving joint states      | echo `/joint_states`                      |
 | package not found         | missing system package                                | install `ros-jazzy-joint-state-publisher` |
 
+
 ---
 
-# 12. Interface Flow
+# 12. `/diff_drive_controller/cmd_vel`
+
+## Purpose
+
+`/diff_drive_controller/cmd_vel` is the velocity command input for the Gazebo-driven robot.
+
+Unlike the original `/cmd_vel` used by `sim_node`, this controller topic expects a stamped command.
+
+## Message Type
+
+```txt
+geometry_msgs/msg/TwistStamped
+```
+
+## Direction
+
+```txt
+Input to diff_drive_controller
+```
+
+## Producer
+
+```txt
+ros2 topic pub command
+future teleop node
+future Nav2 controller output after remapping/relay
+```
+
+## Consumer
+
+```txt
+diff_drive_controller
+```
+
+## Used Fields
+
+```txt
+twist.linear.x   = forward velocity command
+twist.angular.z  = yaw velocity command
+```
+
+## Example Command
+
+```bash
+ros2 topic pub -r 10 /diff_drive_controller/cmd_vel geometry_msgs/msg/TwistStamped "{twist: {linear: {x: 0.25}, angular: {z: 0.0}}}"
+```
+
+## Validation Criteria
+
+```txt
+/diff_drive_controller/cmd_vel exists when diff_drive_controller is active
+message type is geometry_msgs/msg/TwistStamped
+linear.x drives forward/backward motion in Gazebo
+angular.z drives rotation in Gazebo
+robot stops after controller timeout when commands stop
+```
+
+---
+
+# 13. `/diff_drive_controller/odom`
+
+## Purpose
+
+`/diff_drive_controller/odom` is the odometry output from the Gazebo differential-drive controller.
+
+It represents the Gazebo-controlled robot state, not the custom `sim_node` kinematic state.
+
+## Message Type
+
+```txt
+nav_msgs/msg/Odometry
+```
+
+## Direction
+
+```txt
+Output from diff_drive_controller
+```
+
+## Producer
+
+```txt
+diff_drive_controller
+```
+
+## Consumers
+
+```txt
+RViz Odometry display
+validation tools
+future Nav2/localization stack
+```
+
+## Frame IDs
+
+```txt
+header.frame_id: odom
+child_frame_id: base_link
+```
+
+## Example Checks
+
+```bash
+ros2 topic echo /diff_drive_controller/odom --once
+ros2 run tf2_ros tf2_echo odom base_link
+```
+
+## Validation Criteria
+
+```txt
+/diff_drive_controller/odom exists
+type is nav_msgs/msg/Odometry
+pose changes when Gazebo robot moves
+child_frame_id is base_link
+header.frame_id is odom
+RViz Odometry display uses /diff_drive_controller/odom in Gazebo control stack
+```
+
+---
+
+# 14. `/diff_drive_controller/cmd_vel_out`
+
+## Purpose
+
+`/diff_drive_controller/cmd_vel_out` reports the velocity command after controller-side limiting.
+
+It is useful for debugging whether velocity limits are being applied.
+
+## Message Type
+
+```txt
+geometry_msgs/msg/TwistStamped
+```
+
+## Direction
+
+```txt
+Output from diff_drive_controller
+```
+
+## Producer
+
+```txt
+diff_drive_controller
+```
+
+## Consumers
+
+```txt
+CLI/debug tools
+future validation tools
+```
+
+## Example Check
+
+```bash
+ros2 topic echo /diff_drive_controller/cmd_vel_out --once
+```
+
+## Validation Criteria
+
+```txt
+cmd_vel_out appears when publish_limited_velocity is true
+message type is geometry_msgs/msg/TwistStamped
+values reflect controller velocity limits
+```
+
+---
+
+# 15. `/scan`
+
+## Purpose
+
+`/scan` is the simulated 2D lidar output.
+
+The lidar is simulated in Gazebo as a `gpu_lidar` sensor attached to `lidar_link`, then bridged into ROS through `ros_gz_bridge`.
+
+## Message Type
+
+```txt
+sensor_msgs/msg/LaserScan
+```
+
+## Direction
+
+```txt
+Output from ros_gz_bridge into ROS
+```
+
+## Producer
+
+```txt
+Gazebo gpu_lidar sensor
+ros_gz_bridge parameter_bridge
+```
+
+## Consumers
+
+```txt
+RViz LaserScan display
+future Nav2 costmaps
+future SLAM Toolbox
+future AMCL/localization workflows
+```
+
+## Important Fields
+
+```txt
+header.frame_id
+angle_min
+angle_max
+angle_increment
+range_min
+range_max
+ranges
+intensities
+```
+
+Expected frame:
+
+```txt
+header.frame_id: lidar_link
+```
+
+## Example Checks
+
+```bash
+ros2 topic list | grep scan
+ros2 topic type /scan
+ros2 topic echo /scan --once
+ros2 run tf2_ros tf2_echo base_link lidar_link
+```
+
+If ROS `/scan` is missing, check Gazebo side:
+
+```bash
+gz topic -l | grep scan
+gz topic -e -t /scan
+```
+
+Manual bridge test:
+
+```bash
+ros2 run ros_gz_bridge parameter_bridge "/scan@sensor_msgs/msg/LaserScan[gz.msgs.LaserScan"
+```
+
+## RViz Settings
+
+```txt
+Fixed Frame: odom
+LaserScan Topic: /scan
+Reliability Policy: Best Effort if needed
+```
+
+## Validation Criteria
+
+```txt
+/scan exists
+type is sensor_msgs/msg/LaserScan
+ranges are populated
+lidar_link exists in TF
+LaserScan appears in RViz
+scan changes relative to obstacles as the robot moves
+```
+
+---
+
+# 16. `/clock`
+
+## Purpose
+
+`/clock` provides Gazebo simulation time to ROS nodes and RViz.
+
+It is required when nodes use `use_sim_time:=true`.
+
+## Message Type
+
+```txt
+rosgraph_msgs/msg/Clock
+```
+
+## Direction
+
+```txt
+Output from ros_gz_bridge into ROS
+```
+
+## Producer
+
+```txt
+Gazebo Sim
+ros_gz_bridge parameter_bridge
+```
+
+## Consumers
+
+```txt
+RViz when use_sim_time is true
+robot_state_publisher when use_sim_time is true
+controller-related nodes using simulation time
+other ROS nodes using simulation time
+```
+
+## Example Check
+
+```bash
+ros2 topic list | grep clock
+ros2 topic echo /clock --once
+```
+
+## Validation Criteria
+
+```txt
+/clock exists during Gazebo launch
+/clock publishes rosgraph_msgs/msg/Clock
+RViz launched with use_sim_time tracks Gazebo motion
+TF_OLD_DATA warnings are absent after a clean restart
+```
+
+## Common Failures
+
+| Failure | Likely Cause | First Check |
+|---|---|---|
+| `No clock received` | clock bridge missing or Gazebo paused | `ros2 topic echo /clock --once` |
+| `TF_OLD_DATA` | stale nodes or wall-time/sim-time mismatch | restart stack and use `rviz2 --ros-args -p use_sim_time:=true` |
+| RViz robot stationary while Gazebo moves | RViz using wall time or wrong odom topic | set sim time and `/diff_drive_controller/odom` |
+
+---
+
+# 17. Interface Flow
 
 ## Command-to-State Flow
 
@@ -983,6 +1402,51 @@ ros_gz_sim create
 diffbot model appears in Gazebo
 ```
 
+## Gazebo Control Flow
+
+```txt
+/diff_drive_controller/cmd_vel
+   ↓
+diff_drive_controller
+   ↓
+left_wheel_joint and right_wheel_joint velocity commands
+   ↓
+gz_ros2_control
+   ↓
+Gazebo simulated wheel joints
+   ↓
+robot moves in Gazebo
+   ↓
+/diff_drive_controller/odom
+/tf odom -> base_link
+```
+
+## Sensor Bridge Flow
+
+```txt
+Gazebo gpu_lidar on lidar_link
+   ↓
+Gazebo /scan
+   ↓
+ros_gz_bridge
+   ↓
+ROS /scan
+   ↓
+RViz LaserScan / future Nav2 / future SLAM
+```
+
+## Clock Bridge Flow
+
+```txt
+Gazebo simulation clock
+   ↓
+ros_gz_bridge
+   ↓
+ROS /clock
+   ↓
+RViz and ROS nodes using use_sim_time
+```
+
 ## Runtime Inspection Flow
 
 ```txt
@@ -1003,11 +1467,19 @@ ros2 topic echo /joint_states
 tf2_echo base_link left_wheel_link
    ↓
 ros2 topic echo /tf_static --qos-durability transient_local --once
+   ↓
+ros2 control list_controllers
+   ↓
+ros2 topic echo /diff_drive_controller/odom
+   ↓
+ros2 topic echo /scan
+   ↓
+ros2 topic echo /clock
 ```
 
 ---
 
-# 13. Interface Contract
+# 18. Interface Contract
 
 The simulator should satisfy this contract:
 
@@ -1038,11 +1510,23 @@ If robot_model_viz.launch.py is running:
 
 If gazebo_spawn.launch.py is running:
   Gazebo should open and spawn diffbot from /robot_description
+
+If ros2_control.launch.py is running:
+  controller_manager should load joint_state_broadcaster and diff_drive_controller
+
+If diff_drive_controller receives TwistStamped commands:
+  Gazebo robot should move and /diff_drive_controller/odom should update
+
+If the lidar sensor and bridge are active:
+  /scan should publish sensor_msgs/msg/LaserScan
+
+If RViz is visualizing Gazebo data:
+  RViz should use simulation time from /clock
 ```
 
 ---
 
-# 14. Full Interface Validation Commands
+# 19. Full Interface Validation Commands
 
 ## Start Simulator
 
@@ -1101,8 +1585,8 @@ ros2 launch cpp_robotics_sim_ros description.launch.py
 ```bash
 ros2 param get /robot_state_publisher robot_description > /tmp/robot_description.txt
 
-grep -E "base_link|left_wheel_link|right_wheel_link|caster_link" /tmp/robot_description.txt
-grep -E "left_wheel_joint|right_wheel_joint|caster_joint" /tmp/robot_description.txt
+grep -E "base_link|left_wheel_link|right_wheel_link|caster_link|lidar_link" /tmp/robot_description.txt
+grep -E "left_wheel_joint|right_wheel_joint|caster_joint|lidar_joint" /tmp/robot_description.txt
 ```
 
 ## Check Joint States
@@ -1123,11 +1607,12 @@ Expected:
 base_link -> caster_link
 ```
 
-## Check Dynamic Wheel Transforms
+## Check Dynamic Wheel and Lidar Transforms
 
 ```bash
 ros2 run tf2_ros tf2_echo base_link left_wheel_link
 ros2 run tf2_ros tf2_echo base_link right_wheel_link
+ros2 run tf2_ros tf2_echo base_link lidar_link
 ```
 
 ## Launch RViz RobotModel Stack
@@ -1159,6 +1644,45 @@ ground plane appears
 diffbot appears in the world
 ```
 
+## Launch Gazebo Control and Sensor Stack
+
+```bash
+ros2 launch cpp_robotics_sim_ros ros2_control.launch.py
+```
+
+Expected controllers:
+
+```bash
+ros2 control list_controllers
+```
+
+```txt
+joint_state_broadcaster active
+diff_drive_controller active
+```
+
+Expected Gazebo control topics:
+
+```bash
+ros2 topic type /diff_drive_controller/cmd_vel
+ros2 topic type /diff_drive_controller/odom
+ros2 topic echo /diff_drive_controller/odom --once
+```
+
+Expected lidar and clock topics:
+
+```bash
+ros2 topic type /scan
+ros2 topic echo /scan --once
+ros2 topic echo /clock --once
+```
+
+Drive Gazebo robot:
+
+```bash
+ros2 topic pub -r 10 /diff_drive_controller/cmd_vel geometry_msgs/msg/TwistStamped "{twist: {linear: {x: 0.25}, angular: {z: 0.0}}}"
+```
+
 ## Run Launch Regression
 
 ```bash
@@ -1173,7 +1697,7 @@ Expected:
 
 ---
 
-# 15. Common Interface Failures
+# 20. Common Interface Failures
 
 | Failure                                 | Likely Cause                                                      | First Check                                        |
 | --------------------------------------- | ----------------------------------------------------------------- | -------------------------------------------------- |
@@ -1196,13 +1720,21 @@ Expected:
 | `/tf_static` echo shows no output       | wrong QoS for static transform echo                               | use transient local durability                     |
 | RobotModel display is red               | missing robot description or TF                                   | check `/robot_description`, `/joint_states`, `/tf` |
 | Gazebo opens but no robot appears       | spawn failed or `/robot_description` missing                      | inspect launch terminal output                     |
-| Gazebo robot does not drive             | expected at Day 76                                                | Day 77/78 adds control/plugin work                 |
+| Gazebo robot does not drive             | controller inactive, wrong command topic, or wrong message type   | `ros2 control list_controllers`, publish `TwistStamped` to controller |
+| `diff_drive_controller` missing          | spawner missing or YAML issue                                     | `ros2 control list_controllers`                    |
+| wheel names empty                        | `ros2_control.yaml` indentation wrong                             | inspect installed controller YAML                  |
+| `/controller_manager` missing            | `gz_ros2_control` plugin failed                                   | inspect Gazebo launch output                       |
+| Gazebo moves but RViz stays still        | RViz sim-time mismatch or wrong odom topic                        | use `/clock`, `use_sim_time:=true`, `/diff_drive_controller/odom` |
+| `/scan` missing                          | lidar sensor or bridge not running                                | `gz topic -l`, `ros2 topic list`                   |
+| LaserScan display empty                  | RViz topic not selected or QoS mismatch                           | set topic `/scan`, Reliability Best Effort         |
+| `TF_OLD_DATA` warnings                   | stale nodes or wall-time/sim-time mismatch                        | restart stack and use simulation time              |
+| `.sdf` world missing on GitHub           | `.gitignore` ignored SDF files                                    | `git check-ignore -v`, `git add -f`                |
 
 ---
 
-# 16. Interface Ownership Summary
+# 21. Interface Ownership Summary
 
-## `sim_node` Owns
+## `sim_node` Owns in the Kinematic Simulator Stack
 
 ```txt
 /cmd_vel subscriber
@@ -1220,10 +1752,34 @@ Expected:
 /tf_static for fixed robot link transforms
 ```
 
-## `joint_state_publisher` Owns
+## `joint_state_publisher` Owns in the Visualization-Only Description Stack
 
 ```txt
 /joint_states
+```
+
+## `joint_state_broadcaster` Owns in the Gazebo ros2_control Stack
+
+```txt
+/joint_states
+/dynamic_joint_states
+```
+
+## `diff_drive_controller` Owns in the Gazebo Control Stack
+
+```txt
+/diff_drive_controller/cmd_vel subscriber
+/diff_drive_controller/odom publisher
+/diff_drive_controller/cmd_vel_out publisher
+/tf broadcaster for odom -> base_link when enable_odom_tf is true
+wheel velocity command interfaces through ros2_control
+```
+
+## `ros_gz_bridge` Owns
+
+```txt
+/clock bridge from Gazebo to ROS
+/scan bridge from Gazebo to ROS
 ```
 
 ## Gazebo Spawn Workflow Uses
@@ -1234,10 +1790,27 @@ ros_gz_sim create
 empty_diffbot_world.sdf
 ```
 
+## Gazebo Sensor Workflow Uses
+
+```txt
+lidar_link
+gpu_lidar sensor
+Gazebo /scan
+ROS /scan
+```
+
 ---
 
-# 17. Interview Explanation
+# 22. Interview Explanation
 
-The simulator exposes a clear ROS 2 topic interface. It subscribes to `/cmd_vel` using `geometry_msgs/msg/Twist`, publishes a simple `/robot_pose` using `geometry_msgs/msg/Pose2D`, publishes standard `/odom` using `nav_msgs/msg/Odometry`, broadcasts `odom -> base_link` on TF, and publishes runtime health on `/diagnostics` using `diagnostic_msgs/msg/DiagnosticArray`.
+The project now exposes two related ROS 2 interfaces.
 
-Days 71–76 extend the interface with robot description topics. The Xacro model is converted into `/robot_description`, `joint_state_publisher` provides `/joint_states`, and `robot_state_publisher` publishes the robot link transforms below `base_link`. The simulator still owns `odom -> base_link`, which keeps transform ownership clean. RViz uses `/robot_description`, `/joint_states`, `/tf`, `/tf_static`, and `/odom` to visualize the full robot model, while Gazebo uses `/robot_description` to spawn the robot into the simulation world.
+The original kinematic simulator subscribes to `/cmd_vel` using `geometry_msgs/msg/Twist`, publishes a simple `/robot_pose` using `geometry_msgs/msg/Pose2D`, publishes standard `/odom` using `nav_msgs/msg/Odometry`, broadcasts `odom -> base_link` on TF, and publishes runtime health on `/diagnostics` using `diagnostic_msgs/msg/DiagnosticArray`.
+
+The robot description stack converts `diffbot.xacro` into `/robot_description`. `robot_state_publisher` uses that model plus `/joint_states` to publish the robot link transforms below `base_link`. In the visualization-only stack, `/joint_states` comes from `joint_state_publisher`. In the Gazebo control stack, `/joint_states` comes from `joint_state_broadcaster`.
+
+The Gazebo control stack uses `ros2_control`. The Xacro model defines velocity command interfaces and position/velocity state interfaces for both wheel joints. `gz_ros2_control` exposes those Gazebo joints to `controller_manager`. `controller_manager` loads `joint_state_broadcaster` and `diff_drive_controller`. The diff-drive controller subscribes to `/diff_drive_controller/cmd_vel` as `geometry_msgs/msg/TwistStamped`, converts body velocity into wheel velocity commands, moves the robot in Gazebo, publishes `/diff_drive_controller/odom`, and publishes `odom -> base_link` TF when enabled.
+
+Day 79 adds a simulated lidar. Gazebo simulates the `gpu_lidar` sensor on `lidar_link`, publishes a Gazebo `/scan` topic, and `ros_gz_bridge` converts it into ROS `/scan` as `sensor_msgs/msg/LaserScan`. The `/clock` bridge provides simulation time so RViz and ROS nodes can visualize Gazebo data without timestamp errors.
+
+The key ownership rule is that `sim_node` owns `odom -> base_link` only in the original kinematic simulator stack, while `diff_drive_controller` owns `odom -> base_link` in the Gazebo control stack. RViz visualizes the robot model, TF, odometry, and lidar, but Gazebo and the controllers are what simulate and move the robot.
