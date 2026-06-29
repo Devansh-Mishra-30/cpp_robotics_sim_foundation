@@ -1,8 +1,8 @@
 # C++ / ROS 2 Robotics Simulation Foundation
 
-This repository contains a C++ and ROS 2 robotics simulation project focused on mobile robot state updates, differential-drive kinematics, ROS 2 messaging, odometry, TF frames, runtime configuration, launch workflows, QoS profiles, rosbag2, diagnostics, RViz visualization, URDF/Xacro robot modeling, Gazebo simulation, `ros2_control`, differential-drive control, simulated lidar, validation, and engineering documentation.
+This repository contains a C++ and ROS 2 robotics simulation project focused on mobile robot state updates, differential-drive kinematics, ROS 2 messaging, odometry, TF frames, runtime configuration, launch workflows, QoS profiles, rosbag2, diagnostics, RViz visualization, URDF/Xacro robot modeling, Gazebo simulation, `ros2_control`, differential-drive control, simulated lidar, validation, uncertainty modeling, trajectory analysis, and engineering documentation.
 
-The project started as a standalone C++ robotics simulation foundation and has been extended into a ROS 2 + Gazebo robot simulation stack with robot description, physics-based motion, controller integration, and sensor output.
+The project started as a standalone C++ robotics simulation foundation and has been extended into a ROS 2 + Gazebo robot simulation stack with robot description, physics-based motion, controller integration, sensor output, noisy odometry generation, trajectory validation, plotting, and portfolio-ready reporting.
 
 ---
 
@@ -34,6 +34,10 @@ cpp_robotics_sim_foundation/
 │       ├── rviz/
 │       │   ├── sim_debug.rviz
 │       │   └── diffbot_robot_model.rviz
+│       ├── scripts/
+│       │   ├── noisy_odom_node.py
+│       │   ├── trajectory_validation_recorder.py
+│       │   └── plot_trajectory_validation.py
 │       ├── src/
 │       │   └── sim_node.cpp
 │       ├── urdf/
@@ -48,20 +52,32 @@ cpp_robotics_sim_foundation/
 ├── scripts/
 │   └── day68_launch_regression.sh
 │
+├── data/
+│   └── .gitkeep
+│
+├── plots/
+│   ├── .gitkeep
+│   └── trajectory_validation.png
+│
 └── docs/
     ├── daily_documentation.md
     ├── system_architecture.md
     ├── debugging_and_validation.md
-    └── topic_interface_reference.md
+    ├── topic_interface_reference.md
+    ├── nav2_architecture.md
+    ├── state_estimation_notes.md
+    └── trajectory_validation_report.md
 ```
 
 Main layers:
 
 ```txt
 standalone_cpp/  -> Pure C++ robotics simulation modules
-ros2_ws/         -> ROS 2 simulator, robot model, Gazebo, ros2_control, RViz, and sensor integration
+ros2_ws/         -> ROS 2 simulator, robot model, Gazebo, ros2_control, RViz, sensor integration, and validation nodes
 scripts/         -> Regression and validation scripts
-docs/            -> Architecture, debugging, validation, topic interface, and daily documentation
+data/            -> Local validation CSV output directory
+plots/           -> Portfolio-ready validation plots
+docs/            -> Architecture, debugging, validation, topic interface, navigation, estimation, and daily documentation
 ```
 
 ---
@@ -84,6 +100,20 @@ Expected:
 
 ```txt
 Summary: 1 package finished
+```
+
+Verify installed ROS 2 package scripts:
+
+```bash
+ros2 pkg executables cpp_robotics_sim_ros | grep -E "noisy|trajectory"
+```
+
+Expected:
+
+```txt
+cpp_robotics_sim_ros noisy_odom_node.py
+cpp_robotics_sim_ros trajectory_validation_recorder.py
+cpp_robotics_sim_ros plot_trajectory_validation.py
 ```
 
 ---
@@ -224,6 +254,125 @@ robot moves in Gazebo
 
 ---
 
+## Quickstart: Noisy Odometry and Trajectory Validation
+
+The validation stack compares commanded motion, actual Gazebo odometry, and intentionally noisy odometry.
+
+### Terminal 1: Launch Gazebo control stack
+
+```bash
+cd "/mnt/c/Self study/PRACTICE C++/Cdev/01_joint_basics/ros2_ws"
+
+source /opt/ros/jazzy/setup.bash
+source install/setup.bash
+
+ros2 launch cpp_robotics_sim_ros ros2_control.launch.py
+```
+
+### Terminal 2: Run noisy odometry node
+
+```bash
+cd "/mnt/c/Self study/PRACTICE C++/Cdev/01_joint_basics/ros2_ws"
+
+source /opt/ros/jazzy/setup.bash
+source install/setup.bash
+
+ros2 run cpp_robotics_sim_ros noisy_odom_node.py
+```
+
+Expected:
+
+```txt
+Day 83 noisy odometry node started
+Subscribing: /diff_drive_controller/odom
+Publishing:  /odom_noisy
+```
+
+### Terminal 3: Run trajectory validation recorder
+
+Run from the repository root so the CSV writes to root `data/`:
+
+```bash
+cd "/mnt/c/Self study/PRACTICE C++/Cdev/01_joint_basics"
+
+source /opt/ros/jazzy/setup.bash
+source ros2_ws/install/setup.bash
+
+ros2 run cpp_robotics_sim_ros trajectory_validation_recorder.py
+```
+
+Expected:
+
+```txt
+Day 84 trajectory validation recorder started
+Command topic:     /diff_drive_controller/cmd_vel
+Actual odom topic: /diff_drive_controller/odom
+Noisy odom topic:  /odom_noisy
+Writing CSV:       /mnt/c/Self study/PRACTICE C++/Cdev/01_joint_basics/data/day84_trajectory_validation.csv
+Sample rate:       20.0 Hz
+```
+
+### Terminal 4: Command robot motion
+
+```bash
+cd "/mnt/c/Self study/PRACTICE C++/Cdev/01_joint_basics/ros2_ws"
+
+source /opt/ros/jazzy/setup.bash
+source install/setup.bash
+
+ros2 topic pub -r 10 /diff_drive_controller/cmd_vel geometry_msgs/msg/TwistStamped "{twist: {linear: {x: 0.25}, angular: {z: 0.2}}}"
+```
+
+Let it run for 10 to 15 seconds, then stop the publisher, recorder, and noisy odometry node.
+
+### Verify CSV
+
+From repository root:
+
+```bash
+cd "/mnt/c/Self study/PRACTICE C++/Cdev/01_joint_basics"
+
+ls data/day84_trajectory_validation.csv
+head data/day84_trajectory_validation.csv
+wc -l data/day84_trajectory_validation.csv
+```
+
+Expected CSV header:
+
+```txt
+time_sec,cmd_linear_x,cmd_angular_z,actual_x,actual_y,actual_yaw,actual_linear_x,actual_angular_z,noisy_x,noisy_y,noisy_yaw
+```
+
+### Generate plot and report
+
+```bash
+cd "/mnt/c/Self study/PRACTICE C++/Cdev/01_joint_basics"
+
+python3 ros2_ws/src/cpp_robotics_sim_ros/scripts/plot_trajectory_validation.py --csv data/day84_trajectory_validation.csv --plot plots/trajectory_validation.png --report docs/trajectory_validation_report.md
+```
+
+Expected outputs:
+
+```txt
+plots/trajectory_validation.png
+docs/trajectory_validation_report.md
+```
+
+Validate:
+
+```bash
+ls plots/trajectory_validation.png
+ls docs/trajectory_validation_report.md
+ls -lh plots/trajectory_validation.png
+
+grep -n "actual path length" docs/trajectory_validation_report.md
+grep -n "mean position noise error" docs/trajectory_validation_report.md
+grep -n "max actual linear velocity" docs/trajectory_validation_report.md
+grep -n "max actual yaw rate" docs/trajectory_validation_report.md
+```
+
+---
+
 ## RViz for Gazebo Control Stack
 
 When visualizing Gazebo-driven data, RViz must use simulation time.
@@ -340,9 +489,61 @@ This starts Gazebo, spawns the robot, loads `controller_manager`, activates `joi
 
 ---
 
+## Two Runtime Stacks
+
+The project has two related but separate runtime stacks.
+
+### Custom Kinematic Simulator Stack
+
+```txt
+/cmd_vel
+    -> sim_node
+    -> /robot_pose
+    -> /odom
+    -> /tf
+    -> /diagnostics
+```
+
+This stack is useful for learning:
+
+```txt
+C++ simulation logic
+planar kinematics
+custom odometry publishing
+custom TF broadcasting
+diagnostics
+runtime parameters
+launch workflows
+validation discipline
+```
+
+### Gazebo ros2_control Stack
+
+```txt
+/diff_drive_controller/cmd_vel
+    -> diff_drive_controller
+    -> ros2_control
+    -> gz_ros2_control
+    -> Gazebo wheel joints
+    -> /diff_drive_controller/odom
+    -> /tf
+    -> /joint_states
+```
+
+This stack is the physics-based Gazebo control workflow.
+
+Important:
+
+```txt
+sim_node does not move Gazebo.
+Gazebo movement uses diff_drive_controller, ros2_control, and gz_ros2_control.
+```
+
+---
+
 ## Transform Ownership
 
-The project has two related runtime stacks. The transform owner changes depending on which stack is running.
+The transform owner changes depending on which stack is running.
 
 Kinematic simulator stack:
 
@@ -379,7 +580,7 @@ Important rule:
 Do not run sim_node and diff_drive_controller together as simultaneous publishers of odom -> base_link.
 ```
 
-Full frame tree through Day 80:
+Full frame tree through Day 85:
 
 ```txt
 odom
@@ -440,6 +641,107 @@ ROS /clock
 RViz and ROS nodes using use_sim_time
 ```
 
+Noisy odometry flow:
+
+```txt
+/diff_drive_controller/odom
+        ↓
+noisy_odom_node.py
+        ↓
+/odom_noisy
+```
+
+Trajectory validation flow:
+
+```txt
+/diff_drive_controller/cmd_vel
+/diff_drive_controller/odom
+/odom_noisy
+        ↓
+trajectory_validation_recorder.py
+        ↓
+data/day84_trajectory_validation.csv
+        ↓
+plot_trajectory_validation.py
+        ↓
+plots/trajectory_validation.png
+docs/trajectory_validation_report.md
+```
+
+Important:
+
+```txt
+/odom_noisy does not move Gazebo.
+It is a noisy feedback stream for validation and future localization work.
+```
+
+---
+
+## Navigation and State Estimation Readiness
+
+Days 81 and 82 added concept documentation for autonomy readiness.
+
+Navigation notes:
+
+```txt
+docs/nav2_architecture.md
+```
+
+State estimation notes:
+
+```txt
+docs/state_estimation_notes.md
+```
+
+Main Nav2 mental model:
+
+```txt
+localization tells the robot where it is
+costmaps tell the robot where it is safe to move
+planner decides the path
+controller sends velocity commands
+recovery handles failure cases
+```
+
+Important navigation frame chain:
+
+```txt
+map -> odom -> base_link
+```
+
+Frame meanings:
+
+```txt
+base_link = robot body frame
+odom      = smooth local frame that can drift
+map       = globally corrected frame that can correct odometry drift
+```
+
+Planner vs controller:
+
+```txt
+planner    = decides where the robot should go
+controller = decides what velocity the robot should execute now
+```
+
+Global vs local costmaps:
+
+```txt
+global_costmap = long-range route planning
+local_costmap  = nearby obstacle avoidance and path execution
+```
+
+State estimation mental model:
+
+```txt
+state estimation = estimating robot pose and velocity from imperfect measurements
+odometry         = smooth short-term motion estimate that drifts
+IMU              = angular velocity and acceleration sensing
+sensor fusion    = combining multiple noisy measurements
+EKF              = prediction + correction using covariance
+covariance       = uncertainty of pose or velocity measurement
+```
+
 ---
 
 ## Differential-Drive Math
@@ -470,6 +772,21 @@ wl     = left wheel angular velocity
 ```
 
 The custom C++ simulator uses planar kinematic pose integration. The Gazebo control stack uses `diff_drive_controller` to convert body velocity commands into wheel joint velocity commands.
+
+For a constant velocity command:
+
+```txt
+linear velocity = 0.25 m/s
+yaw rate        = 0.2 rad/s
+```
+
+Expected turning radius:
+
+```txt
+R = v / omega = 0.25 / 0.2 = 1.25 m
+```
+
+This produces a circular trajectory in the Day 85 validation plot.
 
 ---
 
@@ -528,26 +845,61 @@ diff_drive_controller:
     use_stamped_vel: true
 ```
 
+Noisy odometry runtime parameters are declared in:
+
+```txt
+ros2_ws/src/cpp_robotics_sim_ros/scripts/noisy_odom_node.py
+```
+
+Defaults:
+
+```txt
+input_topic                    = /diff_drive_controller/odom
+output_topic                   = /odom_noisy
+position_noise_std             = 0.02 m
+yaw_noise_std                  = 0.02 rad
+linear_velocity_noise_std      = 0.02 m/s
+angular_velocity_noise_std     = 0.02 rad/s
+random_seed                    = 42
+```
+
+Trajectory recorder runtime parameters are declared in:
+
+```txt
+ros2_ws/src/cpp_robotics_sim_ros/scripts/trajectory_validation_recorder.py
+```
+
+Defaults:
+
+```txt
+cmd_topic          = /diff_drive_controller/cmd_vel
+actual_odom_topic  = /diff_drive_controller/odom
+noisy_odom_topic   = /odom_noisy
+output_csv         = data/day84_trajectory_validation.csv
+sample_rate_hz     = 20.0
+```
+
 ---
 
-## ROS 2 Topics Through Day 80
+## ROS 2 Topics Through Day 85
 
-| Topic | Type | Producer | Purpose |
-|---|---|---|---|
-| `/cmd_vel` | `geometry_msgs/msg/Twist` | external command source | Velocity command input for `sim_node` |
-| `/robot_pose` | `geometry_msgs/msg/Pose2D` | `sim_node` | Simple 2D robot pose |
-| `/odom` | `nav_msgs/msg/Odometry` | `sim_node` | Kinematic simulator odometry |
-| `/tf` | `tf2_msgs/msg/TFMessage` | `sim_node`, `robot_state_publisher`, `diff_drive_controller` | Transform tree data |
-| `/tf_static` | `tf2_msgs/msg/TFMessage` | `robot_state_publisher` | Fixed transform tree data |
-| `/diagnostics` | `diagnostic_msgs/msg/DiagnosticArray` | `sim_node` | Runtime health and simulator diagnostics |
-| `/robot_description` | `std_msgs/msg/String` | `robot_state_publisher` | Robot model XML |
-| `/joint_states` | `sensor_msgs/msg/JointState` | `joint_state_publisher` or `joint_state_broadcaster` | Joint positions/velocities for robot links |
-| `/dynamic_joint_states` | `control_msgs/msg/DynamicJointState` | `joint_state_broadcaster` | Detailed ros2_control joint interface states |
-| `/diff_drive_controller/cmd_vel` | `geometry_msgs/msg/TwistStamped` | command source | Gazebo diff-drive command input |
-| `/diff_drive_controller/odom` | `nav_msgs/msg/Odometry` | `diff_drive_controller` | Gazebo diff-drive odometry |
-| `/diff_drive_controller/cmd_vel_out` | `geometry_msgs/msg/TwistStamped` | `diff_drive_controller` | Limited command output |
-| `/scan` | `sensor_msgs/msg/LaserScan` | `ros_gz_bridge` from Gazebo lidar | Simulated lidar scan |
-| `/clock` | `rosgraph_msgs/msg/Clock` | `ros_gz_bridge` from Gazebo | Simulation time |
+| Topic                                | Type                                  | Producer                                                     | Purpose                                                         |
+| ------------------------------------ | ------------------------------------- | ------------------------------------------------------------ | --------------------------------------------------------------- |
+| `/cmd_vel`                           | `geometry_msgs/msg/Twist`             | external command source                                      | Velocity command input for `sim_node`                           |
+| `/robot_pose`                        | `geometry_msgs/msg/Pose2D`            | `sim_node`                                                   | Simple 2D robot pose                                            |
+| `/odom`                              | `nav_msgs/msg/Odometry`               | `sim_node`                                                   | Kinematic simulator odometry                                    |
+| `/tf`                                | `tf2_msgs/msg/TFMessage`              | `sim_node`, `robot_state_publisher`, `diff_drive_controller` | Transform tree data                                             |
+| `/tf_static`                         | `tf2_msgs/msg/TFMessage`              | `robot_state_publisher`                                      | Fixed transform tree data                                       |
+| `/diagnostics`                       | `diagnostic_msgs/msg/DiagnosticArray` | `sim_node`                                                   | Runtime health and simulator diagnostics                        |
+| `/robot_description`                 | `std_msgs/msg/String`                 | `robot_state_publisher`                                      | Robot model XML                                                 |
+| `/joint_states`                      | `sensor_msgs/msg/JointState`          | `joint_state_publisher` or `joint_state_broadcaster`         | Joint positions/velocities for robot links                      |
+| `/dynamic_joint_states`              | `control_msgs/msg/DynamicJointState`  | `joint_state_broadcaster`                                    | Detailed ros2_control joint interface states                    |
+| `/diff_drive_controller/cmd_vel`     | `geometry_msgs/msg/TwistStamped`      | command source                                               | Gazebo diff-drive command input                                 |
+| `/diff_drive_controller/odom`        | `nav_msgs/msg/Odometry`               | `diff_drive_controller`                                      | Gazebo diff-drive odometry                                      |
+| `/diff_drive_controller/cmd_vel_out` | `geometry_msgs/msg/TwistStamped`      | `diff_drive_controller`                                      | Limited command output                                          |
+| `/odom_noisy`                        | `nav_msgs/msg/Odometry`               | `noisy_odom_node.py`                                         | Noisy odometry stream generated from Gazebo controller odometry |
+| `/scan`                              | `sensor_msgs/msg/LaserScan`           | `ros_gz_bridge` from Gazebo lidar                            | Simulated lidar scan                                            |
+| `/clock`                             | `rosgraph_msgs/msg/Clock`             | `ros_gz_bridge` from Gazebo                                  | Simulation time                                                 |
 
 ---
 
@@ -683,13 +1035,13 @@ Expected:
 ========== PASS: Day 68 launch regression succeeded ==========
 ```
 
-The regression validates the original ROS 2 kinematic simulator stack and should still pass after Gazebo, control, and sensor changes.
+The regression validates the original ROS 2 kinematic simulator stack and should still pass after Gazebo, control, sensor, uncertainty, validation, and plotting changes.
 
 ---
 
 ## Verification Workflow
 
-Use this after meaningful source, launch, config, robot description, world, controller, sensor, or documentation changes.
+Use this after meaningful source, launch, config, robot description, world, controller, sensor, validation, or documentation changes.
 
 ### Build
 
@@ -754,6 +1106,65 @@ robot moves in Gazebo
 RViz tracks Gazebo motion when use_sim_time is true
 ```
 
+### Noisy Odometry Checks
+
+```bash
+ros2 run cpp_robotics_sim_ros noisy_odom_node.py
+```
+
+In another terminal:
+
+```bash
+ros2 topic list | grep odom
+ros2 topic echo /odom_noisy --once
+ros2 topic echo /odom_noisy --once | grep -A 40 "covariance"
+```
+
+Expected:
+
+```txt
+/odom_noisy exists
+/odom_noisy publishes nav_msgs/msg/Odometry
+pose and twist covariance values are populated
+```
+
+### Trajectory Validation Checks
+
+```bash
+cd "/mnt/c/Self study/PRACTICE C++/Cdev/01_joint_basics"
+
+source /opt/ros/jazzy/setup.bash
+source ros2_ws/install/setup.bash
+
+ros2 run cpp_robotics_sim_ros trajectory_validation_recorder.py
+```
+
+After commanding robot motion, verify:
+
+```bash
+ls data/day84_trajectory_validation.csv
+head data/day84_trajectory_validation.csv
+wc -l data/day84_trajectory_validation.csv
+```
+
+Generate plot and report:
+
+```bash
+python3 ros2_ws/src/cpp_robotics_sim_ros/scripts/plot_trajectory_validation.py --csv data/day84_trajectory_validation.csv --plot plots/trajectory_validation.png --report docs/trajectory_validation_report.md
+```
+
+Verify:
+
+```bash
+ls plots/trajectory_validation.png
+ls docs/trajectory_validation_report.md
+
+grep -n "actual path length" docs/trajectory_validation_report.md
+grep -n "mean position noise error" docs/trajectory_validation_report.md
+grep -n "max actual linear velocity" docs/trajectory_validation_report.md
+grep -n "max actual yaw rate" docs/trajectory_validation_report.md
+```
+
 ### Regression Check
 
 ```bash
@@ -772,9 +1183,12 @@ docs/daily_documentation.md
 docs/system_architecture.md
 docs/debugging_and_validation.md
 docs/topic_interface_reference.md
+docs/nav2_architecture.md
+docs/state_estimation_notes.md
+docs/trajectory_validation_report.md
 ```
 
-The documentation tracks the roadmap from C++ fundamentals through ROS 2 launch, YAML parameters, launch arguments, QoS profiles, rosbag2, RViz2, diagnostics, regression, URDF/Xacro robot modeling, robot state publishing, Gazebo spawning, `ros2_control`, differential-drive controller integration, simulated lidar, `/scan` bridging, and Day 80 interview review.
+The documentation tracks the roadmap from C++ fundamentals through ROS 2 launch, YAML parameters, launch arguments, QoS profiles, rosbag2, RViz2, diagnostics, regression, URDF/Xacro robot modeling, robot state publishing, Gazebo spawning, `ros2_control`, differential-drive controller integration, simulated lidar, `/scan` bridging, Day 80 interview review, Nav2 concepts, state estimation, noisy odometry, trajectory validation, plotting, and validation reporting.
 
 ---
 
@@ -813,6 +1227,17 @@ This project demonstrates:
 * simulated lidar sensor modeling
 * `/scan` bridging with `ros_gz_bridge`
 * `/clock` and simulation-time synchronization
+* Nav2 architecture understanding
+* state estimation and EKF concepts
+* odometry noise modeling
+* covariance interpretation
+* noisy odometry publishing
+* trajectory validation recording
+* CSV-based validation workflow
+* commanded vs actual trajectory comparison
+* actual vs noisy odometry comparison
+* validation plotting
+* portfolio-ready validation reporting
 * parameterized runtime behavior
 * safety guards
 * debugging discipline
@@ -824,47 +1249,71 @@ This project demonstrates:
 
 ## Current Status
 
-| Area | Status |
-|---|---|
-| Standalone C++ simulator | Complete foundation |
-| ROS 2 node integration | Complete foundation |
-| Launch workflow | Added |
-| YAML configuration | Added |
-| Launch argument overrides | Added |
-| QoS profiles | Added |
-| rosbag2 workflow | Added |
-| RViz2 odometry/TF visualization | Added |
-| Diagnostics | Added |
-| Launch regression | Added |
-| Topic interface reference | Added |
-| URDF robot model | Added |
-| Xacro robot description | Added |
-| `robot_state_publisher` workflow | Added |
-| `joint_state_publisher` workflow | Added |
-| RViz RobotModel visualization | Added |
-| Gazebo world and robot spawn | Added |
-| `ros2_control` integration | Added |
-| `joint_state_broadcaster` integration | Added |
-| Gazebo differential-drive control | Added |
-| `diff_drive_controller` odometry | Added |
-| Simulated lidar sensor | Added |
-| `/scan` LaserScan bridge | Added |
-| `/clock` simulation-time bridge | Added |
-| Day 80 robot modeling review | Added |
-| Nav2 integration | Planned |
-| SLAM/localization | Planned |
-| Automated tests and CI | Planned |
+| Area                                  | Status              |
+| ------------------------------------- | ------------------- |
+| Standalone C++ simulator              | Complete foundation |
+| ROS 2 node integration                | Complete foundation |
+| Launch workflow                       | Added               |
+| YAML configuration                    | Added               |
+| Launch argument overrides             | Added               |
+| QoS profiles                          | Added               |
+| rosbag2 workflow                      | Added               |
+| RViz2 odometry/TF visualization       | Added               |
+| Diagnostics                           | Added               |
+| Launch regression                     | Added               |
+| Topic interface reference             | Added               |
+| URDF robot model                      | Added               |
+| Xacro robot description               | Added               |
+| `robot_state_publisher` workflow      | Added               |
+| `joint_state_publisher` workflow      | Added               |
+| RViz RobotModel visualization         | Added               |
+| Gazebo world and robot spawn          | Added               |
+| `ros2_control` integration            | Added               |
+| `joint_state_broadcaster` integration | Added               |
+| Gazebo differential-drive control     | Added               |
+| `diff_drive_controller` odometry      | Added               |
+| Simulated lidar sensor                | Added               |
+| `/scan` LaserScan bridge              | Added               |
+| `/clock` simulation-time bridge       | Added               |
+| Day 80 robot modeling review          | Added               |
+| Nav2 architecture notes               | Added               |
+| State estimation and EKF notes        | Added               |
+| Noisy odometry node                   | Added               |
+| `/odom_noisy` topic                   | Added               |
+| Trajectory validation recorder        | Added               |
+| Validation CSV workflow               | Added               |
+| Trajectory validation plot            | Added               |
+| Trajectory validation report          | Added               |
+| Main documentation update             | In progress         |
+| Nav2 integration                      | Planned             |
+| SLAM/localization                     | Planned             |
+| Automated tests and CI                | Planned             |
 
-Next planned milestone:
+Current milestone:
 
 ```txt
-Day 81 - Nav2 concepts and architecture
+Days 81-85 complete:
+Nav2 concepts, state estimation concepts, noisy odometry, trajectory validation recording, plotting, and validation report generation.
+```
+
+Next step before new roadmap work:
+
+```txt
+Update all main documentation files and commit Days 81-85 cleanly.
 ```
 
 ---
 
-## Day 80 Interview Summary
+## Day 85 Interview Summary
 
-I built a modular C++ robotics simulation foundation with standalone differential-drive and manipulator modules, then integrated the mobile robot simulator into ROS 2 using `/cmd_vel`, `/robot_pose`, `/odom`, TF, and `/diagnostics`. I extended the project into a robot modeling and simulation stack with URDF, Xacro, `robot_state_publisher`, joint state publishing, RViz RobotModel visualization, Gazebo spawning, `ros2_control` hardware interfaces, `controller_manager`, `joint_state_broadcaster`, `diff_drive_controller`, Gazebo-driven wheel motion, simulated lidar, `/scan` bridging through `ros_gz_bridge`, and simulation-time synchronization through `/clock`.
+I built a modular C++ robotics simulation foundation with standalone differential-drive and manipulator modules, then integrated the mobile robot simulator into ROS 2 using `/cmd_vel`, `/robot_pose`, `/odom`, TF, and `/diagnostics`.
 
-In the custom kinematic simulator stack, `sim_node` owns `odom -> base_link`. In the Gazebo control stack, `diff_drive_controller` owns `odom -> base_link`, `joint_state_broadcaster` owns `/joint_states`, `robot_state_publisher` owns the robot link transforms below `base_link`, and RViz visualizes the resulting robot model, odometry, TF, and lidar data.
+I extended the project into a robot modeling and simulation stack with URDF, Xacro, `robot_state_publisher`, joint state publishing, RViz RobotModel visualization, Gazebo spawning, `ros2_control` hardware interfaces, `controller_manager`, `joint_state_broadcaster`, `diff_drive_controller`, Gazebo-driven wheel motion, simulated lidar, `/scan` bridging through `ros_gz_bridge`, and simulation-time synchronization through `/clock`.
+
+The project now has two clearly separated stacks. In the custom kinematic simulator stack, `sim_node` owns `odom -> base_link` and publishes custom odometry, TF, pose, and diagnostics. In the Gazebo control stack, `diff_drive_controller` owns `odom -> base_link`, `joint_state_broadcaster` owns `/joint_states`, `robot_state_publisher` owns the robot link transforms below `base_link`, and Gazebo motion is driven through `ros2_control` and `gz_ros2_control`.
+
+For autonomy readiness, I added Nav2 architecture notes covering `map -> odom -> base_link`, global and local costmaps, planner/controller separation, recovery behaviors, and lifecycle nodes. I also added state estimation notes covering odometry drift, IMU contribution, sensor fusion, EKF prediction/correction, covariance, and simulation noise.
+
+For validation readiness, I added a noisy odometry node that subscribes to `/diff_drive_controller/odom`, adds controlled Gaussian noise to position, yaw, linear velocity, and angular velocity, fills covariance, and republishes the result on `/odom_noisy`. I then added a trajectory validation recorder that records `/diff_drive_controller/cmd_vel`, `/diff_drive_controller/odom`, and `/odom_noisy` to CSV. Finally, I added a plotting/report script that generates a portfolio-ready trajectory validation plot and report with path length, final pose, mean/max position noise error, mean/max yaw noise error, max velocity, and max yaw rate.
+
+This demonstrates not just that the robot moves in simulation, but that the simulated behavior can be measured, validated, visualized, and explained in an interview-ready engineering workflow.

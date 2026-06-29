@@ -49,6 +49,13 @@ if(BUILD_TESTING)
   ament_lint_auto_find_test_dependencies()
 endif()
 
+install(PROGRAMS
+  scripts/noisy_odom_node.py
+  scripts/trajectory_validation_recorder.py
+  scripts/plot_trajectory_validation.py
+  DESTINATION lib/${PROJECT_NAME}
+)
+
 ament_package()
 
 

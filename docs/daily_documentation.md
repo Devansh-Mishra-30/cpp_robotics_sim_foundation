@@ -2368,6 +2368,755 @@ If RViz uses wall time while Gazebo uses sim time, TF errors such as `TF_OLD_DAT
 I built a differential-drive robot simulation stack in ROS 2 and Gazebo. The robot is described in Xacro with links, joints, inertial properties, collision geometry, visual geometry, ros2_control interfaces, and a lidar sensor. The Xacro is converted into `robot_description`, which is consumed by `robot_state_publisher` and by the Gazebo spawn process. Gazebo simulates the robot in a physics world. The `gz_ros2_control` plugin exposes the simulated wheel joints as ros2_control hardware interfaces. `controller_manager` loads `joint_state_broadcaster` and `diff_drive_controller`. The broadcaster publishes `/joint_states`; the diff-drive controller receives velocity commands, converts body velocity into wheel velocity commands, moves the simulated wheel joints, and publishes odometry and TF. A Gazebo lidar sensor publishes scan data, which is bridged into ROS as `/scan` using `ros_gz_bridge`. RViz visualizes the robot model, TF tree, odometry, and lidar scan using simulation time from `/clock`.
 
 ---
+# Day 81 — Navigation Basics
+
+## Goal
+
+Learn the basic Nav2 architecture and prepare interview-ready explanations for navigation concepts.
+
+## Deliverable
+
+Added:
+
+```txt
+docs/nav2_architecture.md
+```
+---
+
+## What Was Documented
+
+Day 81 documented the core Nav2 concepts:
+
+```txt
+map
+odom
+base_link
+global costmap
+local costmap
+planner
+controller
+recovery behavior
+lifecycle nodes
+```
+
+## Main Nav2 Architecture
+
+A simplified Nav2 mental model is:
+
+```txt
+localization tells the robot where it is
+costmaps tell the robot where it is safe to move
+planner decides the path
+controller sends velocity commands
+recovery handles failure cases
+```
+
+Important frame chain:
+
+```txt
+map -> odom -> base_link
+```
+
+Frame meanings:
+
+```txt
+base_link = robot body frame
+odom      = smooth local frame that can drift
+map       = globally corrected frame that can correct odometry drift
+```
+
+## Planner vs Controller
+
+```txt
+planner    = decides where the robot should go
+controller = decides what velocity the robot should execute now
+```
+
+## Global Costmap vs Local Costmap
+
+```txt
+global_costmap = used for long-range path planning
+local_costmap  = used for nearby obstacle avoidance and path execution
+```
+
+## Relationship to This Project
+
+This project currently has two stacks.
+
+Custom kinematic simulator stack:
+
+```txt
+/cmd_vel
+    -> sim_node
+    -> /robot_pose
+    -> /odom
+    -> /tf
+    -> /diagnostics
+```
+
+Gazebo ros2_control stack:
+
+```txt
+/diff_drive_controller/cmd_vel
+    -> diff_drive_controller
+    -> ros2_control
+    -> gz_ros2_control
+    -> Gazebo wheel joints
+    -> /diff_drive_controller/odom
+    -> /tf
+    -> /joint_states
+```
+
+Important architecture rule:
+
+```txt
+sim_node does not move Gazebo.
+Gazebo movement uses diff_drive_controller, ros2_control, and gz_ros2_control.
+```
+
+## Interview Explanation
+
+Day 81 added Nav2 architecture notes. Nav2 is the ROS 2 navigation stack that moves a robot from its current pose to a goal pose while avoiding obstacles. It uses localization to estimate robot pose, costmaps to represent obstacle risk, a planner to compute a path, and a controller to generate velocity commands. The key frame chain is `map -> odom -> base_link`, where `odom` gives smooth local motion but drifts, and `map` provides global correction.
+
+---
+
+# Day 82 — State Estimation
+
+## Goal
+
+Learn EKF, odometry drift, IMU contribution, sensor fusion, covariance, and simulation uncertainty concepts.
+
+## Deliverable
+
+Added:
+
+```txt
+docs/state_estimation_notes.md
+```
+
+## What Was Documented
+
+Day 82 documented:
+
+```txt
+state estimation
+odometry drift
+IMU measurements
+sensor fusion
+EKF prediction and correction
+covariance
+noise vs covariance
+why simulation needs uncertainty
+```
+
+## State Estimation Mental Model
+
+State estimation means estimating the robot state using imperfect measurements.
+
+For a 2D mobile robot, the state can include:
+
+```txt
+x position
+y position
+yaw angle
+linear velocity
+angular velocity
+```
+
+A simple state vector is:
+
+```txt
+state = [x, y, yaw, linear_velocity, yaw_rate]
+```
+
+## Odometry Drift
+
+Odometry is smooth and useful for short-term motion, but it drifts because small errors accumulate over time.
+
+Common drift causes:
+
+```txt
+wheel slip
+incorrect wheel radius
+incorrect wheel separation
+encoder noise
+timing error
+model mismatch
+uneven ground
+```
+
+## EKF Concept
+
+EKF means Extended Kalman Filter.
+
+It has two main steps:
+
+```txt
+prediction
+correction
+```
+
+Prediction uses the motion model:
+
+```txt
+x_next   = x + v * cos(yaw) * dt
+y_next   = y + v * sin(yaw) * dt
+yaw_next = yaw + yaw_rate * dt
+```
+
+Correction uses sensor measurements such as odometry, IMU, GPS, lidar localization, or external pose estimates.
+
+## Covariance
+
+Covariance represents uncertainty.
+
+```txt
+low covariance  = trust this measurement more
+high covariance = trust this measurement less
+```
+
+ROS odometry messages contain:
+
+```txt
+pose.covariance
+twist.covariance
+```
+
+Covariance stores variance, not standard deviation:
+
+```txt
+variance = standard_deviation²
+```
+
+## Relationship to This Project
+
+Day 82 prepared the concept foundation for Day 83.
+
+The project already had actual Gazebo odometry:
+
+```txt
+/diff_drive_controller/odom
+```
+
+Day 83 would create:
+
+```txt
+/odom_noisy
+```
+
+from the Gazebo odometry stream.
+
+## Interview Explanation
+
+Day 82 added state estimation notes. State estimation is the process of estimating robot pose and velocity from noisy, incomplete, and imperfect measurements. Odometry is useful but drifts because small motion errors are integrated over time. An EKF predicts the next state using a motion model and corrects that prediction using measurements. Covariance tells the estimator how much uncertainty each measurement has.
+
+---
+
+# Day 83 — Noise and Uncertainty
+
+## Goal
+
+Add an optional noisy odometry stream for simulation uncertainty and future localization validation.
+
+## Deliverable
+
+Added:
+
+```txt
+ros2_ws/src/cpp_robotics_sim_ros/scripts/noisy_odom_node.py
+```
+
+Updated:
+
+```txt
+ros2_ws/src/cpp_robotics_sim_ros/CMakeLists.txt
+ros2_ws/src/cpp_robotics_sim_ros/package.xml
+```
+
+## Runtime Flow
+
+```txt
+/diff_drive_controller/odom
+        ↓
+noisy_odom_node.py
+        ↓
+/odom_noisy
+```
+
+## Topic Interface
+
+Input:
+
+```txt
+/diff_drive_controller/odom
+nav_msgs/msg/Odometry
+```
+
+Output:
+
+```txt
+/odom_noisy
+nav_msgs/msg/Odometry
+```
+
+## What the Node Does
+
+The node subscribes to actual Gazebo controller odometry and republishes a noisy version.
+
+It adds Gaussian noise to:
+
+```txt
+x position
+y position
+yaw
+linear velocity
+angular velocity
+```
+
+It also fills covariance values based on the configured noise standard deviations.
+
+Default noise parameters:
+
+```txt
+position_noise_std             = 0.02 m
+yaw_noise_std                  = 0.02 rad
+linear_velocity_noise_std      = 0.02 m/s
+angular_velocity_noise_std     = 0.02 rad/s
+random_seed                    = 42
+```
+
+The fixed random seed makes the noise repeatable for validation.
+
+## Important Architecture Rule
+
+```txt
+/odom_noisy does not move Gazebo.
+It is only a noisy feedback stream for validation and future localization work.
+```
+
+Odometry is feedback.
+
+Velocity command topics are actuation inputs.
+
+Gazebo movement still comes from:
+
+```txt
+/diff_drive_controller/cmd_vel
+    -> diff_drive_controller
+    -> ros2_control
+    -> gz_ros2_control
+    -> Gazebo wheel joints
+```
+
+## Validation Commands
+
+Build:
+
+```bash
+cd "/mnt/c/Self study/PRACTICE C++/Cdev/01_joint_basics/ros2_ws"
+
+rm -rf build install log
+
+source /opt/ros/jazzy/setup.bash
+colcon build --cmake-args -DBUILD_TESTING=OFF
+source install/setup.bash
+```
+
+Verify executable:
+
+```bash
+ros2 pkg executables cpp_robotics_sim_ros | grep noisy
+```
+
+Run node:
+
+```bash
+ros2 run cpp_robotics_sim_ros noisy_odom_node.py
+```
+
+Expected:
+
+```txt
+Day 83 noisy odometry node started
+Subscribing: /diff_drive_controller/odom
+Publishing:  /odom_noisy
+```
+
+With Gazebo running:
+
+```bash
+ros2 topic list | grep odom
+ros2 topic echo /odom_noisy --once
+ros2 topic echo /odom_noisy --once | grep -A 40 "covariance"
+```
+
+Expected:
+
+```txt
+/diff_drive_controller/odom
+/odom_noisy
+```
+
+Covariance values should be populated and should include values such as:
+
+```txt
+0.0004
+1.0
+```
+
+because:
+
+```txt
+0.02² = 0.0004
+```
+
+## Debugging Lesson
+
+A shebang/runtime error appeared:
+
+```txt
+/usr/bin/env: ‘python3\r’: No such file or directory
+```
+
+Cause:
+
+```txt
+Windows CRLF line endings in a Linux-executed Python script.
+```
+
+Fix:
+
+```bash
+sed -i 's/\r$//' src/cpp_robotics_sim_ros/scripts/noisy_odom_node.py
+chmod +x src/cpp_robotics_sim_ros/scripts/noisy_odom_node.py
+```
+
+VS Code should use:
+
+```txt
+LF
+```
+
+not:
+
+```txt
+CRLF
+```
+
+for ROS Python scripts.
+
+## Interview Explanation
+
+Day 83 added a noisy odometry node. It subscribes to `/diff_drive_controller/odom`, deep-copies the odometry message, adds controlled Gaussian noise to position, yaw, linear velocity, and angular velocity, fills covariance, and republishes the result on `/odom_noisy`. This node does not move Gazebo. It creates a noisy measurement stream for validation, localization readiness, EKF readiness, and Sim2Real-style uncertainty testing.
+
+---
+
+# Day 84 — Validation Metrics Recorder
+
+## Goal
+
+Record commanded velocity, actual Gazebo odometry, and noisy odometry into a CSV file.
+
+## Deliverable
+
+Added:
+
+```txt
+ros2_ws/src/cpp_robotics_sim_ros/scripts/trajectory_validation_recorder.py
+data/.gitkeep
+```
+
+Updated:
+
+```txt
+ros2_ws/src/cpp_robotics_sim_ros/CMakeLists.txt
+```
+
+Generated locally:
+
+```txt
+data/day84_trajectory_validation.csv
+```
+
+## Runtime Flow
+
+```txt
+/diff_drive_controller/cmd_vel
+/diff_drive_controller/odom
+/odom_noisy
+        ↓
+trajectory_validation_recorder.py
+        ↓
+data/day84_trajectory_validation.csv
+```
+
+## CSV Columns
+
+```txt
+time_sec
+cmd_linear_x
+cmd_angular_z
+actual_x
+actual_y
+actual_yaw
+actual_linear_x
+actual_angular_z
+noisy_x
+noisy_y
+noisy_yaw
+```
+
+## Why This Node Uses Python
+
+This node is validation tooling, not a real-time controller.
+
+Python is appropriate for:
+
+```txt
+CSV logging
+quick validation scripts
+data analysis
+plotting workflow
+report generation
+engineering tooling
+```
+
+The performance-critical simulation/control stack remains C++ and `ros2_control`.
+
+## Recorder Design
+
+The recorder subscribes to three streams:
+
+```txt
+/diff_drive_controller/cmd_vel
+/diff_drive_controller/odom
+/odom_noisy
+```
+
+It stores the latest values from each topic.
+
+A timer writes one CSV row at a fixed sample rate:
+
+```txt
+sample_rate_hz = 20.0
+```
+
+This means the CSV records about 20 rows per second.
+
+## Runtime Validation
+
+Terminal 1:
+
+```bash
+ros2 launch cpp_robotics_sim_ros ros2_control.launch.py
+```
+
+Terminal 2:
+
+```bash
+ros2 run cpp_robotics_sim_ros noisy_odom_node.py
+```
+
+Terminal 3:
+
+```bash
+cd "/mnt/c/Self study/PRACTICE C++/Cdev/01_joint_basics"
+
+source /opt/ros/jazzy/setup.bash
+source ros2_ws/install/setup.bash
+
+ros2 run cpp_robotics_sim_ros trajectory_validation_recorder.py
+```
+
+Terminal 4:
+
+```bash
+ros2 topic pub -r 10 /diff_drive_controller/cmd_vel geometry_msgs/msg/TwistStamped "{twist: {linear: {x: 0.25}, angular: {z: 0.2}}}"
+```
+
+After recording:
+
+```bash
+cd "/mnt/c/Self study/PRACTICE C++/Cdev/01_joint_basics"
+
+ls data/day84_trajectory_validation.csv
+head data/day84_trajectory_validation.csv
+wc -l data/day84_trajectory_validation.csv
+```
+
+Expected header:
+
+```txt
+time_sec,cmd_linear_x,cmd_angular_z,actual_x,actual_y,actual_yaw,actual_linear_x,actual_angular_z,noisy_x,noisy_y,noisy_yaw
+```
+
+## Validation Result
+
+A successful Day 84 run produced:
+
+```txt
+981 data rows
+982 total CSV lines including the header
+commanded linear velocity around 0.25 m/s
+commanded yaw rate around 0.2 rad/s
+actual odometry values recorded
+noisy odometry values recorded
+```
+
+## Interview Explanation
+
+Day 84 added a trajectory validation recorder. It subscribes to the Gazebo command topic, the actual controller odometry topic, and the noisy odometry topic from Day 83. It stores the latest command, actual odometry, and noisy odometry values, then writes them to a CSV at a fixed sample rate. This creates measurable evidence of commanded behavior, executed behavior, and noisy measurement behavior.
+
+---
+
+# Day 85 — Plotting and Validation Report
+
+## Goal
+
+Generate portfolio-ready validation plots and a Markdown trajectory validation report from the Day 84 CSV.
+
+## Deliverable
+
+Added:
+
+```txt
+ros2_ws/src/cpp_robotics_sim_ros/scripts/plot_trajectory_validation.py
+plots/.gitkeep
+```
+
+Generated:
+
+```txt
+plots/trajectory_validation.png
+docs/trajectory_validation_report.md
+```
+
+Updated:
+
+```txt
+ros2_ws/src/cpp_robotics_sim_ros/CMakeLists.txt
+```
+
+## Plotting Flow
+
+```txt
+data/day84_trajectory_validation.csv
+        ↓
+plot_trajectory_validation.py
+        ↓
+plots/trajectory_validation.png
+docs/trajectory_validation_report.md
+```
+
+## Plot Contents
+
+The generated plot includes:
+
+```txt
+actual vs noisy trajectory
+yaw over time
+commanded vs actual linear velocity
+commanded vs actual yaw rate
+```
+
+## Validation Metrics in Report
+
+The generated report includes:
+
+```txt
+sample count
+duration
+actual path length
+final actual x
+final actual y
+final actual yaw
+mean position noise error
+max position noise error
+mean yaw noise error
+max yaw noise error
+max commanded linear velocity
+max actual linear velocity
+max commanded yaw rate
+max actual yaw rate
+```
+
+## Validation Command
+
+Run from repository root:
+
+```bash
+cd "/mnt/c/Self study/PRACTICE C++/Cdev/01_joint_basics"
+
+python3 ros2_ws/src/cpp_robotics_sim_ros/scripts/plot_trajectory_validation.py --csv data/day84_trajectory_validation.csv --plot plots/trajectory_validation.png --report docs/trajectory_validation_report.md
+```
+
+Expected:
+
+```txt
+Input CSV:        /mnt/c/Self study/PRACTICE C++/Cdev/01_joint_basics/data/day84_trajectory_validation.csv
+Generated plot:   /mnt/c/Self study/PRACTICE C++/Cdev/01_joint_basics/plots/trajectory_validation.png
+Generated report: /mnt/c/Self study/PRACTICE C++/Cdev/01_joint_basics/docs/trajectory_validation_report.md
+Samples:          981
+```
+
+Verify outputs:
+
+```bash
+ls plots/trajectory_validation.png
+ls docs/trajectory_validation_report.md
+ls -lh plots/trajectory_validation.png
+
+grep -n "actual path length" docs/trajectory_validation_report.md
+grep -n "final actual x" docs/trajectory_validation_report.md
+grep -n "mean position noise error" docs/trajectory_validation_report.md
+grep -n "max yaw noise error" docs/trajectory_validation_report.md
+grep -n "max actual linear velocity" docs/trajectory_validation_report.md
+grep -n "max actual yaw rate" docs/trajectory_validation_report.md
+```
+
+## Plot Interpretation
+
+The robot was commanded with:
+
+```txt
+linear velocity = 0.25 m/s
+yaw rate        = 0.2 rad/s
+```
+
+Expected turning radius:
+
+```txt
+R = v / omega = 0.25 / 0.2 = 1.25 m
+```
+
+The generated trajectory is circular, which matches the commanded differential-drive motion.
+
+The actual and noisy trajectories overlap closely, with small jitter in the noisy odometry path. That jitter is expected because `/odom_noisy` adds controlled Gaussian noise.
+
+The yaw plot contains a jump from approximately `+pi` to `-pi`. This is normal angle wrapping and is not a simulation error.
+
+The commanded and actual velocity plots show that the Gazebo controller tracks the requested linear velocity and yaw rate closely.
+
+## Final Regression Check
+
+After Day 85, the old launch regression should still pass:
+
+```bash
+cd "/mnt/c/Self study/PRACTICE C++/Cdev/01_joint_basics"
+
+./scripts/day68_launch_regression.sh
+```
+
+Expected:
+
+```txt
+========== PASS: Day 68 launch regression succeeded ==========
+```
+
+## Interview Explanation
+
+Day 85 converts raw validation data into engineering evidence. Instead of only saying the robot moves in Gazebo, the project now records command signals, actual odometry feedback, noisy odometry feedback, and quantitative trajectory metrics. The plotting script generates a portfolio-ready figure comparing actual and noisy trajectory, yaw over time, commanded versus actual linear velocity, and commanded versus actual yaw rate. The report summarizes path length, final pose, noise error, and velocity metrics. This demonstrates that the simulation behavior is measurable, repeatable, and explainable.
+---
 
 # Current Verification Workflow
 
@@ -2741,13 +3490,18 @@ ros2_ws/log/
 |   74 | Complete | `joint_state_publisher` integration         |
 |   75 | Complete | RViz RobotModel visualization               |
 |   76 | Complete | Gazebo Sim world and robot spawn workflow   |
-|   77 | Complete | `ros2_control` hardware interface foundation |
+|   77 | Complete | `ros2_control` hardware interface foundation|
 |   78 | Complete | Gazebo differential-drive controller motion |
 |   79 | Complete | Simulated lidar sensor and `/scan` bridge   |
 |   80 | Complete | Robot modeling review and interview prep    |
+|   81 | Complete |	Nav2 architecture notes                     |
+|   82 | Complete |	State estimation and EKF notes              |
+|   83 | Complete |	Noisy odometry node publishing /odom_noisy  |
+|   84 | Complete | Trajectory validation CSV recorder          |
+|   85 | Complete |	Validation plots and trajectory report      |
 
 Next planned day:
 
 ```txt
-Day 81 - Nav2 concepts and architecture
+Day 86 - GoogleTest
 ```

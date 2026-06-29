@@ -1,16 +1,16 @@
 # ROS 2 Topic Interface Reference
 
-This document defines the ROS 2 topic interfaces used by the `cpp_robotics_sim_ros` simulator, robot description stack, Gazebo `ros2_control` stack, differential-drive controller, and simulated lidar sensor workflow.
+This document defines the ROS 2 topic interfaces used by the `cpp_robotics_sim_ros` simulator, robot description stack, Gazebo `ros2_control` stack, differential-drive controller, simulated lidar workflow, noisy odometry workflow, and trajectory validation workflow.
 
-The purpose of this document is to make the runtime interface clear enough that another engineer can understand what each stack subscribes to, what it publishes, what message types are used, what fields matter, what node owns each transform, and how to validate each interface through Day 80.
+The purpose of this document is to make the runtime interface clear enough that another engineer can understand what each stack subscribes to, what it publishes, what message types are used, what fields matter, what node owns each transform, and how to validate each interface through Day 85.
 
 ---
 
 ## 1. Interface Overview
 
-The project has two related runtime interfaces.
+The project has several related runtime interfaces.
 
-The original kinematic simulator stack exposes a planar mobile robot through `sim_node`:
+### 1.1 Original Kinematic Simulator Stack
 
 ```txt
 /cmd_vel
@@ -25,7 +25,7 @@ sim_node
 
 The node accepts velocity commands, updates the robot pose, publishes simple 2D pose, publishes standard odometry, broadcasts TF, and reports diagnostics.
 
-The robot description stack exposes the robot structure:
+### 1.2 Robot Description Stack
 
 ```txt
 diffbot.xacro
@@ -38,7 +38,9 @@ robot_state_publisher  ←  /joint_states
 /tf_static
 ```
 
-The Gazebo control and sensor stack exposes a physics-simulated robot:
+The robot description stack exposes the robot structure below `base_link`.
+
+### 1.3 Gazebo Control Stack
 
 ```txt
 /diff_drive_controller/cmd_vel
@@ -55,7 +57,9 @@ Gazebo wheel joints
 /tf
 ```
 
-The simulated lidar stack exposes sensor data:
+The Gazebo control stack moves the robot in the physics simulator.
+
+### 1.4 Simulated Lidar Stack
 
 ```txt
 Gazebo gpu_lidar
@@ -67,7 +71,51 @@ ros_gz_bridge
 ROS /scan
 ```
 
-The extended frame tree through Day 80 is:
+The simulated lidar stack exposes Gazebo sensor data as a ROS 2 `LaserScan` topic.
+
+### 1.5 Noisy Odometry Stack
+
+```txt
+/diff_drive_controller/odom
+   ↓
+noisy_odom_node.py
+   ↓
+/odom_noisy
+```
+
+The noisy odometry stack creates a controlled noisy measurement stream from actual Gazebo controller odometry.
+
+Important:
+
+```txt
+/odom_noisy does not move Gazebo.
+It is a feedback/measurement topic, not an actuation topic.
+```
+
+### 1.6 Trajectory Validation Stack
+
+```txt
+/diff_drive_controller/cmd_vel
+/diff_drive_controller/odom
+/odom_noisy
+   ↓
+trajectory_validation_recorder.py
+   ↓
+data/day84_trajectory_validation.csv
+   ↓
+plot_trajectory_validation.py
+   ↓
+plots/trajectory_validation.png
+docs/trajectory_validation_report.md
+```
+
+The trajectory validation stack records command, actual odometry, and noisy odometry data, then converts it into plots and report metrics.
+
+---
+
+## 2. Frame Tree and Transform Ownership
+
+The extended frame tree through Day 85 is:
 
 ```txt
 odom
@@ -78,7 +126,7 @@ odom
       └── lidar_link
 ```
 
-Transform ownership rule for the kinematic simulator stack:
+### 2.1 Kinematic Simulator Stack Ownership
 
 ```txt
 sim_node owns:
@@ -91,7 +139,7 @@ robot_state_publisher owns:
   base_link -> lidar_link
 ```
 
-Transform ownership rule for the Gazebo control stack:
+### 2.2 Gazebo Control Stack Ownership
 
 ```txt
 diff_drive_controller owns:
@@ -115,7 +163,7 @@ Do not run sim_node and diff_drive_controller together as simultaneous publisher
 
 ---
 
-## 2. Topic Summary
+## 3. Topic Summary
 
 | Topic | Direction | Message Type | Producer | Consumer | Purpose |
 |---|---|---|---|---|---|
@@ -127,10 +175,11 @@ Do not run sim_node and diff_drive_controller together as simultaneous publisher
 | `/diagnostics` | Output | `diagnostic_msgs/msg/DiagnosticArray` | `sim_node` | CLI/debug/monitoring tools | Runtime health and simulator status |
 | `/robot_description` | Output / parameter-backed topic | `std_msgs/msg/String` | `robot_state_publisher` | RViz RobotModel, Gazebo spawn workflow, `controller_manager` | Robot model XML |
 | `/joint_states` | Output | `sensor_msgs/msg/JointState` | `joint_state_publisher` or `joint_state_broadcaster` | `robot_state_publisher` | Joint positions/velocities for robot links |
-| `/dynamic_joint_states` | Output | `control_msgs/msg/DynamicJointState` | `joint_state_broadcaster` | debugging/control tools | Detailed ros2_control joint interface states |
+| `/dynamic_joint_states` | Output | `control_msgs/msg/DynamicJointState` | `joint_state_broadcaster` | debugging/control tools | Detailed `ros2_control` joint interface states |
 | `/diff_drive_controller/cmd_vel` | Input | `geometry_msgs/msg/TwistStamped` | CLI/teleop/future navigation | `diff_drive_controller` | Velocity command input for Gazebo-driven robot |
-| `/diff_drive_controller/odom` | Output | `nav_msgs/msg/Odometry` | `diff_drive_controller` | RViz, validation tools, future navigation | Odometry output from Gazebo diff-drive controller |
+| `/diff_drive_controller/odom` | Output | `nav_msgs/msg/Odometry` | `diff_drive_controller` | RViz, validation tools, future navigation/localization | Odometry output from Gazebo diff-drive controller |
 | `/diff_drive_controller/cmd_vel_out` | Output | `geometry_msgs/msg/TwistStamped` | `diff_drive_controller` | CLI/debug tools | Limited velocity command after controller limits |
+| `/odom_noisy` | Output | `nav_msgs/msg/Odometry` | `noisy_odom_node.py` | validation recorder, future localization/EKF tools | Noisy odometry stream generated from `/diff_drive_controller/odom` |
 | `/scan` | Output | `sensor_msgs/msg/LaserScan` | `ros_gz_bridge` from Gazebo lidar | RViz, future Nav2/SLAM/costmaps | Simulated 2D lidar scan |
 | `/clock` | Output | `rosgraph_msgs/msg/Clock` | `ros_gz_bridge` from Gazebo | ROS nodes and RViz using sim time | Simulation time source |
 
@@ -138,7 +187,7 @@ Do not run sim_node and diff_drive_controller together as simultaneous publisher
 
 ---
 
-## 3. QoS Summary
+## 4. QoS Summary
 
 | Topic | Endpoint | QoS |
 |---|---|---|
@@ -153,6 +202,7 @@ Do not run sim_node and diff_drive_controller together as simultaneous publisher
 | `/diff_drive_controller/cmd_vel` | `diff_drive_controller` subscriber | controller default QoS; expects `TwistStamped` |
 | `/diff_drive_controller/odom` | `diff_drive_controller` publisher | controller default QoS |
 | `/diff_drive_controller/cmd_vel_out` | `diff_drive_controller` publisher | controller default QoS |
+| `/odom_noisy` | `noisy_odom_node.py` publisher | reliable, volatile, queue depth 10 through `rclpy` default construction |
 | `/scan` | bridge publisher | sensor-style QoS; RViz may need Best Effort |
 | `/clock` | bridge publisher | simulation-time clock QoS |
 
@@ -166,42 +216,40 @@ High-rate sensor topics such as `/scan` are commonly visualized with Best Effort
 
 ---
 
-# 4. `/cmd_vel`
+## 5. `/cmd_vel`
 
-## Purpose
+### Purpose
 
-`/cmd_vel` is the velocity command input topic.
+`/cmd_vel` is the velocity command input topic for the custom kinematic simulator stack.
 
-The simulator subscribes to this topic and uses it to update robot motion.
-
-## Message Type
+### Message Type
 
 ```txt
 geometry_msgs/msg/Twist
 ```
 
-## Direction
+### Direction
 
 ```txt
 Input to sim_node
 ```
 
-## Producer
+### Producer
 
 ```txt
 external command source
 ros2 topic pub command
 future teleop node
-future navigation/control layer
+future navigation/control layer for the custom kinematic stack
 ```
 
-## Consumer
+### Consumer
 
 ```txt
 sim_node
 ```
 
-## Used Fields
+### Used Fields
 
 ```txt
 linear.x   = forward linear velocity
@@ -217,7 +265,7 @@ angular.x
 angular.y
 ```
 
-## Example Command
+### Example Command
 
 One-shot command:
 
@@ -231,7 +279,7 @@ Continuous command:
 ros2 topic pub -r 10 /cmd_vel geometry_msgs/msg/Twist "{linear: {x: 0.3}, angular: {z: 0.2}}"
 ```
 
-## Safety Behavior
+### Safety Behavior
 
 Incoming commands are clamped using configured limits:
 
@@ -249,7 +297,7 @@ angular.z = 3.0 ->  0.8
 
 If no fresh `/cmd_vel` arrives before `cmd_timeout`, the robot stops.
 
-## Validation Commands
+### Validation Commands
 
 ```bash
 ros2 topic info /cmd_vel
@@ -265,7 +313,7 @@ Reliability: RELIABLE
 Durability: VOLATILE
 ```
 
-## Validation Criteria
+### Validation Criteria
 
 ```txt
 /cmd_vel exists when sim_node is running
@@ -278,33 +326,33 @@ stale commands time out
 
 ---
 
-# 5. `/robot_pose`
+## 6. `/robot_pose`
 
-## Purpose
+### Purpose
 
 `/robot_pose` is a simple 2D pose output used for quick debugging.
 
 It is easier to inspect than the full `/odom` message.
 
-## Message Type
+### Message Type
 
 ```txt
 geometry_msgs/msg/Pose2D
 ```
 
-## Direction
+### Direction
 
 ```txt
 Output from sim_node
 ```
 
-## Producer
+### Producer
 
 ```txt
 sim_node
 ```
 
-## Consumers
+### Consumers
 
 ```txt
 CLI debugging
@@ -312,7 +360,7 @@ validation checks
 future lightweight plotting/debug tools
 ```
 
-## Fields
+### Fields
 
 ```txt
 x      = robot x position
@@ -320,7 +368,7 @@ y      = robot y position
 theta  = robot heading angle in radians
 ```
 
-## Example Check
+### Example Check
 
 ```bash
 ros2 topic echo --once /robot_pose
@@ -334,7 +382,7 @@ y: ...
 theta: ...
 ```
 
-## Validation Criteria
+### Validation Criteria
 
 ```txt
 x changes during forward motion
@@ -346,60 +394,58 @@ pose remains consistent with /odom position and odom -> base_link TF
 
 ---
 
-# 6. `/odom`
+## 7. `/odom`
 
-## Purpose
+### Purpose
 
-`/odom` is the standard ROS 2 odometry output.
+`/odom` is the standard ROS 2 odometry output from the custom kinematic simulator stack.
 
-It is used by RViz2, validation tools, rosbag2 workflows, and future navigation/simulation layers.
+It is used by RViz2, validation tools, rosbag2 workflows, and future simulation layers.
 
-## Message Type
+### Message Type
 
 ```txt
 nav_msgs/msg/Odometry
 ```
 
-## Direction
+### Direction
 
 ```txt
 Output from sim_node
 ```
 
-## Producer
+### Producer
 
 ```txt
 sim_node
 ```
 
-## Consumers
+### Consumers
 
 ```txt
 RViz Odometry display
 rosbag2 recording
 validation tools
-future navigation/control layers
+future navigation/control layers for the custom kinematic stack
 ```
 
-## Frame IDs
+### Frame IDs
 
 ```txt
 header.frame_id: odom
 child_frame_id: base_link
 ```
 
-## Important Fields
+### Important Fields
 
 ```txt
 pose.pose.position.x
 pose.pose.position.y
 pose.pose.position.z
-
 pose.pose.orientation.x
 pose.pose.orientation.y
 pose.pose.orientation.z
 pose.pose.orientation.w
-
 twist.twist.linear.x
 twist.twist.angular.z
 ```
@@ -413,7 +459,7 @@ twist.linear.x = current linear velocity
 twist.angular.z = current angular velocity
 ```
 
-## Quaternion Convention
+### Quaternion Convention
 
 The simulator converts planar heading `theta` into yaw quaternion form:
 
@@ -424,7 +470,7 @@ q.z = sin(theta / 2)
 q.w = cos(theta / 2)
 ```
 
-## Example Checks
+### Example Checks
 
 ```bash
 ros2 topic type /odom
@@ -439,7 +485,7 @@ Expected type:
 nav_msgs/msg/Odometry
 ```
 
-## Validation Criteria
+### Validation Criteria
 
 ```txt
 header.frame_id is odom
@@ -452,9 +498,9 @@ odom remains consistent with odom -> base_link TF
 
 ---
 
-# 7. `/tf`
+## 8. `/tf`
 
-## Purpose
+### Purpose
 
 `/tf` publishes dynamic transform tree relationships.
 
@@ -466,19 +512,19 @@ robot_state_publisher
 diff_drive_controller
 ```
 
-## Message Type
+### Message Type
 
 ```txt
 tf2_msgs/msg/TFMessage
 ```
 
-## Direction
+### Direction
 
 ```txt
-Output from tf2_ros::TransformBroadcaster and robot_state_publisher
+Output from tf2_ros::TransformBroadcaster, robot_state_publisher, and diff_drive_controller
 ```
 
-## Transform Ownership
+### Transform Ownership
 
 In the kinematic simulator stack, `sim_node` owns:
 
@@ -503,9 +549,9 @@ base_link -> lidar_link
 
 Fixed transforms appear through `/tf_static`.
 
-## Frame Relationship
+### Frame Relationship
 
-Full expected tree after Days 71-80:
+Full expected tree after Day 85:
 
 ```txt
 odom
@@ -516,22 +562,23 @@ odom
       └── lidar_link
 ```
 
-## Example Checks
+### Example Checks
 
-Simulator transform:
+Simulator/Gazebo moving transform:
 
 ```bash
 ros2 run tf2_ros tf2_echo odom base_link
 ```
 
-Wheel transforms:
+Wheel and lidar transforms:
 
 ```bash
 ros2 run tf2_ros tf2_echo base_link left_wheel_link
 ros2 run tf2_ros tf2_echo base_link right_wheel_link
+ros2 run tf2_ros tf2_echo base_link lidar_link
 ```
 
-Expected simulator transform structure:
+Expected moving transform structure:
 
 ```txt
 Translation: [x, y, 0.000]
@@ -545,59 +592,59 @@ base_link -> left_wheel_link:  [0.000, 0.180, 0.080]
 base_link -> right_wheel_link: [0.000, -0.180, 0.080]
 ```
 
-## Validation Criteria
+### Validation Criteria
 
 ```txt
 odom -> base_link transform exists
 parent frame is odom
 child frame is base_link
 translation matches robot x/y
-rotation matches robot theta
+rotation matches robot yaw
 base_link -> wheel transforms exist when /joint_states is active
-base_link -> lidar_link transform exists after Day 79
+base_link -> lidar_link transform exists
 RViz2 can use odom as Fixed Frame
 ```
 
-## Common Failures
+### Common Failures
 
-| Failure                | Likely Cause                                   | First Check                                       |
-| ---------------------- | ---------------------------------------------- | ------------------------------------------------- |
-| `odom` missing         | simulator not running or TF broadcaster broken | `ros2 node list`, `tf2_echo odom base_link`       |
-| `base_link` missing    | wrong child frame ID                           | inspect `publishTransform()`                      |
-| wheel frames missing   | `/joint_states` missing                        | `ros2 topic echo /joint_states --once`            |
-| duplicate TF warning   | two nodes publish same transform               | do not run `sim_node` and `diff_drive_controller` as `odom -> base_link` owners together |
+| Failure | Likely Cause | First Check |
+|---|---|---|
+| `odom` missing | simulator/controller not running or TF broadcaster broken | `ros2 node list`, `tf2_echo odom base_link` |
+| `base_link` missing | wrong child frame ID | inspect transform publisher or controller frame config |
+| wheel frames missing | `/joint_states` missing | `ros2 topic echo /joint_states --once` |
+| duplicate TF warning | two nodes publish same transform | do not run `sim_node` and `diff_drive_controller` as `odom -> base_link` owners together |
 | `TF_OLD_DATA` warnings | RViz/Gazebo sim-time mismatch or stale nodes | restart stack, verify `/clock`, launch RViz with `use_sim_time:=true` |
-| RViz fixed frame error | TF tree incomplete                             | set Fixed Frame to `odom` and check TF            |
+| RViz fixed frame error | TF tree incomplete | set Fixed Frame to `odom` and check TF |
 
 ---
 
-# 8. `/tf_static`
+## 9. `/tf_static`
 
-## Purpose
+### Purpose
 
 `/tf_static` publishes fixed transforms from the robot description.
 
 Fixed transforms are used for links that do not move relative to their parent.
 
-## Message Type
+### Message Type
 
 ```txt
 tf2_msgs/msg/TFMessage
 ```
 
-## Direction
+### Direction
 
 ```txt
 Output from robot_state_publisher
 ```
 
-## Producer
+### Producer
 
 ```txt
 robot_state_publisher
 ```
 
-## Consumers
+### Consumers
 
 ```txt
 RViz TF display
@@ -605,7 +652,7 @@ RViz RobotModel display
 TF tools
 ```
 
-## Expected Fixed Transform
+### Expected Fixed Transforms
 
 Current fixed transforms include:
 
@@ -614,7 +661,7 @@ base_link -> caster_link
 base_link -> lidar_link
 ```
 
-Expected values:
+Expected caster translation:
 
 ```txt
 translation.x = -0.17
@@ -623,7 +670,15 @@ translation.z = 0.035
 rotation.w = 1.0
 ```
 
-## Validation Command
+Expected lidar translation:
+
+```txt
+translation.x = 0.15
+translation.y = 0.0
+translation.z = 0.18
+```
+
+### Validation Command
 
 Use transient local durability when echoing `/tf_static`:
 
@@ -640,45 +695,45 @@ transforms:
   child_frame_id: caster_link
 ```
 
-## Validation Criteria
+### Validation Criteria
 
 ```txt
 /tf_static exists
 base_link -> caster_link is published
-base_link -> lidar_link is published after Day 79
+base_link -> lidar_link is published
 caster_link and lidar_link appear in RViz TF tree
 late subscribers can receive the fixed transform
 ```
 
 ---
 
-# 9. `/diagnostics`
+## 10. `/diagnostics`
 
-## Purpose
+### Purpose
 
-`/diagnostics` publishes structured runtime health information for the simulator.
+`/diagnostics` publishes structured runtime health information for the custom kinematic simulator.
 
 It is used to inspect node status, timeout state, current command/state values, and callback timing.
 
-## Message Type
+### Message Type
 
 ```txt
 diagnostic_msgs/msg/DiagnosticArray
 ```
 
-## Direction
+### Direction
 
 ```txt
 Output from sim_node
 ```
 
-## Producer
+### Producer
 
 ```txt
 sim_node
 ```
 
-## Consumers
+### Consumers
 
 ```txt
 CLI debugging
@@ -686,7 +741,7 @@ rosbag2 diagnostics recording
 future monitoring tools
 ```
 
-## Status Levels
+### Status Levels
 
 ```txt
 level: 0  -> OK
@@ -700,7 +755,7 @@ OK   = simulator running with fresh command input
 WARN = cmd_vel timeout active
 ```
 
-## Diagnostic Identity
+### Diagnostic Identity
 
 Expected fields:
 
@@ -709,7 +764,7 @@ name: sim_node
 hardware_id: cpp_robotics_sim_ros
 ```
 
-## Key-Value Fields
+### Key-Value Fields
 
 The diagnostic report includes:
 
@@ -732,7 +787,7 @@ timing_budget_ms
 callback_count
 ```
 
-## Example Checks
+### Example Checks
 
 ```bash
 ros2 topic echo --once /diagnostics
@@ -752,7 +807,7 @@ Reliability: RELIABLE
 Durability: VOLATILE
 ```
 
-## OK-State Test
+### OK-State Test
 
 Run continuous command input:
 
@@ -774,7 +829,7 @@ message: Simulator running
 timeout_active: false
 ```
 
-## WARN-State Test
+### WARN-State Test
 
 Stop `/cmd_vel`, wait longer than `cmd_timeout`, then run:
 
@@ -792,9 +847,9 @@ timeout_active: true
 
 ---
 
-# 10. `/robot_description`
+## 11. `/robot_description`
 
-## Purpose
+### Purpose
 
 `/robot_description` provides the generated robot model XML.
 
@@ -806,7 +861,7 @@ ros2_ws/src/cpp_robotics_sim_ros/xacro/diffbot.xacro
 
 The robot model describes the structure below `base_link`.
 
-## Message Type
+### Message Type
 
 ```txt
 std_msgs/msg/String
@@ -814,29 +869,30 @@ std_msgs/msg/String
 
 The same content is also available through the `robot_description` parameter on `/robot_state_publisher`.
 
-## Direction
+### Direction
 
 ```txt
 Output from robot_state_publisher / parameter-backed robot model interface
 ```
 
-## Producer
+### Producer
 
 ```txt
 description.launch.py
 robot_state_publisher
 ```
 
-## Consumers
+### Consumers
 
 ```txt
 robot_state_publisher
 RViz RobotModel display
 ros_gz_sim create spawn command
+controller_manager / gz_ros2_control workflow
 debugging tools
 ```
 
-## Model Content
+### Model Content
 
 Expected links:
 
@@ -866,7 +922,7 @@ caster_joint       fixed
 lidar_joint        fixed
 ```
 
-## Validation Commands
+### Validation Commands
 
 Launch robot description stack:
 
@@ -895,7 +951,7 @@ Expected:
 /robot_description
 ```
 
-## Validation Criteria
+### Validation Criteria
 
 ```txt
 /robot_description exists
@@ -903,28 +959,28 @@ robot_description parameter exists on /robot_state_publisher
 generated XML contains all expected links
 generated XML contains all expected joints
 generated XML contains ros2_control wheel interfaces
-generated XML contains lidar sensor configuration after Day 79
+generated XML contains lidar sensor configuration
 RViz RobotModel can load the robot model
 Gazebo spawn can use the robot model
 ```
 
-## Common Failures
+### Common Failures
 
-| Failure                      | Likely Cause                          | First Check                               |
-| ---------------------------- | ------------------------------------- | ----------------------------------------- |
-| `/robot_description` missing | `robot_state_publisher` not running   | `ros2 node list`                          |
-| XML parsed as YAML           | launch parameter not forced to string | use `ParameterValue(..., value_type=str)` |
-| Xacro command fails          | path quoting issue or Xacro typo      | run `xacro diffbot.xacro` manually        |
-| robot model missing links    | Xacro macro/link typo                 | inspect `/tmp/robot_description.txt`      |
-| RViz RobotModel red          | missing robot description or TF       | check `/robot_description` and TF tree    |
+| Failure | Likely Cause | First Check |
+|---|---|---|
+| `/robot_description` missing | `robot_state_publisher` not running | `ros2 node list` |
+| XML parsed as YAML | launch parameter not forced to string | use `ParameterValue(..., value_type=str)` |
+| Xacro command fails | path quoting issue or Xacro typo | run `xacro diffbot.xacro` manually |
+| robot model missing links | Xacro macro/link typo | inspect `/tmp/robot_description.txt` |
+| RViz RobotModel red | missing robot description or TF | check `/robot_description` and TF tree |
 
 ---
 
-# 11. `/joint_states`
+## 12. `/joint_states`
 
-## Purpose
+### Purpose
 
-`/joint_states` publishes joint positions for the robot model joints.
+`/joint_states` publishes joint positions and velocities for the robot model joints.
 
 For this project, it provides wheel joint states to `robot_state_publisher`.
 
@@ -932,40 +988,41 @@ In the visualization-only stack, `/joint_states` comes from `joint_state_publish
 
 In the Gazebo `ros2_control` stack, `/joint_states` comes from `joint_state_broadcaster`.
 
-## Message Type
+### Message Type
 
 ```txt
 sensor_msgs/msg/JointState
 ```
 
-## Direction
+### Direction
 
 ```txt
-Output from `joint_state_publisher` or `joint_state_broadcaster`, depending on launch stack
+Output from joint_state_publisher or joint_state_broadcaster, depending on launch stack
 ```
 
-## Producer
+### Producers
 
 ```txt
 joint_state_publisher
+joint_state_broadcaster
 ```
 
-## Consumer
+### Consumer
 
 ```txt
 robot_state_publisher
 ```
 
-## Expected Joint Names
+### Expected Joint Names
 
 ```txt
 left_wheel_joint
 right_wheel_joint
 ```
 
-The caster joint is fixed, so it does not need a moving joint state.
+The caster and lidar joints are fixed, so they do not need moving joint states.
 
-## Example Check
+### Example Check
 
 ```bash
 ros2 topic echo /joint_states --once
@@ -978,13 +1035,13 @@ name:
 - left_wheel_joint
 - right_wheel_joint
 position:
-- 0.0
-- 0.0
+- ...
+- ...
 ```
 
 The exact numeric values may vary. In the Gazebo control stack, values come from simulated hardware state interfaces through `joint_state_broadcaster`.
 
-## Validation Criteria
+### Validation Criteria
 
 ```txt
 /joint_states exists
@@ -995,39 +1052,87 @@ base_link -> left_wheel_link transform exists
 base_link -> right_wheel_link transform exists
 ```
 
-## Common Failures
+### Common Failures
 
-| Failure                   | Likely Cause                                          | First Check                               |
-| ------------------------- | ----------------------------------------------------- | ----------------------------------------- |
-| `/joint_states` missing   | `joint_state_publisher` not installed or not launched | `ros2 node list`                          |
-| wheel joint names missing | Xacro joint names do not match                        | inspect robot description                 |
-| wheel transforms missing  | robot_state_publisher not receiving joint states      | echo `/joint_states`                      |
-| package not found         | missing system package                                | install `ros-jazzy-joint-state-publisher` |
-
+| Failure | Likely Cause | First Check |
+|---|---|---|
+| `/joint_states` missing | `joint_state_publisher` not installed/launched or broadcaster inactive | `ros2 node list`, `ros2 control list_controllers` |
+| wheel joint names missing | Xacro joint names do not match | inspect robot description |
+| wheel transforms missing | robot_state_publisher not receiving joint states | echo `/joint_states` |
+| package not found | missing system package | install `ros-jazzy-joint-state-publisher` |
 
 ---
 
-# 12. `/diff_drive_controller/cmd_vel`
+## 13. `/dynamic_joint_states`
 
-## Purpose
+### Purpose
+
+`/dynamic_joint_states` exposes detailed `ros2_control` interface state information.
+
+It is useful for debugging hardware interface state in the Gazebo control stack.
+
+### Message Type
+
+```txt
+control_msgs/msg/DynamicJointState
+```
+
+### Direction
+
+```txt
+Output from joint_state_broadcaster
+```
+
+### Producer
+
+```txt
+joint_state_broadcaster
+```
+
+### Consumers
+
+```txt
+CLI debugging
+control interface inspection tools
+```
+
+### Example Check
+
+```bash
+ros2 topic echo /dynamic_joint_states --once
+```
+
+### Validation Criteria
+
+```txt
+/dynamic_joint_states exists when joint_state_broadcaster is active
+wheel joint interfaces appear
+position and velocity state interfaces are visible
+```
+
+---
+
+## 14. `/diff_drive_controller/cmd_vel`
+
+### Purpose
 
 `/diff_drive_controller/cmd_vel` is the velocity command input for the Gazebo-driven robot.
 
 Unlike the original `/cmd_vel` used by `sim_node`, this controller topic expects a stamped command.
 
-## Message Type
+### Message Type
 
 ```txt
 geometry_msgs/msg/TwistStamped
 ```
 
-## Direction
+### Direction
 
 ```txt
 Input to diff_drive_controller
 ```
 
-## Producer
+### Producer
 
 ```txt
 ros2 topic pub command
@@ -1035,26 +1140,34 @@ future teleop node
 future Nav2 controller output after remapping/relay
 ```
 
-## Consumer
+### Consumer
 
 ```txt
 diff_drive_controller
 ```
 
-## Used Fields
+### Used Fields
 
 ```txt
 twist.linear.x   = forward velocity command
 twist.angular.z  = yaw velocity command
 ```
 
-## Example Command
+### Example Command
+
+Straight motion:
 
 ```bash
 ros2 topic pub -r 10 /diff_drive_controller/cmd_vel geometry_msgs/msg/TwistStamped "{twist: {linear: {x: 0.25}, angular: {z: 0.0}}}"
 ```
 
-## Validation Criteria
+Circular motion used for Day 84/85 validation:
+
+```bash
+ros2 topic pub -r 10 /diff_drive_controller/cmd_vel geometry_msgs/msg/TwistStamped "{twist: {linear: {x: 0.25}, angular: {z: 0.2}}}"
+```
+
+### Validation Criteria
 
 ```txt
 /diff_drive_controller/cmd_vel exists when diff_drive_controller is active
@@ -1064,57 +1177,78 @@ angular.z drives rotation in Gazebo
 robot stops after controller timeout when commands stop
 ```
 
+### Important Architecture Rule
+
+```txt
+/diff_drive_controller/cmd_vel moves Gazebo.
+/odom_noisy does not move Gazebo.
+```
+
 ---
 
-# 13. `/diff_drive_controller/odom`
+## 15. `/diff_drive_controller/odom`
 
-## Purpose
+### Purpose
 
 `/diff_drive_controller/odom` is the odometry output from the Gazebo differential-drive controller.
 
 It represents the Gazebo-controlled robot state, not the custom `sim_node` kinematic state.
 
-## Message Type
+### Message Type
 
 ```txt
 nav_msgs/msg/Odometry
 ```
 
-## Direction
+### Direction
 
 ```txt
 Output from diff_drive_controller
 ```
 
-## Producer
+### Producer
 
 ```txt
 diff_drive_controller
 ```
 
-## Consumers
+### Consumers
 
 ```txt
 RViz Odometry display
-validation tools
+noisy_odom_node.py
+trajectory_validation_recorder.py
 future Nav2/localization stack
+future EKF/sensor fusion workflow
 ```
 
-## Frame IDs
+### Frame IDs
 
 ```txt
 header.frame_id: odom
 child_frame_id: base_link
 ```
 
-## Example Checks
+### Important Fields
+
+```txt
+pose.pose.position.x
+pose.pose.position.y
+pose.pose.orientation
+twist.twist.linear.x
+twist.twist.angular.z
+pose.covariance
+twist.covariance
+```
+
+### Example Checks
 
 ```bash
 ros2 topic echo /diff_drive_controller/odom --once
 ros2 run tf2_ros tf2_echo odom base_link
 ```
 
-## Validation Criteria
+### Validation Criteria
 
 ```txt
 /diff_drive_controller/odom exists
@@ -1123,50 +1257,52 @@ pose changes when Gazebo robot moves
 child_frame_id is base_link
 header.frame_id is odom
 RViz Odometry display uses /diff_drive_controller/odom in Gazebo control stack
+noisy_odom_node.py can subscribe to it
+trajectory_validation_recorder.py can record it
 ```
 
 ---
 
-# 14. `/diff_drive_controller/cmd_vel_out`
+## 16. `/diff_drive_controller/cmd_vel_out`
 
-## Purpose
+### Purpose
 
 `/diff_drive_controller/cmd_vel_out` reports the velocity command after controller-side limiting.
 
 It is useful for debugging whether velocity limits are being applied.
 
-## Message Type
+### Message Type
 
 ```txt
 geometry_msgs/msg/TwistStamped
 ```
 
-## Direction
+### Direction
 
 ```txt
 Output from diff_drive_controller
 ```
 
-## Producer
+### Producer
 
 ```txt
 diff_drive_controller
 ```
 
-## Consumers
+### Consumers
 
 ```txt
 CLI/debug tools
 future validation tools
 ```
 
-## Example Check
+### Example Check
 
 ```bash
 ros2 topic echo /diff_drive_controller/cmd_vel_out --once
 ```
 
-## Validation Criteria
+### Validation Criteria
 
 ```txt
 cmd_vel_out appears when publish_limited_velocity is true
@@ -1176,34 +1312,207 @@ values reflect controller velocity limits
 
 ---
 
-# 15. `/scan`
+## 17. `/odom_noisy`
 
-## Purpose
+### Purpose
+
+`/odom_noisy` is a noisy odometry stream generated from the Gazebo controller odometry topic.
+
+It is used for validation, uncertainty modeling, EKF readiness, localization readiness, and Sim2Real-style testing.
+
+### Message Type
+
+```txt
+nav_msgs/msg/Odometry
+```
+
+### Direction
+
+```txt
+Output from noisy_odom_node.py
+```
+
+### Producer
+
+```txt
+noisy_odom_node.py
+```
+
+### Consumers
+
+```txt
+trajectory_validation_recorder.py
+future EKF/localization tools
+future validation tools
+```
+
+### Input Source
+
+`/odom_noisy` is created from:
+
+```txt
+/diff_drive_controller/odom
+```
+
+Flow:
+
+```txt
+/diff_drive_controller/odom
+   ↓
+noisy_odom_node.py
+   ↓
+/odom_noisy
+```
+
+### Noise Fields
+
+The node adds Gaussian noise to:
+
+```txt
+x position
+y position
+yaw
+linear velocity
+angular velocity
+```
+
+### Covariance Fields
+
+The node fills:
+
+```txt
+pose.covariance
+twist.covariance
+```
+
+Important covariance indices:
+
+```txt
+pose.covariance[0]   = x variance
+pose.covariance[7]   = y variance
+pose.covariance[35]  = yaw variance
+
+twist.covariance[0]  = linear velocity x variance
+twist.covariance[35] = angular velocity z variance
+```
+
+Covariance stores variance:
+
+```txt
+variance = standard_deviation²
+```
+
+With default `0.02` standard deviation:
+
+```txt
+0.02² = 0.0004
+```
+
+### Default Parameters
+
+```txt
+input_topic                    = /diff_drive_controller/odom
+output_topic                   = /odom_noisy
+position_noise_std             = 0.02 m
+yaw_noise_std                  = 0.02 rad
+linear_velocity_noise_std      = 0.02 m/s
+angular_velocity_noise_std     = 0.02 rad/s
+random_seed                    = 42
+```
+
+### Example Run
+
+```bash
+ros2 run cpp_robotics_sim_ros noisy_odom_node.py
+```
+
+Expected:
+
+```txt
+Day 83 noisy odometry node started
+Subscribing: /diff_drive_controller/odom
+Publishing:  /odom_noisy
+```
+
+### Validation Commands
+
+With Gazebo control stack running:
+
+```bash
+ros2 topic list | grep odom
+ros2 topic type /odom_noisy
+ros2 topic echo /odom_noisy --once
+ros2 topic echo /odom_noisy --once | grep -A 40 "covariance"
+```
+
+Expected:
+
+```txt
+/diff_drive_controller/odom
+/odom_noisy
+```
+
+Expected type:
+
+```txt
+nav_msgs/msg/Odometry
+```
+
+Expected covariance values:
+
+```txt
+0.0004
+1.0
+```
+
+### Validation Criteria
+
+```txt
+/odom_noisy exists when noisy_odom_node.py is running
+/odom_noisy publishes nav_msgs/msg/Odometry
+x and y are close to actual odometry but not identical
+yaw is close to actual yaw but not identical
+pose covariance is populated
+twist covariance is populated
+```
+
+### Important Architecture Rule
+
+```txt
+/odom_noisy does not move Gazebo.
+It is a noisy feedback stream only.
+```
+
+---
+
+## 18. `/scan`
+
+### Purpose
 
 `/scan` is the simulated 2D lidar output.
 
 The lidar is simulated in Gazebo as a `gpu_lidar` sensor attached to `lidar_link`, then bridged into ROS through `ros_gz_bridge`.
 
-## Message Type
+### Message Type
 
 ```txt
 sensor_msgs/msg/LaserScan
 ```
 
-## Direction
+### Direction
 
 ```txt
 Output from ros_gz_bridge into ROS
 ```
 
-## Producer
+### Producer
 
 ```txt
 Gazebo gpu_lidar sensor
 ros_gz_bridge parameter_bridge
 ```
 
-## Consumers
+### Consumers
 
 ```txt
 RViz LaserScan display
@@ -1212,7 +1521,7 @@ future SLAM Toolbox
 future AMCL/localization workflows
 ```
 
-## Important Fields
+### Important Fields
 
 ```txt
 header.frame_id
@@ -1231,7 +1540,7 @@ Expected frame:
 header.frame_id: lidar_link
 ```
 
-## Example Checks
+### Example Checks
 
 ```bash
 ros2 topic list | grep scan
@@ -1253,7 +1562,7 @@ Manual bridge test:
 ros2 run ros_gz_bridge parameter_bridge "/scan@sensor_msgs/msg/LaserScan[gz.msgs.LaserScan"
 ```
 
-## RViz Settings
+### RViz Settings
 
 ```txt
 Fixed Frame: odom
@@ -1261,7 +1570,7 @@ LaserScan Topic: /scan
 Reliability Policy: Best Effort if needed
 ```
 
-## Validation Criteria
+### Validation Criteria
 
 ```txt
 /scan exists
@@ -1274,34 +1583,34 @@ scan changes relative to obstacles as the robot moves
 
 ---
 
-# 16. `/clock`
+## 19. `/clock`
 
-## Purpose
+### Purpose
 
 `/clock` provides Gazebo simulation time to ROS nodes and RViz.
 
 It is required when nodes use `use_sim_time:=true`.
 
-## Message Type
+### Message Type
 
 ```txt
 rosgraph_msgs/msg/Clock
 ```
 
-## Direction
+### Direction
 
 ```txt
 Output from ros_gz_bridge into ROS
 ```
 
-## Producer
+### Producer
 
 ```txt
 Gazebo Sim
 ros_gz_bridge parameter_bridge
 ```
 
-## Consumers
+### Consumers
 
 ```txt
 RViz when use_sim_time is true
@@ -1310,14 +1619,14 @@ controller-related nodes using simulation time
 other ROS nodes using simulation time
 ```
 
-## Example Check
+### Example Check
 
 ```bash
 ros2 topic list | grep clock
 ros2 topic echo /clock --once
 ```
 
-## Validation Criteria
+### Validation Criteria
 
 ```txt
 /clock exists during Gazebo launch
@@ -1326,7 +1635,7 @@ RViz launched with use_sim_time tracks Gazebo motion
 TF_OLD_DATA warnings are absent after a clean restart
 ```
 
-## Common Failures
+### Common Failures
 
 | Failure | Likely Cause | First Check |
 |---|---|---|
@@ -1336,9 +1645,185 @@ TF_OLD_DATA warnings are absent after a clean restart
 
 ---
 
-# 17. Interface Flow
+## 20. Trajectory Validation CSV Interface
 
-## Command-to-State Flow
+The Day 84 recorder is not only a ROS topic consumer. It also creates a CSV data interface.
+
+### Producer
+
+```txt
+trajectory_validation_recorder.py
+```
+
+### Output File
+
+```txt
+data/day84_trajectory_validation.csv
+```
+
+### Input Topics
+
+```txt
+/diff_drive_controller/cmd_vel
+/diff_drive_controller/odom
+/odom_noisy
+```
+
+### CSV Columns
+
+```txt
+time_sec
+cmd_linear_x
+cmd_angular_z
+actual_x
+actual_y
+actual_yaw
+actual_linear_x
+actual_angular_z
+noisy_x
+noisy_y
+noisy_yaw
+```
+
+### Recorder Flow
+
+```txt
+cmd_vel callback
+   ↓
+store latest commanded linear velocity and yaw rate
+
+actual odom callback
+   ↓
+store latest actual x, y, yaw, linear velocity, yaw rate
+
+noisy odom callback
+   ↓
+store latest noisy x, y, yaw
+
+timer at 20 Hz
+   ↓
+write latest values to CSV
+```
+
+### Validation Commands
+
+```bash
+cd "/mnt/c/Self study/PRACTICE C++/Cdev/01_joint_basics"
+
+ls data/day84_trajectory_validation.csv
+head data/day84_trajectory_validation.csv
+wc -l data/day84_trajectory_validation.csv
+```
+
+Expected header:
+
+```txt
+time_sec,cmd_linear_x,cmd_angular_z,actual_x,actual_y,actual_yaw,actual_linear_x,actual_angular_z,noisy_x,noisy_y,noisy_yaw
+```
+
+### Validation Criteria
+
+```txt
+CSV file exists
+CSV has the expected header
+CSV contains command values
+CSV contains actual odometry values
+CSV contains noisy odometry values
+noisy fields are not blank after /odom_noisy is active
+```
+
+---
+
+## 21. Plot and Report File Interface
+
+Day 85 converts the CSV interface into plot and report artifacts.
+
+### Producer
+
+```txt
+plot_trajectory_validation.py
+```
+
+### Input File
+
+```txt
+data/day84_trajectory_validation.csv
+```
+
+### Output Files
+
+```txt
+plots/trajectory_validation.png
+docs/trajectory_validation_report.md
+```
+
+### Plot Contents
+
+```txt
+actual vs noisy trajectory
+yaw over time
+commanded vs actual linear velocity
+commanded vs actual yaw rate
+```
+
+### Report Metrics
+
+```txt
+sample count
+duration
+actual path length
+final actual x
+final actual y
+final actual yaw
+mean position noise error
+max position noise error
+mean yaw noise error
+max yaw noise error
+max commanded linear velocity
+max actual linear velocity
+max commanded yaw rate
+max actual yaw rate
+```
+
+### Generation Command
+
+Run from the repository root:
+
+```bash
+python3 ros2_ws/src/cpp_robotics_sim_ros/scripts/plot_trajectory_validation.py --csv data/day84_trajectory_validation.csv --plot plots/trajectory_validation.png --report docs/trajectory_validation_report.md
+```
+
+### Validation Commands
+
+```bash
+ls plots/trajectory_validation.png
+ls docs/trajectory_validation_report.md
+ls -lh plots/trajectory_validation.png
+
+grep -n "actual path length" docs/trajectory_validation_report.md
+grep -n "mean position noise error" docs/trajectory_validation_report.md
+grep -n "max actual linear velocity" docs/trajectory_validation_report.md
+grep -n "max actual yaw rate" docs/trajectory_validation_report.md
+```
+
+### Validation Criteria
+
+```txt
+plot exists
+plot file is not empty
+report exists
+report contains path length
+report contains final pose
+report contains mean/max position noise error
+report contains mean/max yaw noise error
+report contains max velocity and yaw rate metrics
+```
+
+---
+
+## 22. Interface Flow Summary
+
+### 22.1 Kinematic Simulator Command-to-State Flow
 
 ```txt
 /cmd_vel
@@ -1364,7 +1849,7 @@ broadcast odom -> base_link
 publish /diagnostics
 ```
 
-## Robot-Description-to-TF Flow
+### 22.2 Robot-Description-to-TF Flow
 
 ```txt
 diffbot.xacro
@@ -1379,10 +1864,10 @@ robot_state_publisher
 /tf for moving joints
 ```
 
-## Joint-State-to-Link-TF Flow
+### 22.3 Joint-State-to-Link-TF Flow
 
 ```txt
-joint_state_publisher
+joint_state_publisher or joint_state_broadcaster
    ↓
 /joint_states
    ↓
@@ -1392,7 +1877,7 @@ base_link -> left_wheel_link
 base_link -> right_wheel_link
 ```
 
-## Gazebo Spawn Flow
+### 22.4 Gazebo Spawn Flow
 
 ```txt
 /robot_description
@@ -1402,7 +1887,7 @@ ros_gz_sim create
 diffbot model appears in Gazebo
 ```
 
-## Gazebo Control Flow
+### 22.5 Gazebo Control Flow
 
 ```txt
 /diff_drive_controller/cmd_vel
@@ -1421,7 +1906,40 @@ robot moves in Gazebo
 /tf odom -> base_link
 ```
 
-## Sensor Bridge Flow
+### 22.6 Noisy Odometry Flow
+
+```txt
+/diff_drive_controller/odom
+   ↓
+noisy_odom_node.py
+   ↓
+/odom_noisy
+```
+
+### 22.7 Validation Recording Flow
+
+```txt
+/diff_drive_controller/cmd_vel
+/diff_drive_controller/odom
+/odom_noisy
+   ↓
+trajectory_validation_recorder.py
+   ↓
+data/day84_trajectory_validation.csv
+```
+
+### 22.8 Plot/Report Flow
+
+```txt
+data/day84_trajectory_validation.csv
+   ↓
+plot_trajectory_validation.py
+   ↓
+plots/trajectory_validation.png
+docs/trajectory_validation_report.md
+```
+
+### 22.9 Sensor Bridge Flow
 
 ```txt
 Gazebo gpu_lidar on lidar_link
@@ -1435,7 +1953,7 @@ ROS /scan
 RViz LaserScan / future Nav2 / future SLAM
 ```
 
-## Clock Bridge Flow
+### 22.10 Clock Bridge Flow
 
 ```txt
 Gazebo simulation clock
@@ -1447,50 +1965,20 @@ ROS /clock
 RViz and ROS nodes using use_sim_time
 ```
 
-## Runtime Inspection Flow
-
-```txt
-ros2 topic list
-   ↓
-ros2 topic echo /robot_pose
-   ↓
-ros2 topic echo /odom
-   ↓
-tf2_echo odom base_link
-   ↓
-ros2 topic echo /diagnostics
-   ↓
-ros2 param get /robot_state_publisher robot_description
-   ↓
-ros2 topic echo /joint_states
-   ↓
-tf2_echo base_link left_wheel_link
-   ↓
-ros2 topic echo /tf_static --qos-durability transient_local --once
-   ↓
-ros2 control list_controllers
-   ↓
-ros2 topic echo /diff_drive_controller/odom
-   ↓
-ros2 topic echo /scan
-   ↓
-ros2 topic echo /clock
-```
-
 ---
 
-# 18. Interface Contract
+## 23. Full Interface Contract
 
 The simulator should satisfy this contract:
 
 ```txt
 If /cmd_vel publishes valid commands:
-  robot pose should update
+  custom kinematic robot pose should update
 
 If /cmd_vel stops:
-  robot should stop after cmd_timeout
+  custom kinematic robot should stop after cmd_timeout
 
-If robot pose updates:
+If custom robot pose updates:
   /robot_pose, /odom, and odom -> base_link TF should remain consistent
 
 If diagnostics is active:
@@ -1517,6 +2005,15 @@ If ros2_control.launch.py is running:
 If diff_drive_controller receives TwistStamped commands:
   Gazebo robot should move and /diff_drive_controller/odom should update
 
+If noisy_odom_node.py is running with Gazebo odometry active:
+  /odom_noisy should publish noisy nav_msgs/msg/Odometry messages
+
+If trajectory_validation_recorder.py is running:
+  command, actual odom, and noisy odom should be recorded to CSV
+
+If plot_trajectory_validation.py is executed:
+  a plot and validation report should be generated from the CSV
+
 If the lidar sensor and bridge are active:
   /scan should publish sensor_msgs/msg/LaserScan
 
@@ -1526,21 +2023,21 @@ If RViz is visualizing Gazebo data:
 
 ---
 
-# 19. Full Interface Validation Commands
+## 24. Full Interface Validation Commands
 
-## Start Simulator
+### 24.1 Start Custom Simulator
 
 ```bash
 ros2 launch cpp_robotics_sim_ros sim.launch.py
 ```
 
-## List Topics
+### 24.2 List Topics
 
 ```bash
 ros2 topic list
 ```
 
-## Check Simulator Topic Types
+### 24.3 Check Custom Simulator Topic Types
 
 ```bash
 ros2 topic type /cmd_vel
@@ -1550,7 +2047,7 @@ ros2 topic type /tf
 ros2 topic type /diagnostics
 ```
 
-## Check Simulator Messages
+### 24.4 Check Custom Simulator Messages
 
 ```bash
 ros2 topic echo --once /robot_pose
@@ -1559,7 +2056,7 @@ ros2 topic echo --once /diagnostics
 ros2 run tf2_ros tf2_echo odom base_link
 ```
 
-## Check QoS
+### 24.5 Check Custom Simulator QoS
 
 ```bash
 ros2 topic info /cmd_vel --verbose
@@ -1568,19 +2065,19 @@ ros2 topic info /odom --verbose
 ros2 topic info /diagnostics --verbose
 ```
 
-## Send Command
+### 24.6 Send Custom Simulator Command
 
 ```bash
 ros2 topic pub -r 10 /cmd_vel geometry_msgs/msg/Twist "{linear: {x: 0.3}, angular: {z: 0.2}}"
 ```
 
-## Launch Robot Description Stack
+### 24.7 Launch Robot Description Stack
 
 ```bash
 ros2 launch cpp_robotics_sim_ros description.launch.py
 ```
 
-## Check Robot Description
+### 24.8 Check Robot Description
 
 ```bash
 ros2 param get /robot_state_publisher robot_description > /tmp/robot_description.txt
@@ -1589,13 +2086,13 @@ grep -E "base_link|left_wheel_link|right_wheel_link|caster_link|lidar_link" /tmp
 grep -E "left_wheel_joint|right_wheel_joint|caster_joint|lidar_joint" /tmp/robot_description.txt
 ```
 
-## Check Joint States
+### 24.9 Check Joint States
 
 ```bash
 ros2 topic echo /joint_states --once
 ```
 
-## Check Static Transform
+### 24.10 Check Static Transform
 
 ```bash
 ros2 topic echo /tf_static --qos-durability transient_local --qos-reliability reliable --once
@@ -1605,9 +2102,10 @@ Expected:
 
 ```txt
 base_link -> caster_link
+base_link -> lidar_link
 ```
 
-## Check Dynamic Wheel and Lidar Transforms
+### 24.11 Check Dynamic Wheel and Lidar Transforms
 
 ```bash
 ros2 run tf2_ros tf2_echo base_link left_wheel_link
@@ -1615,7 +2113,7 @@ ros2 run tf2_ros tf2_echo base_link right_wheel_link
 ros2 run tf2_ros tf2_echo base_link lidar_link
 ```
 
-## Launch RViz RobotModel Stack
+### 24.12 Launch RViz RobotModel Stack
 
 ```bash
 ros2 launch cpp_robotics_sim_ros robot_model_viz.launch.py
@@ -1630,7 +2128,7 @@ RobotModel
 Odometry
 ```
 
-## Launch Gazebo Spawn Stack
+### 24.13 Launch Gazebo Spawn Stack
 
 ```bash
 ros2 launch cpp_robotics_sim_ros gazebo_spawn.launch.py
@@ -1644,7 +2142,7 @@ ground plane appears
 diffbot appears in the world
 ```
 
-## Launch Gazebo Control and Sensor Stack
+### 24.14 Launch Gazebo Control and Sensor Stack
 
 ```bash
 ros2 launch cpp_robotics_sim_ros ros2_control.launch.py
@@ -1683,9 +2181,78 @@ Drive Gazebo robot:
 ros2 topic pub -r 10 /diff_drive_controller/cmd_vel geometry_msgs/msg/TwistStamped "{twist: {linear: {x: 0.25}, angular: {z: 0.0}}}"
 ```
 
-## Run Launch Regression
+### 24.15 Run Noisy Odometry Node
 
 ```bash
+ros2 run cpp_robotics_sim_ros noisy_odom_node.py
+```
+
+Validation:
+
+```bash
+ros2 topic list | grep odom
+ros2 topic type /odom_noisy
+ros2 topic echo /odom_noisy --once
+ros2 topic echo /odom_noisy --once | grep -A 40 "covariance"
+```
+
+Expected:
+
+```txt
+/odom_noisy exists
+/odom_noisy type is nav_msgs/msg/Odometry
+covariance values are populated
+```
+
+### 24.16 Run Trajectory Validation Recorder
+
+From repository root:
+
+```bash
+cd "/mnt/c/Self study/PRACTICE C++/Cdev/01_joint_basics"
+source /opt/ros/jazzy/setup.bash
+source ros2_ws/install/setup.bash
+ros2 run cpp_robotics_sim_ros trajectory_validation_recorder.py
+```
+
+Command robot motion:
+
+```bash
+ros2 topic pub -r 10 /diff_drive_controller/cmd_vel geometry_msgs/msg/TwistStamped "{twist: {linear: {x: 0.25}, angular: {z: 0.2}}}"
+```
+
+Verify CSV:
+
+```bash
+ls data/day84_trajectory_validation.csv
+head data/day84_trajectory_validation.csv
+wc -l data/day84_trajectory_validation.csv
+```
+
+### 24.17 Generate Plot and Report
+
+From repository root:
+
+```bash
+python3 ros2_ws/src/cpp_robotics_sim_ros/scripts/plot_trajectory_validation.py --csv data/day84_trajectory_validation.csv --plot plots/trajectory_validation.png --report docs/trajectory_validation_report.md
+```
+
+Verify:
+
+```bash
+ls plots/trajectory_validation.png
+ls docs/trajectory_validation_report.md
+
+grep -n "actual path length" docs/trajectory_validation_report.md
+grep -n "mean position noise error" docs/trajectory_validation_report.md
+grep -n "max actual linear velocity" docs/trajectory_validation_report.md
+grep -n "max actual yaw rate" docs/trajectory_validation_report.md
+```
+
+### 24.18 Run Launch Regression
+
+```bash
+cd "/mnt/c/Self study/PRACTICE C++/Cdev/01_joint_basics"
 ./scripts/day68_launch_regression.sh
 ```
 
@@ -1697,44 +2264,52 @@ Expected:
 
 ---
 
-# 20. Common Interface Failures
+## 25. Common Interface Failures
 
-| Failure                                 | Likely Cause                                                      | First Check                                        |
-| --------------------------------------- | ----------------------------------------------------------------- | -------------------------------------------------- |
-| `/cmd_vel` has no subscriber            | `sim_node` not running                                            | `ros2 topic info /cmd_vel`                         |
-| `/robot_pose` missing                   | publisher not created or node crashed                             | `ros2 topic list`                                  |
-| `/odom` missing                         | odom publisher missing or node not rebuilt                        | `ros2 topic list`                                  |
-| `/tf` missing                           | transform broadcaster issue                                       | `ros2 run tf2_ros tf2_echo odom base_link`         |
-| `/diagnostics` missing                  | diagnostics publisher missing                                     | `ros2 topic list`                                  |
-| wrong message type                      | topic name reused incorrectly                                     | `ros2 topic type <topic>`                          |
-| no motion after command                 | command not received, timeout active, or velocity clamped to zero | `/diagnostics` and `/robot_pose`                   |
-| motion never stops                      | timeout logic broken                                              | stop `/cmd_vel` and watch diagnostics              |
-| RViz frame error                        | TF missing or wrong fixed frame                                   | set Fixed Frame to `odom`                          |
-| diagnostics always WARN                 | no active `/cmd_vel` stream                                       | publish `/cmd_vel` at 10 Hz                        |
-| diagnostics always OK                   | timeout state not wired to diagnostics                            | check timeout logic                                |
-| `/robot_description` missing            | `robot_state_publisher` not running                               | `ros2 node list`                                   |
-| robot description XML parsed as YAML    | missing `ParameterValue(..., value_type=str)`                     | inspect `description.launch.py`                    |
-| Xacro command fails with spaces in path | model path not quoted                                             | inspect `Command(['xacro "', model, '"'])`         |
-| `/joint_states` missing                 | `joint_state_publisher` not installed or not launched             | `ros2 node list`                                   |
-| wheel links missing in TF               | no joint states or joint name mismatch                            | `ros2 topic echo /joint_states --once`             |
-| `/tf_static` echo shows no output       | wrong QoS for static transform echo                               | use transient local durability                     |
-| RobotModel display is red               | missing robot description or TF                                   | check `/robot_description`, `/joint_states`, `/tf` |
-| Gazebo opens but no robot appears       | spawn failed or `/robot_description` missing                      | inspect launch terminal output                     |
-| Gazebo robot does not drive             | controller inactive, wrong command topic, or wrong message type   | `ros2 control list_controllers`, publish `TwistStamped` to controller |
-| `diff_drive_controller` missing          | spawner missing or YAML issue                                     | `ros2 control list_controllers`                    |
-| wheel names empty                        | `ros2_control.yaml` indentation wrong                             | inspect installed controller YAML                  |
-| `/controller_manager` missing            | `gz_ros2_control` plugin failed                                   | inspect Gazebo launch output                       |
-| Gazebo moves but RViz stays still        | RViz sim-time mismatch or wrong odom topic                        | use `/clock`, `use_sim_time:=true`, `/diff_drive_controller/odom` |
-| `/scan` missing                          | lidar sensor or bridge not running                                | `gz topic -l`, `ros2 topic list`                   |
-| LaserScan display empty                  | RViz topic not selected or QoS mismatch                           | set topic `/scan`, Reliability Best Effort         |
-| `TF_OLD_DATA` warnings                   | stale nodes or wall-time/sim-time mismatch                        | restart stack and use simulation time              |
-| `.sdf` world missing on GitHub           | `.gitignore` ignored SDF files                                    | `git check-ignore -v`, `git add -f`                |
+| Failure | Likely Cause | First Check |
+|---|---|---|
+| `/cmd_vel` has no subscriber | `sim_node` not running | `ros2 topic info /cmd_vel` |
+| `/robot_pose` missing | publisher not created or node crashed | `ros2 topic list` |
+| `/odom` missing | odom publisher missing or node not rebuilt | `ros2 topic list` |
+| `/tf` missing | transform broadcaster issue | `ros2 run tf2_ros tf2_echo odom base_link` |
+| `/diagnostics` missing | diagnostics publisher missing | `ros2 topic list` |
+| wrong message type | topic name reused incorrectly | `ros2 topic type <topic>` |
+| no motion after command | command not received, timeout active, or velocity clamped to zero | `/diagnostics` and `/robot_pose` |
+| motion never stops | timeout logic broken | stop `/cmd_vel` and watch diagnostics |
+| RViz frame error | TF missing or wrong fixed frame | set Fixed Frame to `odom` |
+| diagnostics always WARN | no active `/cmd_vel` stream | publish `/cmd_vel` at 10 Hz |
+| diagnostics always OK | timeout state not wired to diagnostics | check timeout logic |
+| `/robot_description` missing | `robot_state_publisher` not running | `ros2 node list` |
+| robot description XML parsed as YAML | missing `ParameterValue(..., value_type=str)` | inspect `description.launch.py` |
+| Xacro command fails with spaces in path | model path not quoted | inspect `Command(['xacro "', model, '"'])` |
+| `/joint_states` missing | `joint_state_publisher` not installed/launched or broadcaster inactive | `ros2 node list`, `ros2 control list_controllers` |
+| wheel links missing in TF | no joint states or joint name mismatch | `ros2 topic echo /joint_states --once` |
+| `/tf_static` echo shows no output | wrong QoS for static transform echo | use transient local durability |
+| RobotModel display is red | missing robot description or TF | check `/robot_description`, `/joint_states`, `/tf` |
+| Gazebo opens but no robot appears | spawn failed or `/robot_description` missing | inspect launch terminal output |
+| Gazebo robot does not drive | controller inactive, wrong command topic, or wrong message type | `ros2 control list_controllers`, publish `TwistStamped` to controller |
+| `diff_drive_controller` missing | spawner missing or YAML issue | `ros2 control list_controllers` |
+| wheel names empty | `ros2_control.yaml` indentation wrong | inspect installed controller YAML |
+| `/controller_manager` missing | `gz_ros2_control` plugin failed | inspect Gazebo launch output |
+| Gazebo moves but RViz stays still | RViz sim-time mismatch or wrong odom topic | use `/clock`, `use_sim_time:=true`, `/diff_drive_controller/odom` |
+| `/scan` missing | lidar sensor or bridge not running | `gz topic -l`, `ros2 topic list` |
+| LaserScan display empty | RViz topic not selected or QoS mismatch | set topic `/scan`, Reliability Best Effort |
+| `TF_OLD_DATA` warnings | stale nodes or wall-time/sim-time mismatch | restart stack and use simulation time |
+| `/odom_noisy` missing | noisy odometry node not running or not installed | `ros2 pkg executables cpp_robotics_sim_ros | grep noisy` |
+| `/odom_noisy` exists but no messages | `/diff_drive_controller/odom` not publishing | launch Gazebo control stack and echo controller odom |
+| noisy covariance is all zero | covariance assignment bug | inspect `set_covariance()` in `noisy_odom_node.py` |
+| `python3\r` shebang error | Windows CRLF line endings | `sed -i 's/\r$//' <script.py>` and use LF in VS Code |
+| recorder CSV missing | recorder launched from wrong workspace or not running | check recorder terminal and `ls data/` |
+| recorder CSV has blank noisy fields | `/odom_noisy` was not running before recording | start noisy node before recorder |
+| plot script cannot find CSV | wrong working directory or wrong `--csv` path | run from repo root or pass absolute path |
+| matplotlib import error | Python plotting dependency missing | `sudo apt install -y python3-matplotlib` |
+| `.sdf` world missing on GitHub | `.gitignore` ignored SDF files | `git check-ignore -v`, `git add -f` |
 
 ---
 
-# 21. Interface Ownership Summary
+## 26. Interface Ownership Summary
 
-## `sim_node` Owns in the Kinematic Simulator Stack
+### 26.1 `sim_node` Owns in the Kinematic Simulator Stack
 
 ```txt
 /cmd_vel subscriber
@@ -1744,7 +2319,7 @@ Expected:
 /diagnostics publisher
 ```
 
-## `robot_state_publisher` Owns
+### 26.2 `robot_state_publisher` Owns
 
 ```txt
 /robot_description
@@ -1752,20 +2327,20 @@ Expected:
 /tf_static for fixed robot link transforms
 ```
 
-## `joint_state_publisher` Owns in the Visualization-Only Description Stack
+### 26.3 `joint_state_publisher` Owns in the Visualization-Only Description Stack
 
 ```txt
 /joint_states
 ```
 
-## `joint_state_broadcaster` Owns in the Gazebo ros2_control Stack
+### 26.4 `joint_state_broadcaster` Owns in the Gazebo ros2_control Stack
 
 ```txt
 /joint_states
 /dynamic_joint_states
 ```
 
-## `diff_drive_controller` Owns in the Gazebo Control Stack
+### 26.5 `diff_drive_controller` Owns in the Gazebo Control Stack
 
 ```txt
 /diff_drive_controller/cmd_vel subscriber
@@ -1775,14 +2350,39 @@ Expected:
 wheel velocity command interfaces through ros2_control
 ```
 
-## `ros_gz_bridge` Owns
+### 26.6 `noisy_odom_node.py` Owns
+
+```txt
+/diff_drive_controller/odom subscriber
+/odom_noisy publisher
+pose and twist covariance assignment for noisy odometry
+```
+
+### 26.7 `trajectory_validation_recorder.py` Owns
+
+```txt
+/diff_drive_controller/cmd_vel subscriber
+/diff_drive_controller/odom subscriber
+/odom_noisy subscriber
+data/day84_trajectory_validation.csv writer
+```
+
+### 26.8 `plot_trajectory_validation.py` Owns
+
+```txt
+data/day84_trajectory_validation.csv reader
+plots/trajectory_validation.png writer
+docs/trajectory_validation_report.md writer
+```
+
+### 26.9 `ros_gz_bridge` Owns
 
 ```txt
 /clock bridge from Gazebo to ROS
 /scan bridge from Gazebo to ROS
 ```
 
-## Gazebo Spawn Workflow Uses
+### 26.10 Gazebo Spawn Workflow Uses
 
 ```txt
 /robot_description
@@ -1790,7 +2390,7 @@ ros_gz_sim create
 empty_diffbot_world.sdf
 ```
 
-## Gazebo Sensor Workflow Uses
+### 26.11 Gazebo Sensor Workflow Uses
 
 ```txt
 lidar_link
@@ -1801,16 +2401,64 @@ ROS /scan
 
 ---
 
-# 22. Interview Explanation
+## 27. Interview Explanation
 
-The project now exposes two related ROS 2 interfaces.
+The project exposes two main robot-motion interfaces and one validation interface.
 
 The original kinematic simulator subscribes to `/cmd_vel` using `geometry_msgs/msg/Twist`, publishes a simple `/robot_pose` using `geometry_msgs/msg/Pose2D`, publishes standard `/odom` using `nav_msgs/msg/Odometry`, broadcasts `odom -> base_link` on TF, and publishes runtime health on `/diagnostics` using `diagnostic_msgs/msg/DiagnosticArray`.
 
 The robot description stack converts `diffbot.xacro` into `/robot_description`. `robot_state_publisher` uses that model plus `/joint_states` to publish the robot link transforms below `base_link`. In the visualization-only stack, `/joint_states` comes from `joint_state_publisher`. In the Gazebo control stack, `/joint_states` comes from `joint_state_broadcaster`.
 
-The Gazebo control stack uses `ros2_control`. The Xacro model defines velocity command interfaces and position/velocity state interfaces for both wheel joints. `gz_ros2_control` exposes those Gazebo joints to `controller_manager`. `controller_manager` loads `joint_state_broadcaster` and `diff_drive_controller`. The diff-drive controller subscribes to `/diff_drive_controller/cmd_vel` as `geometry_msgs/msg/TwistStamped`, converts body velocity into wheel velocity commands, moves the robot in Gazebo, publishes `/diff_drive_controller/odom`, and publishes `odom -> base_link` TF when enabled.
+The Gazebo control stack uses `/diff_drive_controller/cmd_vel` as the actuation input. `diff_drive_controller` converts `TwistStamped` body velocity commands into wheel velocity commands, sends those commands through `ros2_control` and `gz_ros2_control`, moves the Gazebo wheel joints, and publishes `/diff_drive_controller/odom` plus the moving `odom -> base_link` transform.
 
-Day 79 adds a simulated lidar. Gazebo simulates the `gpu_lidar` sensor on `lidar_link`, publishes a Gazebo `/scan` topic, and `ros_gz_bridge` converts it into ROS `/scan` as `sensor_msgs/msg/LaserScan`. The `/clock` bridge provides simulation time so RViz and ROS nodes can visualize Gazebo data without timestamp errors.
+The sensor stack simulates a lidar on `lidar_link` in Gazebo. `ros_gz_bridge` converts the Gazebo scan into the ROS `/scan` topic as `sensor_msgs/msg/LaserScan`. It also bridges `/clock` so RViz and ROS nodes can use simulation time.
 
-The key ownership rule is that `sim_node` owns `odom -> base_link` only in the original kinematic simulator stack, while `diff_drive_controller` owns `odom -> base_link` in the Gazebo control stack. RViz visualizes the robot model, TF, odometry, and lidar, but Gazebo and the controllers are what simulate and move the robot.
+Days 83-85 add a validation interface. `noisy_odom_node.py` subscribes to `/diff_drive_controller/odom`, adds controlled Gaussian noise and covariance, and publishes `/odom_noisy`. `trajectory_validation_recorder.py` records `/diff_drive_controller/cmd_vel`, `/diff_drive_controller/odom`, and `/odom_noisy` into a CSV. `plot_trajectory_validation.py` turns that CSV into a plot and Markdown validation report. This proves that the simulation behavior can be commanded, measured, corrupted with controlled uncertainty, recorded, plotted, and explained.
+
+Important distinction:
+
+```txt
+/diff_drive_controller/cmd_vel is an actuation command.
+/odom_noisy is feedback.
+/odom_noisy does not move Gazebo.
+```
+
+---
+
+## 28. Day 85 Interface Summary
+
+Through Day 85, the most important runtime interfaces are:
+
+```txt
+Custom kinematic simulator:
+  /cmd_vel -> sim_node -> /robot_pose, /odom, /tf, /diagnostics
+
+Gazebo control:
+  /diff_drive_controller/cmd_vel
+      -> diff_drive_controller
+      -> ros2_control
+      -> gz_ros2_control
+      -> Gazebo wheel joints
+      -> /diff_drive_controller/odom, /tf, /joint_states
+
+Sensor:
+  Gazebo lidar -> ros_gz_bridge -> /scan
+
+Simulation time:
+  Gazebo clock -> ros_gz_bridge -> /clock
+
+Noisy odometry:
+  /diff_drive_controller/odom -> noisy_odom_node.py -> /odom_noisy
+
+Validation:
+  /diff_drive_controller/cmd_vel
+  /diff_drive_controller/odom
+  /odom_noisy
+      -> trajectory_validation_recorder.py
+      -> data/day84_trajectory_validation.csv
+      -> plot_trajectory_validation.py
+      -> plots/trajectory_validation.png
+      -> docs/trajectory_validation_report.md
+```
+
+This interface structure makes the project ready for the next roadmap phase: Nav2 bringup, SLAM/localization, EKF configuration, automated tests, CI, and portfolio demo packaging.
