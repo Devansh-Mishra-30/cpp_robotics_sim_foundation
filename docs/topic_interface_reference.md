@@ -1,8 +1,8 @@
 # ROS 2 Topic Interface Reference
 
-This document defines the ROS 2 topic interfaces used by the `cpp_robotics_sim_ros` simulator, robot description stack, Gazebo `ros2_control` stack, differential-drive controller, simulated lidar workflow, noisy odometry workflow, and trajectory validation workflow.
+This document defines the ROS 2 topic, file, test, CI, benchmark, and validation interfaces used by the `cpp_robotics_sim_ros` simulator, robot description stack, Gazebo `ros2_control` stack, differential-drive controller, simulated lidar workflow, noisy odometry workflow, trajectory validation workflow, GoogleTest suite, GitHub Actions CI workflow, and deterministic performance benchmark.
 
-The purpose of this document is to make the runtime interface clear enough that another engineer can understand what each stack subscribes to, what it publishes, what message types are used, what fields matter, what node owns each transform, and how to validate each interface through Day 85.
+The purpose of this document is to make the runtime and validation interfaces clear enough that another engineer can understand what each stack subscribes to, what it publishes, what message types are used, what fields matter, what node owns each transform, what files are generated, what tests run, and how to validate each interface through Day 90.
 
 ---
 
@@ -111,11 +111,51 @@ docs/trajectory_validation_report.md
 
 The trajectory validation stack records command, actual odometry, and noisy odometry data, then converts it into plots and report metrics.
 
+
+### 1.7 Automated Testing and CI Stack
+
+```txt
+day86_testable_core.hpp
+   ↓
+test_day86_core.cpp
+   ↓
+GoogleTest
+   ↓
+colcon test
+   ↓
+GitHub Actions CI
+```
+
+The automated testing stack validates deterministic C++ math utilities and pose integration independent of ROS 2 runtime, Gazebo, RViz, and controller execution.
+
+### 1.8 Performance Benchmark Stack
+
+```txt
+day88_performance_benchmark
+   ↓
+data/day88_performance_results.csv
+docs/performance_report.md
+```
+
+The performance benchmark stack measures deterministic C++ pose-update timing for multiple timestep values.
+
+### 1.9 Documentation and Assessment Stack
+
+```txt
+local validation commands
+   ↓
+docs/day89_validation_checkpoint.md
+   ↓
+Day 90 final assessment notes
+```
+
+The Day 89-90 documentation layer records the current validation state before continuing into the next implementation phase.
+
 ---
 
 ## 2. Frame Tree and Transform Ownership
 
-The extended frame tree through Day 85 is:
+The extended frame tree through Day 90 is:
 
 ```txt
 odom
@@ -184,6 +224,18 @@ Do not run sim_node and diff_drive_controller together as simultaneous publisher
 | `/clock` | Output | `rosgraph_msgs/msg/Clock` | `ros_gz_bridge` from Gazebo | ROS nodes and RViz using sim time | Simulation time source |
 
 `controller_manager` also exposes ROS services used by the `ros2 control` CLI and controller spawners, but the main user-facing runtime interfaces in this document are topics.
+
+
+Additional non-topic interfaces added through Day 90:
+
+| Interface | Type | Producer / Owner | Consumer | Purpose |
+|---|---|---|---|---|
+| `test_day86_core` | GoogleTest executable | `ament_add_gtest` / CMake | `colcon test`, GitHub Actions | Unit-test deterministic C++ math and pose integration |
+| `.github/workflows/ros2_jazzy_ci.yml` | CI workflow | GitHub Actions | GitHub repository checks | Build and test the ROS 2 workspace on push/pull request |
+| `day88_performance_benchmark` | C++ executable | `cpp_robotics_sim_ros` package | CLI, docs, future CI | Benchmark deterministic pose-update timing |
+| `data/day88_performance_results.csv` | CSV artifact | performance benchmark executable | performance report, manual inspection | Store benchmark timing results |
+| `docs/performance_report.md` | Markdown artifact | performance benchmark executable | documentation/review | Report timing metrics and interpretation |
+| `docs/day89_validation_checkpoint.md` | Markdown artifact | manual validation checkpoint | documentation/review | Record build, test, CI, benchmark, and validation status |
 
 ---
 
@@ -551,7 +603,7 @@ Fixed transforms appear through `/tf_static`.
 
 ### Frame Relationship
 
-Full expected tree after Day 85:
+Full expected tree through Day 90:
 
 ```txt
 odom
@@ -1708,7 +1760,7 @@ write latest values to CSV
 ### Validation Commands
 
 ```bash
-cd "/mnt/c/Self study/PRACTICE C++/Cdev/01_joint_basics"
+cd "~/robotics_projects/cpp_robotics_sim_foundation"
 
 ls data/day84_trajectory_validation.csv
 head data/day84_trajectory_validation.csv
@@ -1821,9 +1873,357 @@ report contains max velocity and yaw rate metrics
 
 ---
 
-## 22. Interface Flow Summary
 
-### 22.1 Kinematic Simulator Command-to-State Flow
+## 22. GoogleTest Unit-Test Interface — Day 86
+
+Day 86 adds a C++ unit-test interface using GoogleTest.
+
+This is not a ROS topic interface. It is a software validation interface.
+
+### 22.1 Testable Core Header
+
+```txt
+ros2_ws/src/cpp_robotics_sim_ros/include/cpp_robotics_sim_ros/day86_testable_core.hpp
+```
+
+The header contains deterministic functions and data structures that can be tested without starting ROS 2 or Gazebo:
+
+```txt
+Pose2D
+clamp()
+wrapToPi()
+integratePose()
+```
+
+### 22.2 GoogleTest Source File
+
+```txt
+ros2_ws/src/cpp_robotics_sim_ros/test/test_day86_core.cpp
+```
+
+The test file validates:
+
+```txt
+command/value clamping
+angle normalization
+forward pose integration
+side-direction pose integration
+pure rotation
+theta wrapping after integration
+repeated deterministic integration
+invalid negative timestep handling
+```
+
+### 22.3 CMake Test Target
+
+The CMake interface is:
+
+```cmake
+ament_add_gtest(test_day86_core
+  test/test_day86_core.cpp
+)
+```
+
+The test executable is registered with `colcon test`.
+
+### 22.4 Test Command
+
+```bash
+cd ~/robotics_projects/cpp_robotics_sim_foundation/ros2_ws
+
+source /opt/ros/jazzy/setup.bash
+source install/setup.bash
+
+colcon test --packages-select cpp_robotics_sim_ros --event-handlers console_direct+
+
+colcon test-result --verbose
+```
+
+Expected result:
+
+```txt
+Summary: 17 tests, 0 errors, 0 failures, 0 skipped
+```
+
+### 22.5 Interface Meaning
+
+GoogleTest validates small deterministic C++ functions.
+
+It answers:
+
+```txt
+Is this function correct?
+```
+
+It does not answer:
+
+```txt
+Did Gazebo launch?
+Did RViz visualize?
+Did /scan publish?
+Did the robot navigate?
+```
+
+Those are launch, regression, or simulation validation questions.
+
+---
+
+## 23. GitHub Actions CI Interface — Day 87
+
+Day 87 adds a remote build/test interface through GitHub Actions.
+
+This is not a ROS topic interface. It is a repository automation interface.
+
+### 23.1 Workflow File
+
+```txt
+.github/workflows/ros2_jazzy_ci.yml
+```
+
+### 23.2 CI Trigger
+
+The workflow runs on:
+
+```txt
+push to main
+pull request to main
+manual workflow_dispatch
+```
+
+### 23.3 CI Environment
+
+```txt
+ubuntu-24.04
+ROS 2 Jazzy
+colcon
+ament_cmake
+ament_cmake_gtest
+```
+
+### 23.4 CI Flow
+
+```txt
+GitHub push / pull request
+   ↓
+checkout repository
+   ↓
+install ROS 2 Jazzy dependencies
+   ↓
+rosdep install package dependencies
+   ↓
+colcon build
+   ↓
+colcon test
+   ↓
+upload colcon test logs
+   ↓
+pass/fail status badge
+```
+
+### 23.5 CI Output
+
+The workflow produces:
+
+```txt
+GitHub Actions pass/fail status
+colcon test logs artifact
+README CI badge status
+```
+
+### 23.6 Current CI Scope
+
+Current CI validates:
+
+```txt
+the ROS 2 workspace builds
+the GoogleTest target builds
+the GoogleTest suite passes
+test logs upload as an artifact
+```
+
+Current CI does not yet validate:
+
+```txt
+Gazebo launch runtime
+controller activation
+/scan runtime behavior
+/clock runtime behavior
+Nav2 behavior
+full simulation scenario scoring
+```
+
+### 23.7 Interface Meaning
+
+CI answers:
+
+```txt
+Can the project build and run its test suite automatically in a clean remote environment?
+```
+
+---
+
+## 24. Performance Benchmark Interface — Day 88
+
+Day 88 adds a deterministic C++ benchmark executable.
+
+This is not a ROS topic interface. It is a CLI executable and file-output interface.
+
+### 24.1 Executable
+
+```txt
+day88_performance_benchmark
+```
+
+Package executable path after build/install:
+
+```txt
+cpp_robotics_sim_ros day88_performance_benchmark
+```
+
+### 24.2 Source File
+
+```txt
+ros2_ws/src/cpp_robotics_sim_ros/src/day88_performance_benchmark.cpp
+```
+
+### 24.3 Input Arguments
+
+```txt
+--output <csv_path>
+--report <markdown_path>
+--sim-duration <seconds>
+--virtual-robots <count>
+--trials <count>
+```
+
+Default benchmark configuration:
+
+```txt
+dt values: 0.1, 0.01, 0.001
+simulated duration: 10 seconds
+virtual robot states: 1000
+trials per dt: 5
+```
+
+### 24.4 Output Files
+
+```txt
+data/day88_performance_results.csv
+docs/performance_report.md
+```
+
+### 24.5 Benchmark Command
+
+```bash
+cd ~/robotics_projects/cpp_robotics_sim_foundation
+
+ros2 run cpp_robotics_sim_ros day88_performance_benchmark --output data/day88_performance_results.csv --report docs/performance_report.md
+```
+
+### 24.6 CSV Columns
+
+```txt
+dt
+simulated_duration_sec
+steps
+virtual_robot_count
+trials
+total_updates
+mean_total_wall_ms
+mean_avg_step_us
+max_step_us
+mean_realtime_factor
+checksum
+```
+
+### 24.7 Observed Results
+
+```txt
+dt=0.1    steps=100     mean wall time ≈ 1.83 ms     RTF ≈ 5684.98
+dt=0.01   steps=1000    mean wall time ≈ 17.40 ms    RTF ≈ 574.99
+dt=0.001  steps=10000   mean wall time ≈ 174.74 ms   RTF ≈ 57.23
+```
+
+### 24.8 Interface Meaning
+
+The performance benchmark answers:
+
+```txt
+How expensive is the deterministic C++ pose-update layer for different timestep values?
+```
+
+It does not include:
+
+```txt
+Gazebo physics
+ROS middleware overhead
+TF publishing
+sensor simulation
+RViz rendering
+rosbag logging
+Nav2 behavior
+```
+
+---
+
+## 25. Validation Checkpoint and Assessment Interfaces — Days 89-90
+
+Days 89-90 add documentation and assessment interfaces around the current project state.
+
+### 25.1 Day 89 Validation Checkpoint
+
+```txt
+docs/day89_validation_checkpoint.md
+```
+
+This document records:
+
+```txt
+local build status
+GoogleTest status
+GitHub Actions CI status
+performance benchmark status
+current validation artifacts
+what is validated
+what is not yet automated
+```
+
+### 25.2 Day 90 Final Assessment
+
+Day 90 is an assessment and interview-simulation checkpoint.
+
+It does not add a new ROS topic.
+
+It checks whether the project can be explained through:
+
+```txt
+architecture
+interfaces
+TF ownership
+Gazebo vs RViz
+ros2_control ownership
+validation layers
+GoogleTest and CI
+performance benchmark results
+current limitations
+next implementation phase
+```
+
+### 25.3 Day 90 Interface Meaning
+
+Day 90 answers:
+
+```txt
+Can the full system be explained, validated, defended, and extended?
+```
+
+It is a readiness checkpoint before the next implementation phase.
+
+---
+
+## 26. Interface Flow Summary
+
+### 26.1 Kinematic Simulator Command-to-State Flow
 
 ```txt
 /cmd_vel
@@ -1849,7 +2249,7 @@ broadcast odom -> base_link
 publish /diagnostics
 ```
 
-### 22.2 Robot-Description-to-TF Flow
+### 26.2 Robot-Description-to-TF Flow
 
 ```txt
 diffbot.xacro
@@ -1864,7 +2264,7 @@ robot_state_publisher
 /tf for moving joints
 ```
 
-### 22.3 Joint-State-to-Link-TF Flow
+### 26.3 Joint-State-to-Link-TF Flow
 
 ```txt
 joint_state_publisher or joint_state_broadcaster
@@ -1877,7 +2277,7 @@ base_link -> left_wheel_link
 base_link -> right_wheel_link
 ```
 
-### 22.4 Gazebo Spawn Flow
+### 26.4 Gazebo Spawn Flow
 
 ```txt
 /robot_description
@@ -1887,7 +2287,7 @@ ros_gz_sim create
 diffbot model appears in Gazebo
 ```
 
-### 22.5 Gazebo Control Flow
+### 26.5 Gazebo Control Flow
 
 ```txt
 /diff_drive_controller/cmd_vel
@@ -1906,7 +2306,7 @@ robot moves in Gazebo
 /tf odom -> base_link
 ```
 
-### 22.6 Noisy Odometry Flow
+### 26.6 Noisy Odometry Flow
 
 ```txt
 /diff_drive_controller/odom
@@ -1916,7 +2316,7 @@ noisy_odom_node.py
 /odom_noisy
 ```
 
-### 22.7 Validation Recording Flow
+### 26.7 Validation Recording Flow
 
 ```txt
 /diff_drive_controller/cmd_vel
@@ -1928,7 +2328,7 @@ trajectory_validation_recorder.py
 data/day84_trajectory_validation.csv
 ```
 
-### 22.8 Plot/Report Flow
+### 26.8 Plot/Report Flow
 
 ```txt
 data/day84_trajectory_validation.csv
@@ -1939,7 +2339,7 @@ plots/trajectory_validation.png
 docs/trajectory_validation_report.md
 ```
 
-### 22.9 Sensor Bridge Flow
+### 26.9 Sensor Bridge Flow
 
 ```txt
 Gazebo gpu_lidar on lidar_link
@@ -1953,7 +2353,7 @@ ROS /scan
 RViz LaserScan / future Nav2 / future SLAM
 ```
 
-### 22.10 Clock Bridge Flow
+### 26.10 Clock Bridge Flow
 
 ```txt
 Gazebo simulation clock
@@ -1965,9 +2365,53 @@ ROS /clock
 RViz and ROS nodes using use_sim_time
 ```
 
+
+### 26.11 GoogleTest Flow
+
+```txt
+day86_testable_core.hpp
+   ↓
+test_day86_core.cpp
+   ↓
+test_day86_core executable
+   ↓
+colcon test
+   ↓
+test result XML and console output
+```
+
+### 26.12 GitHub Actions CI Flow
+
+```txt
+push / pull_request / workflow_dispatch
+   ↓
+GitHub Actions runner on ubuntu-24.04
+   ↓
+install ROS 2 Jazzy dependencies
+   ↓
+colcon build
+   ↓
+colcon test
+   ↓
+CI badge and log artifact
+```
+
+### 26.13 Performance Benchmark Flow
+
+```txt
+day88_performance_benchmark
+   ↓
+integratePose() timing loop
+   ↓
+data/day88_performance_results.csv
+   ↓
+docs/performance_report.md
+```
+
+
 ---
 
-## 23. Full Interface Contract
+## 27. Full Interface Contract
 
 The simulator should satisfy this contract:
 
@@ -2019,25 +2463,37 @@ If the lidar sensor and bridge are active:
 
 If RViz is visualizing Gazebo data:
   RViz should use simulation time from /clock
+
+If colcon test is executed:
+  GoogleTest should run test_day86_core and report zero failures
+
+If GitHub Actions CI runs:
+  the workspace should build and GoogleTest should pass on Ubuntu 24.04
+
+If day88_performance_benchmark is executed:
+  data/day88_performance_results.csv and docs/performance_report.md should be generated
+
+If Day 89-90 documentation is current:
+  validation state, limitations, and next-phase readiness should be clear
 ```
 
 ---
 
-## 24. Full Interface Validation Commands
+## 28. Full Interface Validation Commands
 
-### 24.1 Start Custom Simulator
+### 28.1 Start Custom Simulator
 
 ```bash
 ros2 launch cpp_robotics_sim_ros sim.launch.py
 ```
 
-### 24.2 List Topics
+### 28.2 List Topics
 
 ```bash
 ros2 topic list
 ```
 
-### 24.3 Check Custom Simulator Topic Types
+### 28.3 Check Custom Simulator Topic Types
 
 ```bash
 ros2 topic type /cmd_vel
@@ -2047,7 +2503,7 @@ ros2 topic type /tf
 ros2 topic type /diagnostics
 ```
 
-### 24.4 Check Custom Simulator Messages
+### 28.4 Check Custom Simulator Messages
 
 ```bash
 ros2 topic echo --once /robot_pose
@@ -2056,7 +2512,7 @@ ros2 topic echo --once /diagnostics
 ros2 run tf2_ros tf2_echo odom base_link
 ```
 
-### 24.5 Check Custom Simulator QoS
+### 28.5 Check Custom Simulator QoS
 
 ```bash
 ros2 topic info /cmd_vel --verbose
@@ -2065,19 +2521,19 @@ ros2 topic info /odom --verbose
 ros2 topic info /diagnostics --verbose
 ```
 
-### 24.6 Send Custom Simulator Command
+### 28.6 Send Custom Simulator Command
 
 ```bash
 ros2 topic pub -r 10 /cmd_vel geometry_msgs/msg/Twist "{linear: {x: 0.3}, angular: {z: 0.2}}"
 ```
 
-### 24.7 Launch Robot Description Stack
+### 28.7 Launch Robot Description Stack
 
 ```bash
 ros2 launch cpp_robotics_sim_ros description.launch.py
 ```
 
-### 24.8 Check Robot Description
+### 28.8 Check Robot Description
 
 ```bash
 ros2 param get /robot_state_publisher robot_description > /tmp/robot_description.txt
@@ -2086,13 +2542,13 @@ grep -E "base_link|left_wheel_link|right_wheel_link|caster_link|lidar_link" /tmp
 grep -E "left_wheel_joint|right_wheel_joint|caster_joint|lidar_joint" /tmp/robot_description.txt
 ```
 
-### 24.9 Check Joint States
+### 28.9 Check Joint States
 
 ```bash
 ros2 topic echo /joint_states --once
 ```
 
-### 24.10 Check Static Transform
+### 28.10 Check Static Transform
 
 ```bash
 ros2 topic echo /tf_static --qos-durability transient_local --qos-reliability reliable --once
@@ -2105,7 +2561,7 @@ base_link -> caster_link
 base_link -> lidar_link
 ```
 
-### 24.11 Check Dynamic Wheel and Lidar Transforms
+### 28.11 Check Dynamic Wheel and Lidar Transforms
 
 ```bash
 ros2 run tf2_ros tf2_echo base_link left_wheel_link
@@ -2113,7 +2569,7 @@ ros2 run tf2_ros tf2_echo base_link right_wheel_link
 ros2 run tf2_ros tf2_echo base_link lidar_link
 ```
 
-### 24.12 Launch RViz RobotModel Stack
+### 28.12 Launch RViz RobotModel Stack
 
 ```bash
 ros2 launch cpp_robotics_sim_ros robot_model_viz.launch.py
@@ -2128,7 +2584,7 @@ RobotModel
 Odometry
 ```
 
-### 24.13 Launch Gazebo Spawn Stack
+### 28.13 Launch Gazebo Spawn Stack
 
 ```bash
 ros2 launch cpp_robotics_sim_ros gazebo_spawn.launch.py
@@ -2142,7 +2598,7 @@ ground plane appears
 diffbot appears in the world
 ```
 
-### 24.14 Launch Gazebo Control and Sensor Stack
+### 28.14 Launch Gazebo Control and Sensor Stack
 
 ```bash
 ros2 launch cpp_robotics_sim_ros ros2_control.launch.py
@@ -2181,7 +2637,7 @@ Drive Gazebo robot:
 ros2 topic pub -r 10 /diff_drive_controller/cmd_vel geometry_msgs/msg/TwistStamped "{twist: {linear: {x: 0.25}, angular: {z: 0.0}}}"
 ```
 
-### 24.15 Run Noisy Odometry Node
+### 28.15 Run Noisy Odometry Node
 
 ```bash
 ros2 run cpp_robotics_sim_ros noisy_odom_node.py
@@ -2204,12 +2660,12 @@ Expected:
 covariance values are populated
 ```
 
-### 24.16 Run Trajectory Validation Recorder
+### 28.16 Run Trajectory Validation Recorder
 
 From repository root:
 
 ```bash
-cd "/mnt/c/Self study/PRACTICE C++/Cdev/01_joint_basics"
+cd "~/robotics_projects/cpp_robotics_sim_foundation"
 source /opt/ros/jazzy/setup.bash
 source ros2_ws/install/setup.bash
 ros2 run cpp_robotics_sim_ros trajectory_validation_recorder.py
@@ -2229,7 +2685,7 @@ head data/day84_trajectory_validation.csv
 wc -l data/day84_trajectory_validation.csv
 ```
 
-### 24.17 Generate Plot and Report
+### 28.17 Generate Plot and Report
 
 From repository root:
 
@@ -2249,10 +2705,10 @@ grep -n "max actual linear velocity" docs/trajectory_validation_report.md
 grep -n "max actual yaw rate" docs/trajectory_validation_report.md
 ```
 
-### 24.18 Run Launch Regression
+### 28.18 Run Launch Regression
 
 ```bash
-cd "/mnt/c/Self study/PRACTICE C++/Cdev/01_joint_basics"
+cd "~/robotics_projects/cpp_robotics_sim_foundation"
 ./scripts/day68_launch_regression.sh
 ```
 
@@ -2262,9 +2718,57 @@ Expected:
 ========== PASS: Day 68 launch regression succeeded ==========
 ```
 
+
+### 28.19 Run GoogleTest
+
+```bash
+cd ~/robotics_projects/cpp_robotics_sim_foundation/ros2_ws
+
+source /opt/ros/jazzy/setup.bash
+source install/setup.bash
+
+colcon test --packages-select cpp_robotics_sim_ros --event-handlers console_direct+
+
+colcon test-result --verbose
+```
+
+Expected:
+
+```txt
+Summary: 17 tests, 0 errors, 0 failures, 0 skipped
+```
+
+### 28.20 Check GitHub Actions CI
+
+```txt
+GitHub repository -> Actions -> ROS 2 Jazzy CI
+```
+
+Expected:
+
+```txt
+ROS 2 Jazzy CI: Passing
+```
+
+### 28.21 Run Performance Benchmark
+
+```bash
+cd ~/robotics_projects/cpp_robotics_sim_foundation
+
+ros2 run cpp_robotics_sim_ros day88_performance_benchmark --output data/day88_performance_results.csv --report docs/performance_report.md
+```
+
+Expected outputs:
+
+```txt
+data/day88_performance_results.csv
+docs/performance_report.md
+```
+
+
 ---
 
-## 25. Common Interface Failures
+## 29. Common Interface Failures
 
 | Failure | Likely Cause | First Check |
 |---|---|---|
@@ -2304,12 +2808,19 @@ Expected:
 | plot script cannot find CSV | wrong working directory or wrong `--csv` path | run from repo root or pass absolute path |
 | matplotlib import error | Python plotting dependency missing | `sudo apt install -y python3-matplotlib` |
 | `.sdf` world missing on GitHub | `.gitignore` ignored SDF files | `git check-ignore -v`, `git add -f` |
+| GoogleTest target missing | CMake test target not registered | check `ament_add_gtest(test_day86_core ...)` |
+| `colcon test-result` shows old lint failures | stale test results from earlier run | `colcon test-result --delete`, rerun tests |
+| GitHub Actions fails before build | dependency install or rosdep issue | inspect Actions log step that failed |
+| CI badge not updating | wrong workflow filename or badge URL | verify `.github/workflows/ros2_jazzy_ci.yml` |
+| performance benchmark not found | workspace not rebuilt or not sourced | rebuild and `source install/setup.bash` |
+| benchmark report missing | wrong working directory or output path | run benchmark from repo root |
+| CSV ignored by Git | `.gitignore` contains `*.csv` | expected for raw data, use `git add -f` only if intentional |
 
 ---
 
-## 26. Interface Ownership Summary
+## 30. Interface Ownership Summary
 
-### 26.1 `sim_node` Owns in the Kinematic Simulator Stack
+### 30.1 `sim_node` Owns in the Kinematic Simulator Stack
 
 ```txt
 /cmd_vel subscriber
@@ -2319,7 +2830,7 @@ Expected:
 /diagnostics publisher
 ```
 
-### 26.2 `robot_state_publisher` Owns
+### 30.2 `robot_state_publisher` Owns
 
 ```txt
 /robot_description
@@ -2327,20 +2838,20 @@ Expected:
 /tf_static for fixed robot link transforms
 ```
 
-### 26.3 `joint_state_publisher` Owns in the Visualization-Only Description Stack
+### 30.3 `joint_state_publisher` Owns in the Visualization-Only Description Stack
 
 ```txt
 /joint_states
 ```
 
-### 26.4 `joint_state_broadcaster` Owns in the Gazebo ros2_control Stack
+### 30.4 `joint_state_broadcaster` Owns in the Gazebo ros2_control Stack
 
 ```txt
 /joint_states
 /dynamic_joint_states
 ```
 
-### 26.5 `diff_drive_controller` Owns in the Gazebo Control Stack
+### 30.5 `diff_drive_controller` Owns in the Gazebo Control Stack
 
 ```txt
 /diff_drive_controller/cmd_vel subscriber
@@ -2350,7 +2861,7 @@ Expected:
 wheel velocity command interfaces through ros2_control
 ```
 
-### 26.6 `noisy_odom_node.py` Owns
+### 30.6 `noisy_odom_node.py` Owns
 
 ```txt
 /diff_drive_controller/odom subscriber
@@ -2358,7 +2869,7 @@ wheel velocity command interfaces through ros2_control
 pose and twist covariance assignment for noisy odometry
 ```
 
-### 26.7 `trajectory_validation_recorder.py` Owns
+### 30.7 `trajectory_validation_recorder.py` Owns
 
 ```txt
 /diff_drive_controller/cmd_vel subscriber
@@ -2367,7 +2878,7 @@ pose and twist covariance assignment for noisy odometry
 data/day84_trajectory_validation.csv writer
 ```
 
-### 26.8 `plot_trajectory_validation.py` Owns
+### 30.8 `plot_trajectory_validation.py` Owns
 
 ```txt
 data/day84_trajectory_validation.csv reader
@@ -2375,14 +2886,14 @@ plots/trajectory_validation.png writer
 docs/trajectory_validation_report.md writer
 ```
 
-### 26.9 `ros_gz_bridge` Owns
+### 30.9 `ros_gz_bridge` Owns
 
 ```txt
 /clock bridge from Gazebo to ROS
 /scan bridge from Gazebo to ROS
 ```
 
-### 26.10 Gazebo Spawn Workflow Uses
+### 30.10 Gazebo Spawn Workflow Uses
 
 ```txt
 /robot_description
@@ -2390,7 +2901,7 @@ ros_gz_sim create
 empty_diffbot_world.sdf
 ```
 
-### 26.11 Gazebo Sensor Workflow Uses
+### 30.11 Gazebo Sensor Workflow Uses
 
 ```txt
 lidar_link
@@ -2399,11 +2910,46 @@ Gazebo /scan
 ROS /scan
 ```
 
+### 30.12 GoogleTest Owns
+
+```txt
+test_day86_core executable
+test result XML under build/cpp_robotics_sim_ros/test_results/
+unit-test validation for clamp, wrapToPi, and integratePose
+```
+
+### 30.13 GitHub Actions Owns
+
+```txt
+remote build/test workflow
+CI pass/fail status
+colcon test log artifact
+README badge status
+```
+
+### 30.14 Day 88 Benchmark Owns
+
+```txt
+day88_performance_benchmark executable
+data/day88_performance_results.csv
+docs/performance_report.md
+```
+
+### 30.15 Day 89-90 Documentation Owns
+
+```txt
+validation checkpoint
+assessment summary
+current limitations
+next-phase readiness notes
+```
+
+
 ---
 
-## 27. Interview Explanation
+## 31. Interview Explanation
 
-The project exposes two main robot-motion interfaces and one validation interface.
+The project exposes two main robot-motion interfaces, one sensor interface, one validation interface, and one software-quality interface.
 
 The original kinematic simulator subscribes to `/cmd_vel` using `geometry_msgs/msg/Twist`, publishes a simple `/robot_pose` using `geometry_msgs/msg/Pose2D`, publishes standard `/odom` using `nav_msgs/msg/Odometry`, broadcasts `odom -> base_link` on TF, and publishes runtime health on `/diagnostics` using `diagnostic_msgs/msg/DiagnosticArray`.
 
@@ -2413,7 +2959,9 @@ The Gazebo control stack uses `/diff_drive_controller/cmd_vel` as the actuation 
 
 The sensor stack simulates a lidar on `lidar_link` in Gazebo. `ros_gz_bridge` converts the Gazebo scan into the ROS `/scan` topic as `sensor_msgs/msg/LaserScan`. It also bridges `/clock` so RViz and ROS nodes can use simulation time.
 
-Days 83-85 add a validation interface. `noisy_odom_node.py` subscribes to `/diff_drive_controller/odom`, adds controlled Gaussian noise and covariance, and publishes `/odom_noisy`. `trajectory_validation_recorder.py` records `/diff_drive_controller/cmd_vel`, `/diff_drive_controller/odom`, and `/odom_noisy` into a CSV. `plot_trajectory_validation.py` turns that CSV into a plot and Markdown validation report. This proves that the simulation behavior can be commanded, measured, corrupted with controlled uncertainty, recorded, plotted, and explained.
+The validation stack adds noisy odometry and data recording. `noisy_odom_node.py` subscribes to `/diff_drive_controller/odom`, adds controlled Gaussian noise and covariance, and publishes `/odom_noisy`. `trajectory_validation_recorder.py` records `/diff_drive_controller/cmd_vel`, `/diff_drive_controller/odom`, and `/odom_noisy` into a CSV. `plot_trajectory_validation.py` turns that CSV into a plot and Markdown validation report. This proves that the simulation behavior can be commanded, measured, corrupted with controlled uncertainty, recorded, plotted, and explained.
+
+The software-quality stack adds GoogleTest, GitHub Actions CI, and performance benchmarking. GoogleTest validates deterministic C++ math functions such as `clamp`, `wrapToPi`, and `integratePose`. GitHub Actions builds the ROS 2 Jazzy workspace and runs the GoogleTest suite automatically on push or pull request. The Day 88 benchmark measures deterministic pose-update timing and generates a performance report.
 
 Important distinction:
 
@@ -2421,13 +2969,16 @@ Important distinction:
 /diff_drive_controller/cmd_vel is an actuation command.
 /odom_noisy is feedback.
 /odom_noisy does not move Gazebo.
+GoogleTest validates C++ functions.
+CI validates build and tests.
+The performance benchmark validates deterministic update-loop timing.
 ```
 
 ---
 
-## 28. Day 85 Interface Summary
+## 32. Day 90 Interface Summary
 
-Through Day 85, the most important runtime interfaces are:
+Through Day 90, the most important runtime and validation interfaces are:
 
 ```txt
 Custom kinematic simulator:
@@ -2450,7 +3001,7 @@ Simulation time:
 Noisy odometry:
   /diff_drive_controller/odom -> noisy_odom_node.py -> /odom_noisy
 
-Validation:
+Trajectory validation:
   /diff_drive_controller/cmd_vel
   /diff_drive_controller/odom
   /odom_noisy
@@ -2459,6 +3010,28 @@ Validation:
       -> plot_trajectory_validation.py
       -> plots/trajectory_validation.png
       -> docs/trajectory_validation_report.md
+
+Unit testing:
+  day86_testable_core.hpp
+      -> test_day86_core.cpp
+      -> GoogleTest
+      -> colcon test
+
+Continuous integration:
+  .github/workflows/ros2_jazzy_ci.yml
+      -> GitHub Actions
+      -> colcon build
+      -> colcon test
+      -> CI badge and test logs
+
+Performance benchmarking:
+  day88_performance_benchmark
+      -> data/day88_performance_results.csv
+      -> docs/performance_report.md
+
+Assessment:
+  docs/day89_validation_checkpoint.md
+      -> Day 90 final assessment and interview simulation
 ```
 
-This interface structure makes the project ready for the next roadmap phase: Nav2 bringup, SLAM/localization, EKF configuration, automated tests, CI, and portfolio demo packaging.
+This interface structure makes the project ready for the next roadmap phase: Nav2 working integration, SLAM/localization, EKF configuration, launch-level CI regression, deeper simulator benchmarking, and eventual v1.0 portfolio/release packaging.

@@ -1,6 +1,6 @@
 # Debugging and Validation — C++ / ROS 2 Robotics Simulation Foundation
 
-This document defines the debugging workflow, validation commands, regression checks, and common failure modes for the `cpp_robotics_sim_foundation` project through **Day 85**.
+This document defines the debugging workflow, validation commands, regression checks, and common failure modes for the `cpp_robotics_sim_foundation` project through **Day 90**.
 
 The project now includes:
 
@@ -21,6 +21,11 @@ noisy odometry node
 trajectory validation recorder
 trajectory validation plotting and report generation
 Day 68 launch regression
+GoogleTest unit tests
+GitHub Actions CI
+deterministic C++ performance benchmark
+Day 89 validation checkpoint
+Day 90 final assessment workflow
 ```
 
 The goal of this document is to avoid random debugging. Every failure should be classified, isolated, tested, and documented.
@@ -86,6 +91,10 @@ plot/report generation failure
 CRLF/shebang failure
 matplotlib/Python dependency failure
 performance/timing issue
+GoogleTest failure
+GitHub Actions CI failure
+benchmark execution failure
+WSL workspace/path issue
 Git/repository hygiene issue
 ```
 
@@ -96,12 +105,12 @@ Git/repository hygiene issue
 Use this after source, launch, config, robot description, world, controller, Python script, or documentation changes.
 
 ```bash
-cd "/mnt/c/Self study/PRACTICE C++/Cdev/01_joint_basics/ros2_ws"
+cd ~/robotics_projects/cpp_robotics_sim_foundation/ros2_ws
 
 rm -rf build install log
 
 source /opt/ros/jazzy/setup.bash
-colcon build --cmake-args -DBUILD_TESTING=OFF
+colcon build --cmake-args -DBUILD_TESTING=ON
 source install/setup.bash
 ```
 
@@ -128,6 +137,7 @@ For Days 83-85, expected Python scripts:
 cpp_robotics_sim_ros noisy_odom_node.py
 cpp_robotics_sim_ros trajectory_validation_recorder.py
 cpp_robotics_sim_ros plot_trajectory_validation.py
+cpp_robotics_sim_ros day88_performance_benchmark
 ```
 
 Common build failures:
@@ -201,7 +211,7 @@ There should be no `^M`.
 If a script shows `^M` or fails with `python3\r`, run:
 
 ```bash
-cd "/mnt/c/Self study/PRACTICE C++/Cdev/01_joint_basics/ros2_ws"
+cd ~/robotics_projects/cpp_robotics_sim_foundation/ros2_ws
 
 sed -i 's/\r$//' src/cpp_robotics_sim_ros/scripts/noisy_odom_node.py
 sed -i 's/\r$//' src/cpp_robotics_sim_ros/scripts/trajectory_validation_recorder.py
@@ -322,7 +332,7 @@ Expected:
 ### 4.4 Run Regression Script
 
 ```bash
-cd "/mnt/c/Self study/PRACTICE C++/Cdev/01_joint_basics"
+cd ~/robotics_projects/cpp_robotics_sim_foundation
 ./scripts/day68_launch_regression.sh
 ```
 
@@ -828,7 +838,7 @@ scripts/day68_launch_regression.sh
 Run:
 
 ```bash
-cd "/mnt/c/Self study/PRACTICE C++/Cdev/01_joint_basics"
+cd ~/robotics_projects/cpp_robotics_sim_foundation
 ./scripts/day68_launch_regression.sh
 ```
 
@@ -888,7 +898,7 @@ ros2_ws/src/cpp_robotics_sim_ros/urdf/diffbot.urdf
 XML parse check:
 
 ```bash
-cd "/mnt/c/Self study/PRACTICE C++/Cdev/01_joint_basics"
+cd ~/robotics_projects/cpp_robotics_sim_foundation
 
 python3 - <<'PY'
 import xml.etree.ElementTree as ET
@@ -926,7 +936,7 @@ caster_joint
 Generate URDF from Xacro:
 
 ```bash
-cd "/mnt/c/Self study/PRACTICE C++/Cdev/01_joint_basics"
+cd ~/robotics_projects/cpp_robotics_sim_foundation
 source /opt/ros/jazzy/setup.bash
 
 xacro "ros2_ws/src/cpp_robotics_sim_ros/xacro/diffbot.xacro" > /tmp/diffbot_from_xacro.urdf
@@ -1342,7 +1352,7 @@ nav_msgs/msg/Odometry
 ### 23.1 Build and Script Checks
 
 ```bash
-cd "/mnt/c/Self study/PRACTICE C++/Cdev/01_joint_basics/ros2_ws"
+cd ~/robotics_projects/cpp_robotics_sim_foundation/ros2_ws
 
 python3 -m py_compile src/cpp_robotics_sim_ros/scripts/noisy_odom_node.py
 head -n 3 src/cpp_robotics_sim_ros/scripts/noisy_odom_node.py | cat -A
@@ -1440,7 +1450,7 @@ data/day84_trajectory_validation.csv
 ### 24.1 Script Checks
 
 ```bash
-cd "/mnt/c/Self study/PRACTICE C++/Cdev/01_joint_basics/ros2_ws"
+cd ~/robotics_projects/cpp_robotics_sim_foundation/ros2_ws
 
 python3 -m py_compile src/cpp_robotics_sim_ros/scripts/trajectory_validation_recorder.py
 head -n 3 src/cpp_robotics_sim_ros/scripts/trajectory_validation_recorder.py | cat -A
@@ -1472,7 +1482,7 @@ ros2 run cpp_robotics_sim_ros noisy_odom_node.py
 Terminal 3, from repository root:
 
 ```bash
-cd "/mnt/c/Self study/PRACTICE C++/Cdev/01_joint_basics"
+cd ~/robotics_projects/cpp_robotics_sim_foundation
 source /opt/ros/jazzy/setup.bash
 source ros2_ws/install/setup.bash
 
@@ -1486,7 +1496,7 @@ Day 84 trajectory validation recorder started
 Command topic:     /diff_drive_controller/cmd_vel
 Actual odom topic: /diff_drive_controller/odom
 Noisy odom topic:  /odom_noisy
-Writing CSV:       /mnt/c/Self study/PRACTICE C++/Cdev/01_joint_basics/data/day84_trajectory_validation.csv
+Writing CSV:       ~/robotics_projects/cpp_robotics_sim_foundation/data/day84_trajectory_validation.csv
 Sample rate:       20.0 Hz
 ```
 
@@ -1501,7 +1511,7 @@ Let it run for 10-15 seconds, then stop the command publisher, recorder, and noi
 ### 24.3 CSV Verification
 
 ```bash
-cd "/mnt/c/Self study/PRACTICE C++/Cdev/01_joint_basics"
+cd ~/robotics_projects/cpp_robotics_sim_foundation
 
 ls data/day84_trajectory_validation.csv
 head data/day84_trajectory_validation.csv
@@ -1578,7 +1588,7 @@ docs/trajectory_validation_report.md
 ### 25.1 Script Checks
 
 ```bash
-cd "/mnt/c/Self study/PRACTICE C++/Cdev/01_joint_basics/ros2_ws"
+cd ~/robotics_projects/cpp_robotics_sim_foundation/ros2_ws
 
 python3 -m py_compile src/cpp_robotics_sim_ros/scripts/plot_trajectory_validation.py
 head -n 3 src/cpp_robotics_sim_ros/scripts/plot_trajectory_validation.py | cat -A
@@ -1611,7 +1621,7 @@ sudo apt install -y python3-matplotlib
 Run from repository root:
 
 ```bash
-cd "/mnt/c/Self study/PRACTICE C++/Cdev/01_joint_basics"
+cd ~/robotics_projects/cpp_robotics_sim_foundation
 
 python3 ros2_ws/src/cpp_robotics_sim_ros/scripts/plot_trajectory_validation.py --csv data/day84_trajectory_validation.csv --plot plots/trajectory_validation.png --report docs/trajectory_validation_report.md
 ```
@@ -1619,9 +1629,9 @@ python3 ros2_ws/src/cpp_robotics_sim_ros/scripts/plot_trajectory_validation.py -
 Expected:
 
 ```txt
-Input CSV:        /mnt/c/Self study/PRACTICE C++/Cdev/01_joint_basics/data/day84_trajectory_validation.csv
-Generated plot:   /mnt/c/Self study/PRACTICE C++/Cdev/01_joint_basics/plots/trajectory_validation.png
-Generated report: /mnt/c/Self study/PRACTICE C++/Cdev/01_joint_basics/docs/trajectory_validation_report.md
+Input CSV:        ~/robotics_projects/cpp_robotics_sim_foundation/data/day84_trajectory_validation.csv
+Generated plot:   ~/robotics_projects/cpp_robotics_sim_foundation/plots/trajectory_validation.png
+Generated report: ~/robotics_projects/cpp_robotics_sim_foundation/docs/trajectory_validation_report.md
 Samples:          <number of CSV data rows>
 ```
 
@@ -1706,18 +1716,18 @@ actual yaw rate tracks commanded yaw rate
 
 ---
 
-## 26. Days 81-85 Validation Flow
+## 26. Days 81-90 Validation Flow
 
-Use this full validation flow after Days 81-85 changes.
+Use this full validation flow after Days 81-90 changes.
 
 ### 26.1 Clean Build
 
 ```bash
-cd "/mnt/c/Self study/PRACTICE C++/Cdev/01_joint_basics/ros2_ws"
+cd ~/robotics_projects/cpp_robotics_sim_foundation/ros2_ws
 
 rm -rf build install log
 source /opt/ros/jazzy/setup.bash
-colcon build --cmake-args -DBUILD_TESTING=OFF
+colcon build --cmake-args -DBUILD_TESTING=ON
 source install/setup.bash
 ```
 
@@ -1752,7 +1762,7 @@ ros2 run cpp_robotics_sim_ros noisy_odom_node.py
 Terminal 3:
 
 ```bash
-cd "/mnt/c/Self study/PRACTICE C++/Cdev/01_joint_basics"
+cd ~/robotics_projects/cpp_robotics_sim_foundation
 source /opt/ros/jazzy/setup.bash
 source ros2_ws/install/setup.bash
 ros2 run cpp_robotics_sim_ros trajectory_validation_recorder.py
@@ -1767,7 +1777,7 @@ ros2 topic pub -r 10 /diff_drive_controller/cmd_vel geometry_msgs/msg/TwistStamp
 ### 26.4 Generate Plot and Report
 
 ```bash
-cd "/mnt/c/Self study/PRACTICE C++/Cdev/01_joint_basics"
+cd ~/robotics_projects/cpp_robotics_sim_foundation
 
 python3 ros2_ws/src/cpp_robotics_sim_ros/scripts/plot_trajectory_validation.py --csv data/day84_trajectory_validation.csv --plot plots/trajectory_validation.png --report docs/trajectory_validation_report.md
 ```
@@ -1791,7 +1801,7 @@ grep -n "max actual yaw rate" docs/trajectory_validation_report.md
 ### 26.6 Run Regression
 
 ```bash
-cd "/mnt/c/Self study/PRACTICE C++/Cdev/01_joint_basics"
+cd ~/robotics_projects/cpp_robotics_sim_foundation
 ./scripts/day68_launch_regression.sh
 ```
 
@@ -1803,13 +1813,508 @@ Expected:
 
 ---
 
-## 27. Regression Test Checklist
+
+---
+
+## 27. GoogleTest Validation — Day 86
+
+Day 86 adds automated C++ unit testing through GoogleTest.
+
+Primary files:
+
+```txt
+ros2_ws/src/cpp_robotics_sim_ros/include/cpp_robotics_sim_ros/day86_testable_core.hpp
+ros2_ws/src/cpp_robotics_sim_ros/test/test_day86_core.cpp
+docs/day86_gtest_report.md
+```
+
+The tests validate deterministic C++ logic:
+
+```txt
+clamp()
+wrapToPi()
+integratePose()
+```
+
+These tests do not launch ROS nodes, Gazebo, RViz, controllers, or sensors. They are pure C++ unit tests.
+
+### 27.1 Build With Testing Enabled
+
+```bash
+cd ~/robotics_projects/cpp_robotics_sim_foundation/ros2_ws
+
+rm -rf build install log
+
+source /opt/ros/jazzy/setup.bash
+
+colcon build --cmake-args -DBUILD_TESTING=ON
+```
+
+Expected:
+
+```txt
+Summary: 1 package finished
+```
+
+### 27.2 Run GoogleTest
+
+```bash
+colcon test --packages-select cpp_robotics_sim_ros --event-handlers console_direct+
+
+colcon test-result --verbose
+```
+
+Expected:
+
+```txt
+Summary: 17 tests, 0 errors, 0 failures, 0 skipped
+```
+
+### 27.3 What GoogleTest Proves
+
+GoogleTest validates small deterministic C++ functions.
+
+It answers:
+
+```txt
+Is this function correct?
+```
+
+It does not answer:
+
+```txt
+Does Gazebo launch?
+Does the controller activate?
+Does the robot move in simulation?
+Does /scan publish?
+Does Nav2 work?
+```
+
+Those require launch tests, regression tests, and simulation scenario tests.
+
+### 27.4 Common GoogleTest Failures
+
+| Failure | Likely Cause | First Check |
+|---|---|---|
+| `ament_cmake_gtest` missing | test dependency not installed or not declared | check `package.xml` and apt install |
+| test target not found | CMake test block missing | check `ament_add_gtest(...)` |
+| header not found | include path missing | check `target_include_directories(...)` |
+| expected value mismatch | math logic changed or expected value wrong | inspect failed assertion |
+| `0 tests` run | `BUILD_TESTING` off or test not registered | build with `-DBUILD_TESTING=ON` |
+| many flake8/uncrustify failures | lint auto enabled | skip lint tools for now; code-quality phase comes later |
+
+---
+
+## 28. GitHub Actions CI Validation — Day 87
+
+Day 87 adds GitHub Actions CI.
+
+Primary file:
+
+```txt
+.github/workflows/ros2_jazzy_ci.yml
+```
+
+Report:
+
+```txt
+docs/day87_ci_report.md
+```
+
+### 28.1 What CI Currently Validates
+
+The current CI validates:
+
+```txt
+repository checkout
+ROS 2 Jazzy dependency installation
+rosdep dependency installation
+colcon workspace build
+GoogleTest execution
+test log artifact upload
+```
+
+Expected GitHub status:
+
+```txt
+ROS 2 Jazzy CI: Passing
+```
+
+### 28.2 What CI Does Not Yet Validate
+
+The current CI does not yet run:
+
+```txt
+Gazebo runtime launch
+controller activation checks
+/clock runtime behavior
+/scan runtime behavior
+/tf runtime behavior
+Nav2 behavior
+SLAM/localization tests
+full simulation scenario scoring
+```
+
+Those belong to later validation automation and release engineering phases.
+
+### 28.3 Local Mirror of CI
+
+Before pushing meaningful code changes:
+
+```bash
+cd ~/robotics_projects/cpp_robotics_sim_foundation/ros2_ws
+
+rm -rf build install log
+
+source /opt/ros/jazzy/setup.bash
+
+colcon build --cmake-args -DBUILD_TESTING=ON
+
+colcon test --packages-select cpp_robotics_sim_ros --event-handlers console_direct+
+
+colcon test-result --verbose
+```
+
+Expected:
+
+```txt
+Summary: 17 tests, 0 errors, 0 failures, 0 skipped
+```
+
+### 28.4 Common CI Failures
+
+| Failure | Likely Cause | First Check |
+|---|---|---|
+| apt package missing | workflow dependency list incomplete | inspect failed install step |
+| rosdep cannot resolve dependency | `package.xml` dependency wrong or unavailable | check dependency name and Jazzy package |
+| build passes locally but fails in CI | local environment has undeclared dependency | add missing dependency to `package.xml` and workflow |
+| test fails in CI only | environment/timing/path assumption | inspect uploaded colcon logs |
+| badge not updating | wrong workflow filename or branch | verify badge URL and workflow name |
+
+---
+
+## 29. Performance Benchmark Validation — Day 88
+
+Day 88 adds a deterministic C++ performance benchmark.
+
+Primary file:
+
+```txt
+ros2_ws/src/cpp_robotics_sim_ros/src/day88_performance_benchmark.cpp
+```
+
+Generated outputs:
+
+```txt
+data/day88_performance_results.csv
+docs/performance_report.md
+```
+
+### 29.1 Benchmark Command
+
+Run from repository root after building and sourcing the workspace:
+
+```bash
+cd ~/robotics_projects/cpp_robotics_sim_foundation
+
+ros2 run cpp_robotics_sim_ros day88_performance_benchmark --output data/day88_performance_results.csv --report docs/performance_report.md
+```
+
+Expected output format:
+
+```txt
+Day 88 Performance Benchmark Results
+------------------------------------
+        dt       steps           mean ms       avg step us       max step us         RTF
+  0.100000         100          ...
+  0.010000        1000          ...
+  0.001000       10000          ...
+
+Generated CSV:    data/day88_performance_results.csv
+Generated report: docs/performance_report.md
+```
+
+Observed baseline result:
+
+```txt
+dt=0.1    steps=100     mean wall time ≈ 1.83 ms     RTF ≈ 5684.98
+dt=0.01   steps=1000    mean wall time ≈ 17.40 ms    RTF ≈ 574.99
+dt=0.001  steps=10000   mean wall time ≈ 174.74 ms   RTF ≈ 57.23
+```
+
+### 29.2 Verify Benchmark Outputs
+
+```bash
+ls -lh data/day88_performance_results.csv docs/performance_report.md
+
+cat data/day88_performance_results.csv
+
+sed -n '1,120p' docs/performance_report.md
+```
+
+Pass criteria:
+
+```txt
+CSV exists
+Markdown report exists
+all dt cases are present
+real-time factor values are greater than 1.0 for the deterministic update layer
+```
+
+### 29.3 Benchmark Scope
+
+This benchmark includes:
+
+```txt
+deterministic C++ pose integration
+multiple virtual robot states
+multiple dt values
+multiple trials
+wall-clock timing
+estimated real-time factor
+```
+
+It does not include:
+
+```txt
+Gazebo physics
+rendering
+ROS 2 middleware
+controller_manager overhead
+TF broadcasting
+sensor simulation
+rosbag logging
+RViz visualization
+Nav2 behavior
+```
+
+### 29.4 Common Benchmark Failures
+
+| Failure | Likely Cause | First Check |
+|---|---|---|
+| executable not found | CMake install target missing or workspace not sourced | `ros2 pkg executables cpp_robotics_sim_ros` |
+| CSV not generated | output folder missing or permission issue | `mkdir -p data docs` |
+| report not generated | report path invalid | check command arguments |
+| benchmark fails before running | invalid argument or missing source setup | run `--help` and re-source workspace |
+| results change slightly between runs | normal CPU scheduling variation | compare order of magnitude, not exact microseconds |
+
+---
+
+## 30. Day 89 Validation Checkpoint
+
+Day 89 is a documentation and validation checkpoint after adding GoogleTest, CI, and performance benchmarking.
+
+Primary file:
+
+```txt
+docs/day89_validation_checkpoint.md
+```
+
+### 30.1 Checkpoint Scope
+
+Day 89 validates:
+
+```txt
+clean WSL Linux workspace
+ROS 2 workspace build
+GoogleTest execution
+GitHub Actions CI status
+performance benchmark execution
+generated performance report
+existing trajectory validation report
+existing architecture documentation
+```
+
+### 30.2 WSL Workspace Validation
+
+The active project path is:
+
+```txt
+/home/devansh/robotics_projects/cpp_robotics_sim_foundation
+```
+
+Short path:
+
+```txt
+~/robotics_projects/cpp_robotics_sim_foundation
+```
+
+Check:
+
+```bash
+cd ~/robotics_projects/cpp_robotics_sim_foundation
+
+pwd
+
+git status --short
+
+git remote -v
+```
+
+Expected:
+
+```txt
+/home/devansh/robotics_projects/cpp_robotics_sim_foundation
+```
+
+### 30.3 Full Day 89 Validation Sequence
+
+```bash
+cd ~/robotics_projects/cpp_robotics_sim_foundation/ros2_ws
+
+rm -rf build install log
+
+source /opt/ros/jazzy/setup.bash
+
+colcon build --cmake-args -DBUILD_TESTING=ON
+
+source install/setup.bash
+
+colcon test --packages-select cpp_robotics_sim_ros --event-handlers console_direct+
+
+colcon test-result --verbose
+```
+
+Then:
+
+```bash
+cd ~/robotics_projects/cpp_robotics_sim_foundation
+
+ros2 run cpp_robotics_sim_ros day88_performance_benchmark --output data/day88_performance_results.csv --report docs/performance_report.md
+
+ls -lh docs/day86_gtest_report.md docs/day87_ci_report.md docs/performance_report.md docs/trajectory_validation_report.md
+```
+
+Pass criteria:
+
+```txt
+build passes
+GoogleTest passes
+CI badge is passing on GitHub
+benchmark runs
+performance report exists
+trajectory validation report exists
+```
+
+---
+
+## 31. Day 90 Final Assessment and Interview Simulation
+
+Day 90 is a final assessment checkpoint for the current phase.
+
+Primary file:
+
+```txt
+docs/day90_final_assessment.md
+```
+
+### 31.1 Assessment Scope
+
+Day 90 validates whether the project can be explained as a complete robotics simulation engineering system through the current milestone.
+
+The assessment covers:
+
+```txt
+C++ simulation foundation
+ROS 2 node architecture
+launch/YAML/parameter workflow
+topics and QoS
+odometry and TF
+RViz visualization
+URDF/Xacro robot modeling
+robot_state_publisher and joint state workflows
+Gazebo spawn
+ros2_control
+diff_drive_controller
+simulated lidar and /scan bridge
+/clock and simulation time
+noisy odometry
+trajectory validation
+GoogleTest
+GitHub Actions CI
+performance benchmarking
+debugging and validation workflow
+```
+
+### 31.2 Final Build/Test Gate
+
+```bash
+cd ~/robotics_projects/cpp_robotics_sim_foundation/ros2_ws
+
+rm -rf build install log
+
+source /opt/ros/jazzy/setup.bash
+
+colcon build --cmake-args -DBUILD_TESTING=ON
+
+source install/setup.bash
+
+colcon test --packages-select cpp_robotics_sim_ros --event-handlers console_direct+
+
+colcon test-result --verbose
+```
+
+Expected:
+
+```txt
+Summary: 17 tests, 0 errors, 0 failures, 0 skipped
+```
+
+### 31.3 Interview Drill Questions
+
+The system should be explainable through these questions:
+
+```txt
+What problem does this project solve?
+How does the custom C++ simulator differ from the Gazebo stack?
+What does /cmd_vel do in the custom simulator?
+What topic moves the Gazebo robot?
+What does ros2_control do?
+What does diff_drive_controller do?
+Who publishes odom -> base_link?
+What does robot_state_publisher do?
+What is the difference between joint_state_publisher and joint_state_broadcaster?
+How does /scan get from Gazebo into ROS?
+Why is /clock important?
+What is /odom_noisy?
+Why did you add covariance?
+What does the trajectory validation recorder measure?
+What does the validation plot prove?
+What does GoogleTest test?
+What does GitHub Actions CI currently validate?
+What does the performance benchmark measure?
+What is not yet automated?
+What would you improve in the next phase?
+```
+
+### 31.4 Day 90 Pass Criteria
+
+Day 90 is complete when:
+
+```txt
+the workspace builds cleanly
+GoogleTest passes
+GitHub Actions CI is passing
+performance benchmark runs
+core documentation is updated
+the system can be explained without reading code line by line
+known limitations are clearly stated
+next phase scope is clear
+```
+
+### 31.5 Day 90 Interview Explanation
+
+```txt
+This project started as a standalone C++ robotics simulation foundation and grew into a ROS 2 / Gazebo mobile robot simulation stack. It includes a custom kinematic simulator, ROS 2 topics, odometry, TF, diagnostics, URDF/Xacro robot modeling, RViz visualization, Gazebo simulation, ros2_control, diff_drive_controller, simulated lidar, noisy odometry, trajectory validation, GoogleTest unit tests, GitHub Actions CI, and deterministic performance benchmarking. The current validation layer proves that the project builds, core math tests pass, CI runs successfully, and benchmark/report outputs are generated. The next phase will focus on working Nav2 integration, navigation behavior, and deeper autonomy validation.
+```
+
+## 32. Regression Test Checklist
 
 Run this checklist after meaningful simulator changes.
 
 | Test | Command / Method | Expected Result |
 |---|---|---|
-| Build | `colcon build --cmake-args -DBUILD_TESTING=OFF` | Build passes |
+| Build | `colcon build --cmake-args -DBUILD_TESTING=ON` | Build passes |
 | Python syntax | `python3 -m py_compile <script>` | No output |
 | Script install | `ros2 pkg executables cpp_robotics_sim_ros` | scripts listed |
 | Launch | `ros2 launch cpp_robotics_sim_ros sim.launch.py` | Node starts |
@@ -1845,7 +2350,7 @@ Run this checklist after meaningful simulator changes.
 
 ---
 
-## 28. Common Failure Modes
+## 33. Common Failure Modes
 
 | Failure | Likely Cause | First Check |
 |---|---|---|
@@ -1880,12 +2385,12 @@ Run this checklist after meaningful simulator changes.
 
 ---
 
-## 29. Standalone C++ Validation
+## 34. Standalone C++ Validation
 
 Build standalone simulator on Linux / WSL:
 
 ```bash
-cd "/mnt/c/Self study/PRACTICE C++/Cdev/01_joint_basics/standalone_cpp"
+cd "~/robotics_projects/cpp_robotics_sim_foundation/standalone_cpp"
 rm -rf build
 mkdir build
 cd build
@@ -1920,12 +2425,12 @@ Delete build/ before switching environments.
 
 ---
 
-## 30. Git Validation
+## 35. Git Validation
 
 Before every commit:
 
 ```bash
-cd "/mnt/c/Self study/PRACTICE C++/Cdev/01_joint_basics"
+cd ~/robotics_projects/cpp_robotics_sim_foundation
 git status --short
 git diff
 ```
@@ -1956,7 +2461,7 @@ Day 84 raw CSV is optional and should usually not be committed unless intentiona
 git restore --staged data/day84_trajectory_validation.csv 2>/dev/null || true
 ```
 
-Recommended Days 81-85 staged files:
+Recommended Days 86-90 staged files:
 
 ```bash
 git add README.md
@@ -1964,29 +2469,31 @@ git add docs/daily_documentation.md
 git add docs/debugging_and_validation.md
 git add docs/system_architecture.md
 git add docs/topic_interface_reference.md
-git add docs/nav2_architecture.md
-git add docs/state_estimation_notes.md
-git add docs/trajectory_validation_report.md
-git add ros2_ws/src/cpp_robotics_sim_ros/scripts/noisy_odom_node.py
-git add ros2_ws/src/cpp_robotics_sim_ros/scripts/trajectory_validation_recorder.py
-git add ros2_ws/src/cpp_robotics_sim_ros/scripts/plot_trajectory_validation.py
+git add docs/day86_gtest_report.md
+git add docs/day87_ci_report.md
+git add docs/performance_report.md
+git add docs/day89_validation_checkpoint.md
+git add docs/day90_final_assessment.md
+git add .github/workflows/ros2_jazzy_ci.yml
 git add ros2_ws/src/cpp_robotics_sim_ros/CMakeLists.txt
 git add ros2_ws/src/cpp_robotics_sim_ros/package.xml
-git add data/.gitkeep
-git add plots/.gitkeep
-git add plots/trajectory_validation.png
+git add ros2_ws/src/cpp_robotics_sim_ros/include/cpp_robotics_sim_ros/day86_testable_core.hpp
+git add ros2_ws/src/cpp_robotics_sim_ros/test/test_day86_core.cpp
+git add ros2_ws/src/cpp_robotics_sim_ros/src/day88_performance_benchmark.cpp
 ```
 
 Final pre-commit validation:
 
 ```bash
-cd "/mnt/c/Self study/PRACTICE C++/Cdev/01_joint_basics/ros2_ws"
+cd ~/robotics_projects/cpp_robotics_sim_foundation/ros2_ws
 rm -rf build install log
 source /opt/ros/jazzy/setup.bash
-colcon build --cmake-args -DBUILD_TESTING=OFF
+colcon build --cmake-args -DBUILD_TESTING=ON
 source install/setup.bash
+colcon test --packages-select cpp_robotics_sim_ros --event-handlers console_direct+
+colcon test-result --verbose
 
-cd "/mnt/c/Self study/PRACTICE C++/Cdev/01_joint_basics"
+cd ~/robotics_projects/cpp_robotics_sim_foundation
 ./scripts/day68_launch_regression.sh
 ```
 
@@ -1999,39 +2506,38 @@ Expected:
 Commit:
 
 ```bash
-git commit -m "Days 81-85 add autonomy validation readiness"
+git commit -m "Days 86-90 add testing CI performance and assessment"
 git push
 git status
 ```
 
 ---
 
-## 31. Day 85 Completion Checklist
+## 36. Day 90 Completion Checklist
 
-Days 81-85 are complete when all of this is true:
+Days 86-90 are complete when all of this is true:
 
 ```txt
-docs/nav2_architecture.md exists
-docs/state_estimation_notes.md exists
-noisy_odom_node.py exists and runs
-/odom_noisy publishes nav_msgs/msg/Odometry with covariance
-trajectory_validation_recorder.py exists and runs
-data/day84_trajectory_validation.csv is generated locally
-plot_trajectory_validation.py exists and runs
-plots/trajectory_validation.png exists and is not empty
-docs/trajectory_validation_report.md exists and contains metrics
-README.md is updated
+docs/day86_gtest_report.md exists
+docs/day87_ci_report.md exists
+docs/performance_report.md exists
+docs/day89_validation_checkpoint.md exists
+docs/day90_final_assessment.md exists
+GoogleTest suite passes locally
+GitHub Actions CI is passing
+day88_performance_benchmark runs
 docs/daily_documentation.md is updated
 docs/system_architecture.md is updated
 docs/topic_interface_reference.md is updated
 docs/debugging_and_validation.md is updated
-clean build passes
-Day 68 launch regression passes
+README.md is updated
+clean build passes with BUILD_TESTING=ON
+Day 68 launch regression is run locally when launch behavior changes
 Git status is reviewed before commit
 ```
 
 Final engineering statement:
 
 ```txt
-The project now demonstrates not only Gazebo robot motion, but also controlled uncertainty injection, command-vs-actual-vs-noisy data recording, quantitative metrics, plotting, and validation reporting.
+The project now demonstrates not only Gazebo robot motion, but also controlled uncertainty injection, command-vs-actual-vs-noisy data recording, quantitative metrics, plotting, validation reporting, automated unit testing, GitHub Actions CI, and deterministic performance benchmarking.
 ```
