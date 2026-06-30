@@ -56,6 +56,31 @@ install(PROGRAMS
   DESTINATION lib/${PROJECT_NAME}
 )
 
+# ---------------------------------------------------------------------------
+# Day 86 - GoogleTest Unit Tests
+# ---------------------------------------------------------------------------
+# These tests validate the deterministic C++ math/kinematics layer:
+#   - clamp()
+#   - wrapToPi()
+#   - integratePose()
+#
+# They do not launch ROS nodes or Gazebo.
+# They are fast unit tests and will be reused in CI later.
+if(BUILD_TESTING)
+  find_package(ament_cmake_gtest REQUIRED)
+
+  ament_add_gtest(test_day86_core
+    test/test_day86_core.cpp
+  )
+
+  if(TARGET test_day86_core)
+    target_include_directories(test_day86_core PUBLIC
+      $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+      $<INSTALL_INTERFACE:include>
+    )
+  endif()
+endif()
+
 ament_package()
 
 
