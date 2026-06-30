@@ -1,5 +1,7 @@
 # C++ / ROS 2 Robotics Simulation Foundation
 
+![ROS 2 Jazzy CI](https://github.com/Devansh-Mishra-30/cpp_robotics_sim_foundation/actions/workflows/ros2_jazzy_ci.yml/badge.svg)
+
 This repository contains a C++ and ROS 2 robotics simulation project focused on mobile robot state updates, differential-drive kinematics, ROS 2 messaging, odometry, TF frames, runtime configuration, launch workflows, QoS profiles, rosbag2, diagnostics, RViz visualization, URDF/Xacro robot modeling, Gazebo simulation, `ros2_control`, differential-drive control, simulated lidar, validation, uncertainty modeling, trajectory analysis, and engineering documentation.
 
 The project started as a standalone C++ robotics simulation foundation and has been extended into a ROS 2 + Gazebo robot simulation stack with robot description, physics-based motion, controller integration, sensor output, noisy odometry generation, trajectory validation, plotting, and portfolio-ready reporting.
