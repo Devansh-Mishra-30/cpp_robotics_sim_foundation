@@ -46,6 +46,7 @@ rviz
 urdf
 xacro
 worlds
+nav2
 DESTINATION share/${PROJECT_NAME})
 
 # ---------------------------------------------------------------------------
@@ -79,6 +80,9 @@ install(PROGRAMS
   scripts/noisy_odom_node.py
   scripts/trajectory_validation_recorder.py
   scripts/plot_trajectory_validation.py
+  scripts/cmd_vel_twist_bridge.py
+  scripts/nav2_lifecycle_check.sh
+  scripts/nav2_costmap_check.sh
   DESTINATION lib/${PROJECT_NAME}
 )
 
