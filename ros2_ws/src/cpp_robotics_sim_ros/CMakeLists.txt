@@ -83,6 +83,7 @@ install(PROGRAMS
   scripts/cmd_vel_twist_bridge.py
   scripts/nav2_lifecycle_check.sh
   scripts/nav2_costmap_check.sh
+  scripts/nav2_planner_controller_check.sh
   DESTINATION lib/${PROJECT_NAME}
 )
 
