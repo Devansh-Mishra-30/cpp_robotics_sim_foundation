@@ -85,6 +85,8 @@ install(PROGRAMS
   scripts/nav2_lifecycle_check.sh
   scripts/nav2_costmap_check.sh
   scripts/nav2_planner_controller_check.sh
+  scripts/day104_localization_comparison.py
+  scripts/plot_day104_localization_comparison.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
