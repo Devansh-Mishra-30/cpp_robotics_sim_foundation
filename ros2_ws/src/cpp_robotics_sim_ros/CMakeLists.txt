@@ -47,6 +47,7 @@ urdf
 xacro
 worlds
 nav2
+maps
 DESTINATION share/${PROJECT_NAME})
 
 # ---------------------------------------------------------------------------
