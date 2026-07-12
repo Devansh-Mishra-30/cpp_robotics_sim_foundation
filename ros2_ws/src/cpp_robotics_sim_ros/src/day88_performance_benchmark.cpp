@@ -9,51 +9,6 @@
 
 #include "cpp_robotics_sim_ros/day86_testable_core.hpp"
 
-/*
-  Day 88 - Performance Benchmark
-
-  Purpose:
-  --------
-  This executable benchmarks the deterministic pose-update layer of the
-  robotics simulator.
-
-  It compares three simulation timesteps:
-    - dt = 0.1
-    - dt = 0.01
-    - dt = 0.001
-
-  For each dt, it measures:
-    - number of simulation steps
-    - total wall-clock runtime
-    - average update-step time
-    - maximum update-step time
-    - approximate real-time factor
-
-  Why this matters:
-  -----------------
-  A robotics simulation engineer needs to know not only whether the simulator
-  works, but also how expensive it is to run.
-
-  Smaller dt means:
-    - more simulation steps
-    - more computation
-    - potentially better numerical resolution
-    - higher CPU cost
-
-  This benchmark gives a first timing baseline before deeper Gazebo/Nav2
-  simulation benchmarking later.
-
-  Important:
-  ----------
-  This is a deterministic C++ benchmark.
-  It does not launch ROS nodes.
-  It does not launch Gazebo.
-  It does not require RViz.
-  It does not publish topics.
-
-  That makes it fast, repeatable, and suitable for CI-style timing checks later.
-*/
-
 namespace
 {
 
