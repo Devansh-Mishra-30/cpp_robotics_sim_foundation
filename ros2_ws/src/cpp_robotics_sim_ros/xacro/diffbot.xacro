@@ -397,6 +397,41 @@
 		</inertial>
 	</link>
 
+    <!-- ========================= -->
+  <!-- Day 105 IMU Link          -->
+  <!-- ========================= -->
+
+  <link name="imu_link">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.04 0.03 0.015"/>
+      </geometry>
+      <material name="imu_green">
+        <color rgba="0.1 0.8 0.2 1.0"/>
+      </material>
+    </visual>
+
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.04 0.03 0.015"/>
+      </geometry>
+    </collision>
+
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="0.02"/>
+      <inertia
+        ixx="0.000002"
+        ixy="0.0"
+        ixz="0.0"
+        iyy="0.000003"
+        iyz="0.0"
+        izz="0.000004"/>
+    </inertial>
+  </link>
+
 
 
 
@@ -417,6 +452,12 @@
 		<child link="lidar_link"/>
 		<origin xyz="0.15 0 0.18" rpy="0 0 0"/>
 	</joint>
+
+  <joint name="imu_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="imu_link"/>
+    <origin xyz="0.0 0.0 0.19" rpy="0 0 0"/>
+  </joint>
 
 
   <joint name="left_wheel_joint" type="continuous">
@@ -477,6 +518,81 @@
 			<state_interface name="velocity"/>
 		</joint>
 	</ros2_control>
+
+    <!-- ========================= -->
+  <!-- Day 105 Gazebo IMU        -->
+  <!-- ========================= -->
+
+  <gazebo reference="imu_link">
+    <sensor name="diffbot_imu" type="imu">
+      <topic>/imu/data</topic>
+      <update_rate>50</update_rate>
+      <always_on>true</always_on>
+      <visualize>false</visualize>
+
+      <imu>
+        <angular_velocity>
+          <x>
+            <noise type="gaussian">
+              <mean>0.0</mean>
+              <stddev>0.002</stddev>
+              <bias_mean>0.0</bias_mean>
+              <bias_stddev>0.0002</bias_stddev>
+            </noise>
+          </x>
+
+          <y>
+            <noise type="gaussian">
+              <mean>0.0</mean>
+              <stddev>0.002</stddev>
+              <bias_mean>0.0</bias_mean>
+              <bias_stddev>0.0002</bias_stddev>
+            </noise>
+          </y>
+
+          <z>
+            <noise type="gaussian">
+              <mean>0.0</mean>
+              <stddev>0.002</stddev>
+              <bias_mean>0.0</bias_mean>
+              <bias_stddev>0.0002</bias_stddev>
+            </noise>
+          </z>
+        </angular_velocity>
+
+        <linear_acceleration>
+          <x>
+            <noise type="gaussian">
+              <mean>0.0</mean>
+              <stddev>0.03</stddev>
+              <bias_mean>0.0</bias_mean>
+              <bias_stddev>0.003</bias_stddev>
+            </noise>
+          </x>
+
+          <y>
+            <noise type="gaussian">
+              <mean>0.0</mean>
+              <stddev>0.03</stddev>
+              <bias_mean>0.0</bias_mean>
+              <bias_stddev>0.003</bias_stddev>
+            </noise>
+          </y>
+
+          <z>
+            <noise type="gaussian">
+              <mean>0.0</mean>
+              <stddev>0.03</stddev>
+              <bias_mean>0.0</bias_mean>
+              <bias_stddev>0.003</bias_stddev>
+            </noise>
+          </z>
+        </linear_acceleration>
+      </imu>
+    </sensor>
+  </gazebo>
+
+
 
 	<gazebo reference="lidar_link">
 		<sensor name="diffbot_lidar" type="gpu_lidar">

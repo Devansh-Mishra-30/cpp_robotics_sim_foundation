@@ -56,6 +56,19 @@ def generate_launch_description():
         ]
     )
 
+    imu_bridge = Node(
+        package="ros_gz_bridge",
+        executable="parameter_bridge",
+        name="imu_bridge",
+        output="screen",
+        arguments=[
+            "/imu/data@sensor_msgs/msg/Imu[gz.msgs.IMU"
+        ],
+        parameters=[
+            {"use_sim_time": use_sim_time}
+        ]
+    )
+
     description = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             PathJoinSubstitution([
@@ -137,6 +150,7 @@ def generate_launch_description():
         gazebo,
         clock_bridge,
         scan_bridge,
+        imu_bridge,
         description,
         delayed_spawn,
         delayed_joint_state_broadcaster,
