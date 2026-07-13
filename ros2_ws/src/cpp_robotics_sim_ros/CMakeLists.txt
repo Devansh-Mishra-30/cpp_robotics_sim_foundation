@@ -88,6 +88,7 @@ install(PROGRAMS
   scripts/day104_localization_comparison.py
   scripts/plot_day104_localization_comparison.py
   scripts/day107_covariance_analysis.py
+  scripts/day108_fusion_analysis.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
