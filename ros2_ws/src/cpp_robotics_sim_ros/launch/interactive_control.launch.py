@@ -1,0 +1,76 @@
+from launch import LaunchDescription
+from launch.actions import (
+    DeclareLaunchArgument,
+    IncludeLaunchDescription,
+    TimerAction,
+)
+from launch.launch_description_sources import (
+    PythonLaunchDescriptionSource,
+)
+from launch.substitutions import (
+    LaunchConfiguration,
+    PathJoinSubstitution,
+)
+from launch_ros.actions import Node
+from launch_ros.substitutions import FindPackageShare
+
+
+def generate_launch_description():
+    use_sim_time = LaunchConfiguration("use_sim_time")
+
+    package_share = FindPackageShare(
+        "cpp_robotics_sim_ros"
+    )
+
+    simulation = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            PathJoinSubstitution(
+                [
+                    package_share,
+                    "launch",
+                    "ros2_control.launch.py",
+                ]
+            )
+        ),
+        launch_arguments={
+            "use_sim_time": use_sim_time,
+        }.items(),
+    )
+
+    command_mux = Node(
+        package="cpp_robotics_sim_ros",
+        executable="command_mux_node.py",
+        name="command_mux",
+        output="screen",
+        parameters=[
+            PathJoinSubstitution(
+                [
+                    package_share,
+                    "config",
+                    "command_mux.yaml",
+                ]
+            ),
+            {
+                "use_sim_time": use_sim_time,
+            },
+        ],
+    )
+
+    delayed_command_mux = TimerAction(
+        period=10.0,
+        actions=[
+            command_mux,
+        ],
+    )
+
+    return LaunchDescription(
+        [
+            DeclareLaunchArgument(
+                "use_sim_time",
+                default_value="true",
+                description="Use Gazebo simulation time",
+            ),
+            simulation,
+            delayed_command_mux,
+        ]
+    )

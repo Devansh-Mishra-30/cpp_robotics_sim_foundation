@@ -1,0 +1,29 @@
+command_mux:
+  ros__parameters:
+    use_sim_time: true
+
+    publish_rate: 20.0
+
+    max_linear_velocity: 0.30
+    max_angular_velocity: 1.00
+
+    keyboard_topic: /cmd_vel/keyboard
+    keyboard_priority: 90
+    keyboard_timeout: 0.50
+
+    gamepad_topic: /cmd_vel/gamepad
+    gamepad_priority: 100
+    gamepad_timeout: 0.50
+
+    gui_topic: /cmd_vel/gui
+    gui_priority: 80
+    gui_timeout: 0.75
+
+    navigation_topic: /cmd_vel/navigation
+    navigation_priority: 50
+    navigation_timeout: 0.50
+
+    output_topic: /diff_drive_controller/cmd_vel
+
+    active_source_topic: /control/active_source
+    emergency_stop_topic: /control/emergency_stop

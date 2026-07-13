@@ -89,6 +89,7 @@ install(PROGRAMS
   scripts/plot_day104_localization_comparison.py
   scripts/day107_covariance_analysis.py
   scripts/day108_fusion_analysis.py
+  scripts/command_mux_node.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
