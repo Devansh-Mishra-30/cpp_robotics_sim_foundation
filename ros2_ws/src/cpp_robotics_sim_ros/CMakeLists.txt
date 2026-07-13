@@ -48,6 +48,7 @@ xacro
 worlds
 nav2
 maps
+web
 DESTINATION share/${PROJECT_NAME})
 
 # ---------------------------------------------------------------------------

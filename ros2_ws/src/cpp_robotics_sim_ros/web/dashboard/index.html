@@ -1,0 +1,306 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1"
+  >
+
+  <title>Robotics Simulation Control Center</title>
+
+  <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+  <div class="background-grid"></div>
+  <div class="background-glow background-glow-left"></div>
+  <div class="background-glow background-glow-right"></div>
+
+  <main class="app-shell">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">ROS 2 SIMULATION PLATFORM</p>
+        <h1>Robot Control Center</h1>
+        <p class="subtitle">
+          Interactive differential-drive simulation
+        </p>
+      </div>
+
+      <div class="header-status">
+        <div class="status-pill">
+          <span
+            id="connectionIndicator"
+            class="status-indicator disconnected"
+          ></span>
+
+          <span id="connectionText">
+            Connecting to ROS…
+          </span>
+        </div>
+      </div>
+    </header>
+
+    <section class="status-grid">
+      <article class="status-card">
+        <span class="card-label">CONTROL SOURCE</span>
+        <strong id="activeSource" class="status-value">
+          UNKNOWN
+        </strong>
+      </article>
+
+      <article class="status-card">
+        <span class="card-label">LINEAR COMMAND</span>
+        <strong id="linearCommand" class="status-value">
+          0.00 m/s
+        </strong>
+      </article>
+
+      <article class="status-card">
+        <span class="card-label">ANGULAR COMMAND</span>
+        <strong id="angularCommand" class="status-value">
+          0.00 rad/s
+        </strong>
+      </article>
+
+      <article class="status-card">
+        <span class="card-label">SAFETY STATE</span>
+        <strong id="safetyState" class="status-value safe">
+          READY
+        </strong>
+      </article>
+    </section>
+
+    <section class="main-grid">
+      <article class="panel drive-panel">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">MANUAL CONTROL</p>
+            <h2>Drive Robot</h2>
+          </div>
+
+          <span class="keyboard-hint">
+            WASD / Arrows
+          </span>
+        </div>
+
+        <div
+          id="drivePad"
+          class="drive-pad"
+          aria-label="Robot drive controls"
+        >
+          <button
+            class="drive-button diagonal"
+            data-linear="1"
+            data-angular="1"
+            aria-label="Forward left"
+          >
+            ↖
+          </button>
+
+          <button
+            class="drive-button forward"
+            data-linear="1"
+            data-angular="0"
+            aria-label="Forward"
+          >
+            ↑
+          </button>
+
+          <button
+            class="drive-button diagonal"
+            data-linear="1"
+            data-angular="-1"
+            aria-label="Forward right"
+          >
+            ↗
+          </button>
+
+          <button
+            class="drive-button turn"
+            data-linear="0"
+            data-angular="1"
+            aria-label="Rotate left"
+          >
+            ←
+          </button>
+
+          <button
+            id="stopButton"
+            class="drive-button stop-button"
+            aria-label="Stop"
+          >
+            STOP
+          </button>
+
+          <button
+            class="drive-button turn"
+            data-linear="0"
+            data-angular="-1"
+            aria-label="Rotate right"
+          >
+            →
+          </button>
+
+          <button
+            class="drive-button diagonal"
+            data-linear="-1"
+            data-angular="-1"
+            aria-label="Reverse left"
+          >
+            ↙
+          </button>
+
+          <button
+            class="drive-button reverse"
+            data-linear="-1"
+            data-angular="0"
+            aria-label="Reverse"
+          >
+            ↓
+          </button>
+
+          <button
+            class="drive-button diagonal"
+            data-linear="-1"
+            data-angular="1"
+            aria-label="Reverse right"
+          >
+            ↘
+          </button>
+        </div>
+
+        <p class="drive-help">
+          Hold a button or keyboard key to move. Releasing it
+          automatically publishes a stop command.
+        </p>
+      </article>
+
+      <article class="panel settings-panel">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">COMMAND PROFILE</p>
+            <h2>Speed Settings</h2>
+          </div>
+        </div>
+
+        <div class="slider-group">
+          <div class="slider-header">
+            <label for="linearSpeed">
+              Linear speed
+            </label>
+
+            <output id="linearSpeedValue">
+              0.15 m/s
+            </output>
+          </div>
+
+          <input
+            id="linearSpeed"
+            type="range"
+            min="0.02"
+            max="0.30"
+            step="0.01"
+            value="0.15"
+          >
+
+          <div class="range-labels">
+            <span>Precise</span>
+            <span>Maximum</span>
+          </div>
+        </div>
+
+        <div class="slider-group">
+          <div class="slider-header">
+            <label for="angularSpeed">
+              Angular speed
+            </label>
+
+            <output id="angularSpeedValue">
+              0.60 rad/s
+            </output>
+          </div>
+
+          <input
+            id="angularSpeed"
+            type="range"
+            min="0.10"
+            max="1.00"
+            step="0.05"
+            value="0.60"
+          >
+
+          <div class="range-labels">
+            <span>Precise</span>
+            <span>Maximum</span>
+          </div>
+        </div>
+
+        <div class="keyboard-card">
+          <h3>Keyboard controls</h3>
+
+          <div class="key-row">
+            <span class="key">W</span>
+            <span class="key">A</span>
+            <span class="key">S</span>
+            <span class="key">D</span>
+          </div>
+
+          <p>
+            Multiple keys can be held together for diagonal
+            movement.
+          </p>
+        </div>
+
+        <button
+          id="emergencyStopButton"
+          class="emergency-button"
+          type="button"
+        >
+          <span class="emergency-icon">!</span>
+
+          <span>
+            <strong id="emergencyButtonTitle">
+              EMERGENCY STOP
+            </strong>
+
+            <small id="emergencyButtonSubtitle">
+              Immediately disable robot motion
+            </small>
+          </span>
+        </button>
+      </article>
+    </section>
+
+    <section class="panel event-panel">
+      <div class="panel-heading">
+        <div>
+          <p class="eyebrow">SYSTEM EVENTS</p>
+          <h2>Activity Log</h2>
+        </div>
+
+        <button
+          id="clearLogButton"
+          class="secondary-button"
+          type="button"
+        >
+          Clear
+        </button>
+      </div>
+
+      <div id="eventLog" class="event-log">
+        <p class="event-entry info">
+          Dashboard initialized.
+        </p>
+      </div>
+    </section>
+
+    <footer>
+      <span>ROS 2 Robotics Simulation Platform</span>
+      <span>WebSocket: <code>localhost:9090</code></span>
+    </footer>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
