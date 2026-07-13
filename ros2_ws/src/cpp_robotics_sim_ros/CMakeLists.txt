@@ -92,6 +92,7 @@ install(PROGRAMS
   scripts/day108_fusion_analysis.py
   scripts/command_mux_node.py
   scripts/keyboard_teleop_node.py
+  scripts/simulation_manager_node.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
