@@ -87,6 +87,7 @@ install(PROGRAMS
   scripts/nav2_planner_controller_check.sh
   scripts/day104_localization_comparison.py
   scripts/plot_day104_localization_comparison.py
+  scripts/day107_covariance_analysis.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
