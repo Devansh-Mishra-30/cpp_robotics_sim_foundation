@@ -1,0 +1,38 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>ROS Bridge Test</title>
+</head>
+<body>
+  <h1>ROS Bridge Test</h1>
+  <pre id="status">Connecting...</pre>
+
+  <script>
+    const status = document.getElementById("status");
+    const ros = new WebSocket("ws://localhost:9090");
+
+    ros.onopen = () => {
+      status.textContent = "ROSBRIDGE CONNECTED\n";
+
+      ros.send(JSON.stringify({
+        op: "subscribe",
+        topic: "/control/active_source",
+        type: "std_msgs/msg/String"
+      }));
+    };
+
+    ros.onmessage = (event) => {
+      status.textContent += event.data + "\n";
+    };
+
+    ros.onerror = () => {
+      status.textContent += "ROSBRIDGE ERROR\n";
+    };
+
+    ros.onclose = () => {
+      status.textContent += "ROSBRIDGE DISCONNECTED\n";
+    };
+  </script>
+</body>
+</html>
