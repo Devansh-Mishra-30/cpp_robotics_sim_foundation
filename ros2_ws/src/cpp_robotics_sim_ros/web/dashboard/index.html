@@ -90,6 +90,80 @@
         </div>
       </div>
 
+      <div class="environment-selector">
+        <div class="environment-selector-heading">
+          <div>
+            <span class="environment-label">
+              SIMULATION ENVIRONMENT
+            </span>
+
+            <strong id="selectedEnvironmentLabel">
+              WAREHOUSE
+            </strong>
+          </div>
+
+          <span
+            id="environmentLockBadge"
+            class="environment-lock-badge unlocked"
+          >
+            UNLOCKED
+          </span>
+        </div>
+
+        <div class="environment-options">
+          <button
+            id="warehouseEnvironmentButton"
+            class="environment-button warehouse active"
+            type="button"
+            data-environment="warehouse"
+            disabled
+          >
+            <span class="environment-icon">▦</span>
+
+            <span>
+              <strong>Warehouse</strong>
+              <small>
+                Racks, aisles, loading areas, and dead ends
+              </small>
+            </span>
+          </button>
+
+          <button
+            id="hospitalEnvironmentButton"
+            class="environment-button hospital"
+            type="button"
+            data-environment="hospital"
+            disabled
+          >
+            <span class="environment-icon">✚</span>
+
+            <span>
+              <strong>Hospital</strong>
+              <small>
+                Corridors, rooms, reception, and clinical zones
+              </small>
+            </span>
+          </button>
+        </div>
+
+        <div class="environment-details">
+          <span>
+            World
+          </span>
+
+          <strong id="environmentWorldFile">
+            warehouse_world.sdf
+          </strong>
+        </div>
+
+        <p
+          id="environmentMessage"
+          class="environment-message"
+        >
+          Connecting to the environment manager…
+        </p>
+      </div>
+
       <div class="simulation-controls">
         <button
           id="startSimulationButton"

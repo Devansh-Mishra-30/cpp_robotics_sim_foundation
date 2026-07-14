@@ -21,6 +21,16 @@ const state = {
   emergencyStop: false,
   activeSource: "unknown",
   simulationState: "unknown",
+
+  selectedEnvironment: "warehouse",
+  availableEnvironments: [
+    "warehouse",
+    "hospital",
+  ],
+  environmentWorldFile: "warehouse_world.sdf",
+  environmentSelectionLocked: true,
+  environmentState: "unknown",
+
   modeState: "stopped",
   mapSaveState: "ready",
   savedMaps: [],
@@ -114,6 +124,41 @@ const elements = {
 
   resetSimulationButton:
     document.getElementById("resetSimulationButton"),
+
+  selectedEnvironmentLabel:
+    document.getElementById(
+      "selectedEnvironmentLabel"
+    ),
+
+  environmentLockBadge:
+    document.getElementById(
+      "environmentLockBadge"
+    ),
+
+  environmentWorldFile:
+    document.getElementById(
+      "environmentWorldFile"
+    ),
+
+  environmentMessage:
+    document.getElementById(
+      "environmentMessage"
+    ),
+
+  warehouseEnvironmentButton:
+    document.getElementById(
+      "warehouseEnvironmentButton"
+    ),
+
+  hospitalEnvironmentButton:
+    document.getElementById(
+      "hospitalEnvironmentButton"
+    ),
+
+  environmentButtons:
+    document.querySelectorAll(
+      ".environment-button[data-environment]"
+    ),
 
   modeState:
     document.getElementById("modeState"),
@@ -266,6 +311,7 @@ function connectRosbridge() {
     advertiseTopics();
     subscribeToActiveSource();
     subscribeToSimulationStatus();
+    subscribeToEnvironmentStatus();
     subscribeToModeStatus();
     subscribeToMappingStatus();
     subscribeToSavedMaps();
@@ -345,6 +391,12 @@ function advertiseTopics() {
     topic: "/control/emergency_stop",
     type: "std_msgs/msg/Bool",
   });
+
+  sendRosbridgeMessage({
+    op: "advertise",
+    topic: "/simulation/environment_request",
+    type: "std_msgs/msg/String",
+  });
 }
 
 
@@ -363,6 +415,17 @@ function subscribeToSimulationStatus() {
   sendRosbridgeMessage({
     op: "subscribe",
     topic: "/simulation/status",
+    type: "std_msgs/msg/String",
+    throttle_rate: 100,
+    queue_length: 1,
+  });
+}
+
+
+function subscribeToEnvironmentStatus() {
+  sendRosbridgeMessage({
+    op: "subscribe",
+    topic: "/simulation/environment_status",
     type: "std_msgs/msg/String",
     throttle_rate: 100,
     queue_length: 1,
@@ -483,6 +546,15 @@ function handleRosbridgeMessage(rawMessage) {
 
   if (
     message.op === "publish"
+    && message.topic === "/simulation/environment_status"
+    && message.msg
+  ) {
+    handleEnvironmentStatus(message.msg.data);
+    return;
+  }
+
+  if (
+    message.op === "publish"
     && message.topic === "/mode/status"
     && message.msg
   ) {
@@ -554,6 +626,266 @@ function handleRosbridgeMessage(rawMessage) {
   ) {
     handleServiceResponse(message);
   }
+}
+
+
+
+
+function requestEnvironment(environmentName) {
+  const normalizedEnvironment =
+    String(environmentName).trim().toLowerCase();
+
+  if (!state.connected) {
+    setEnvironmentMessage(
+      "ROS is disconnected.",
+      "danger",
+    );
+    return;
+  }
+
+  if (state.environmentSelectionLocked) {
+    setEnvironmentMessage(
+      "Stop the simulation before changing environments.",
+      "warning",
+    );
+    return;
+  }
+
+  if (
+    !state.availableEnvironments.includes(
+      normalizedEnvironment
+    )
+  ) {
+    setEnvironmentMessage(
+      `Unsupported environment: ${normalizedEnvironment}`,
+      "danger",
+    );
+    return;
+  }
+
+  if (
+    normalizedEnvironment
+    === state.selectedEnvironment
+  ) {
+    setEnvironmentMessage(
+      `${formatEnvironmentName(normalizedEnvironment)} `
+      + "is already selected.",
+      "",
+    );
+    return;
+  }
+
+  setEnvironmentControlsBusy(true);
+
+  setEnvironmentMessage(
+    `Selecting ${formatEnvironmentName(normalizedEnvironment)}…`,
+    "warning",
+  );
+
+  const sent = sendRosbridgeMessage({
+    op: "publish",
+    topic: "/simulation/environment_request",
+    msg: {
+      data: normalizedEnvironment,
+    },
+  });
+
+  if (!sent) {
+    setEnvironmentControlsBusy(false);
+
+    setEnvironmentMessage(
+      "Unable to send environment request.",
+      "danger",
+    );
+  }
+}
+
+
+function handleEnvironmentStatus(rawPayload) {
+  let payload;
+
+  try {
+    payload = JSON.parse(rawPayload);
+  } catch {
+    state.environmentState = "error";
+    state.environmentSelectionLocked = true;
+
+    setEnvironmentMessage(
+      "Received invalid environment status.",
+      "danger",
+    );
+
+    updateEnvironmentControls();
+    return;
+  }
+
+  const previousEnvironment =
+    state.selectedEnvironment;
+
+  state.environmentState =
+    String(payload.state ?? "unknown");
+
+  state.selectedEnvironment =
+    String(
+      payload.selected_environment
+      ?? state.selectedEnvironment
+    );
+
+  state.environmentWorldFile =
+    String(payload.world_file ?? "");
+
+  state.environmentSelectionLocked =
+    Boolean(payload.selection_locked);
+
+  if (Array.isArray(payload.available_environments)) {
+    state.availableEnvironments =
+      payload.available_environments.map(
+        (environment) =>
+          String(environment).toLowerCase()
+      );
+  }
+
+  const statusMessage =
+    String(
+      payload.message
+      ?? "Environment status updated"
+    );
+
+  const level =
+    state.environmentState === "error"
+    || state.environmentState === "invalid_request"
+      ? "danger"
+      : state.environmentState === "locked"
+        ? "warning"
+        : state.environmentState === "selected"
+        || state.environmentState === "ready"
+        || state.environmentState === "running"
+          ? "success"
+          : "";
+
+  setEnvironmentMessage(
+    statusMessage,
+    level,
+  );
+
+  updateEnvironmentDisplay();
+  updateEnvironmentControls();
+
+  if (
+    previousEnvironment
+    !== state.selectedEnvironment
+  ) {
+    addLog(
+      "Environment: "
+      + `${formatEnvironmentName(previousEnvironment)} → `
+      + `${formatEnvironmentName(
+        state.selectedEnvironment
+      )}`,
+      "success",
+    );
+  }
+}
+
+
+function formatEnvironmentName(environmentName) {
+  const normalized =
+    String(environmentName || "unknown")
+      .replaceAll("_", " ")
+      .trim();
+
+  return normalized
+    ? normalized[0].toUpperCase()
+      + normalized.slice(1)
+    : "Unknown";
+}
+
+
+function updateEnvironmentDisplay() {
+  elements.selectedEnvironmentLabel.textContent =
+    state.selectedEnvironment
+      .replaceAll("_", " ")
+      .toUpperCase();
+
+  elements.environmentWorldFile.textContent =
+    state.environmentWorldFile || "—";
+
+  elements.environmentLockBadge.textContent =
+    state.environmentSelectionLocked
+      ? "LOCKED"
+      : "UNLOCKED";
+
+  elements.environmentLockBadge.className =
+    "environment-lock-badge "
+    + (
+      state.environmentSelectionLocked
+        ? "locked"
+        : "unlocked"
+    );
+
+  elements.environmentButtons.forEach((button) => {
+    const buttonEnvironment =
+      String(button.dataset.environment);
+
+    button.classList.toggle(
+      "active",
+      buttonEnvironment
+      === state.selectedEnvironment,
+    );
+  });
+}
+
+
+function updateEnvironmentControls() {
+  const simulationBusy =
+    state.simulationState === "starting"
+    || state.simulationState === "running"
+    || state.simulationState === "stopping"
+    || state.serviceRequests.size > 0;
+
+  const selectionEnabled =
+    state.connected
+    && !state.environmentSelectionLocked
+    && !simulationBusy;
+
+  elements.environmentButtons.forEach((button) => {
+    const buttonEnvironment =
+      String(button.dataset.environment);
+
+    const environmentAvailable =
+      state.availableEnvironments.includes(
+        buttonEnvironment
+      );
+
+    button.disabled =
+      !selectionEnabled
+      || !environmentAvailable
+      || buttonEnvironment
+        === state.selectedEnvironment;
+  });
+}
+
+
+function setEnvironmentControlsBusy(busy) {
+  if (busy) {
+    elements.environmentButtons.forEach((button) => {
+      button.disabled = true;
+    });
+    return;
+  }
+
+  updateEnvironmentControls();
+}
+
+
+function setEnvironmentMessage(
+  message,
+  level = "",
+) {
+  elements.environmentMessage.textContent =
+    message;
+
+  elements.environmentMessage.className =
+    `environment-message ${level}`.trim();
 }
 
 
@@ -671,6 +1003,7 @@ function updateSimulationState(simulationState) {
     `simulation-state-indicator ${simulationState}`;
 
   updateSimulationControls();
+  updateEnvironmentControls();
   updateModeControls();
 
   if (simulationState !== "running") {
@@ -1790,6 +2123,7 @@ function updateConnectionStatus(status) {
   if (status === "connected") {
     elements.connectionText.textContent = "ROS connected";
     updateSimulationControls();
+    updateEnvironmentControls();
   updateMappingControls();
   updateLocalizationControls();
     updateMappingControls();
@@ -1804,6 +2138,7 @@ function updateConnectionStatus(status) {
       "Connecting to ROS…";
 
     setLifecycleButtonsBusy(true);
+    setEnvironmentControlsBusy(true);
     setModeButtonsBusy(true);
     return;
   }
@@ -1812,6 +2147,7 @@ function updateConnectionStatus(status) {
     "ROS disconnected";
 
   setLifecycleButtonsBusy(true);
+  setEnvironmentControlsBusy(true);
 
   setSimulationMessage(
     "Simulation controls unavailable while ROS is disconnected.",
@@ -2219,6 +2555,17 @@ function addLog(message, level = "info") {
 
 
 function registerEventListeners() {
+  elements.environmentButtons.forEach((button) => {
+    button.addEventListener(
+      "click",
+      () => {
+        requestEnvironment(
+          button.dataset.environment
+        );
+      },
+    );
+  });
+
   elements.linearSpeed.addEventListener(
     "input",
     () => {
