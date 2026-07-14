@@ -22,6 +22,10 @@ const state = {
   activeSource: "unknown",
   simulationState: "unknown",
   modeState: "stopped",
+  mapSaveState: "ready",
+  savedMaps: [],
+  selectedMapName: "",
+  selectedMapPath: "",
   serviceRequests: new Map(),
 
   pressedKeys: new Set(),
@@ -121,6 +125,47 @@ const elements = {
 
   stopModeButton:
     document.getElementById("stopModeButton"),
+
+  mapNameInput:
+    document.getElementById("mapNameInput"),
+
+  saveMapButton:
+    document.getElementById("saveMapButton"),
+
+  mapSaveMessage:
+    document.getElementById("mapSaveMessage"),
+
+  savedMapList:
+    document.getElementById("savedMapList"),
+
+  savedMapCount:
+    document.getElementById("savedMapCount"),
+
+  selectedMapLabel:
+    document.getElementById("selectedMapLabel"),
+
+  localizationMapSelect:
+    document.getElementById("localizationMapSelect"),
+
+  selectLocalizationMapButton:
+    document.getElementById(
+      "selectLocalizationMapButton"
+    ),
+
+  initialPoseX:
+    document.getElementById("initialPoseX"),
+
+  initialPoseY:
+    document.getElementById("initialPoseY"),
+
+  initialPoseYaw:
+    document.getElementById("initialPoseYaw"),
+
+  setInitialPoseButton:
+    document.getElementById("setInitialPoseButton"),
+
+  localizationMessage:
+    document.getElementById("localizationMessage"),
 };
 
 
@@ -149,6 +194,10 @@ function connectRosbridge() {
     subscribeToActiveSource();
     subscribeToSimulationStatus();
     subscribeToModeStatus();
+    subscribeToMappingStatus();
+    subscribeToSavedMaps();
+    subscribeToLocalizationStatus();
+    subscribeToSelectedMap();
 
     publishEmergencyStop(state.emergencyStop);
 
@@ -257,6 +306,46 @@ function subscribeToModeStatus() {
 }
 
 
+function subscribeToMappingStatus() {
+  sendRosbridgeMessage({
+    op: "subscribe",
+    topic: "/mapping/save_status",
+    type: "std_msgs/msg/String",
+    queue_length: 1,
+  });
+}
+
+
+function subscribeToSavedMaps() {
+  sendRosbridgeMessage({
+    op: "subscribe",
+    topic: "/mapping/saved_maps",
+    type: "std_msgs/msg/String",
+    queue_length: 1,
+  });
+}
+
+
+function subscribeToLocalizationStatus() {
+  sendRosbridgeMessage({
+    op: "subscribe",
+    topic: "/localization/status",
+    type: "std_msgs/msg/String",
+    queue_length: 1,
+  });
+}
+
+
+function subscribeToSelectedMap() {
+  sendRosbridgeMessage({
+    op: "subscribe",
+    topic: "/localization/selected_map",
+    type: "std_msgs/msg/String",
+    queue_length: 1,
+  });
+}
+
+
 function handleRosbridgeMessage(rawMessage) {
   let message;
 
@@ -306,6 +395,42 @@ function handleRosbridgeMessage(rawMessage) {
     );
 
     updateModeState(modeState);
+    return;
+  }
+
+  if (
+    message.op === "publish"
+    && message.topic === "/mapping/save_status"
+    && message.msg
+  ) {
+    handleMapSaveStatus(message.msg.data);
+    return;
+  }
+
+  if (
+    message.op === "publish"
+    && message.topic === "/mapping/saved_maps"
+    && message.msg
+  ) {
+    handleSavedMaps(message.msg.data);
+    return;
+  }
+
+  if (
+    message.op === "publish"
+    && message.topic === "/localization/status"
+    && message.msg
+  ) {
+    handleLocalizationStatus(message.msg.data);
+    return;
+  }
+
+  if (
+    message.op === "publish"
+    && message.topic === "/localization/selected_map"
+    && message.msg
+  ) {
+    handleSelectedMap(message.msg.data);
     return;
   }
 
@@ -440,6 +565,8 @@ function updateSimulationState(simulationState) {
       "",
     );
   }
+  updateMappingControls();
+  updateLocalizationControls();
 }
 
 
@@ -577,6 +704,8 @@ function updateModeState(modeState) {
     `mode-state-indicator ${modeState}`;
 
   updateModeControls();
+  updateMappingControls();
+  updateLocalizationControls();
 }
 
 
@@ -603,8 +732,17 @@ function updateModeControls() {
 
   Object.entries(buttons).forEach(
     ([mode, button]) => {
+      const requiresSelectedMap =
+        (
+          mode === "localization"
+          || mode === "navigation"
+        )
+        && !state.selectedMapPath;
+
       button.disabled =
-        !enabled || state.modeState === mode;
+        !enabled
+        || state.modeState === mode
+        || requiresSelectedMap;
 
       button.classList.toggle(
         "active",
@@ -649,6 +787,448 @@ function setModeMessage(
 }
 
 
+function saveMap() {
+  const mapName =
+    elements.mapNameInput.value.trim();
+
+  if (!mapName) {
+    setMapSaveMessage(
+      "Enter a map name.",
+      "warning",
+    );
+    return;
+  }
+
+  const validName =
+    /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(
+      mapName
+    );
+
+  if (!validName) {
+    setMapSaveMessage(
+      "Use letters, numbers, underscores, or hyphens only.",
+      "danger",
+    );
+    return;
+  }
+
+  if (
+    !state.connected
+    || state.simulationState !== "running"
+    || state.modeState !== "mapping"
+  ) {
+    setMapSaveMessage(
+      "Mapping mode must be active.",
+      "warning",
+    );
+    return;
+  }
+
+  const sent = sendRosbridgeMessage({
+    op: "publish",
+    topic: "/mapping/save_request",
+    msg: {
+      data: mapName,
+    },
+  });
+
+  if (!sent) {
+    setMapSaveMessage(
+      "Unable to send map-save request.",
+      "danger",
+    );
+    return;
+  }
+
+  state.mapSaveState = "saving";
+
+  setMapSaveMessage(
+    `Saving map '${mapName}'…`,
+    "warning",
+  );
+
+  updateMappingControls();
+}
+
+
+function handleMapSaveStatus(rawPayload) {
+  let payload;
+
+  try {
+    payload = JSON.parse(rawPayload);
+  } catch {
+    state.mapSaveState = "error";
+
+    setMapSaveMessage(
+      "Received invalid map-save status.",
+      "danger",
+    );
+
+    updateMappingControls();
+    return;
+  }
+
+  state.mapSaveState =
+    String(payload.status ?? "error");
+
+  const level =
+    state.mapSaveState === "success"
+      ? "success"
+      : state.mapSaveState === "saving"
+        ? "warning"
+        : state.mapSaveState === "error"
+          ? "danger"
+          : "";
+
+  setMapSaveMessage(
+    String(
+      payload.message
+      ?? "Map-save status updated"
+    ),
+    level,
+  );
+
+  if (state.mapSaveState === "success") {
+    elements.mapNameInput.value = "";
+  }
+
+  updateMappingControls();
+}
+
+
+function handleSavedMaps(rawPayload) {
+  try {
+    const maps = JSON.parse(rawPayload);
+
+    state.savedMaps =
+      Array.isArray(maps)
+        ? maps
+        : [];
+  } catch {
+    state.savedMaps = [];
+
+    setMapSaveMessage(
+      "Received an invalid saved-map list.",
+      "danger",
+    );
+  }
+
+  renderSavedMaps();
+}
+
+
+function renderSavedMaps() {
+  elements.savedMapCount.textContent =
+    `${state.savedMaps.length} `
+    + `${state.savedMaps.length === 1
+      ? "MAP"
+      : "MAPS"}`;
+
+  if (state.savedMaps.length === 0) {
+    elements.savedMapList.innerHTML =
+      '<p class="empty-map-list">'
+      + "No saved maps yet."
+      + "</p>";
+  } else {
+    elements.savedMapList.innerHTML =
+      state.savedMaps
+        .map((map) => {
+          const mapName =
+            String(map.name ?? "");
+
+          const complete =
+            Boolean(map.complete);
+
+          return `
+            <div class="saved-map-item">
+              <strong>${escapeHtml(mapName)}</strong>
+              <small>
+                ${complete ? "Ready" : "Incomplete"}
+              </small>
+            </div>
+          `;
+        })
+        .join("");
+  }
+
+  renderLocalizationMapOptions();
+  updateLocalizationControls();
+}
+
+
+function updateMappingControls() {
+  const enabled =
+    state.connected
+    && state.simulationState === "running"
+    && state.modeState === "mapping"
+    && state.mapSaveState !== "saving";
+
+  elements.mapNameInput.disabled = !enabled;
+  elements.saveMapButton.disabled = !enabled;
+}
+
+
+function setMapSaveMessage(
+  message,
+  level = "",
+) {
+  elements.mapSaveMessage.textContent = message;
+
+  elements.mapSaveMessage.className =
+    `map-save-message ${level}`.trim();
+}
+
+
+function selectLocalizationMap() {
+  const mapName =
+    elements.localizationMapSelect.value;
+
+  if (!mapName) {
+    setLocalizationMessage(
+      "Choose a saved map.",
+      "warning",
+    );
+    return;
+  }
+
+  const sent = sendRosbridgeMessage({
+    op: "publish",
+    topic: "/localization/select_map_request",
+    msg: {
+      data: mapName,
+    },
+  });
+
+  if (!sent) {
+    setLocalizationMessage(
+      "Unable to send map-selection request.",
+      "danger",
+    );
+    return;
+  }
+
+  setLocalizationMessage(
+    `Selecting map '${mapName}'…`,
+    "warning",
+  );
+}
+
+
+function setInitialPose() {
+  const x = Number(
+    elements.initialPoseX.value
+  );
+  const y = Number(
+    elements.initialPoseY.value
+  );
+  const yaw = Number(
+    elements.initialPoseYaw.value
+  );
+
+  if (![x, y, yaw].every(Number.isFinite)) {
+    setLocalizationMessage(
+      "Initial pose values must be numeric.",
+      "danger",
+    );
+    return;
+  }
+
+  const sent = sendRosbridgeMessage({
+    op: "publish",
+    topic: "/localization/initial_pose_request",
+    msg: {
+      data: JSON.stringify({
+        x,
+        y,
+        yaw,
+      }),
+    },
+  });
+
+  if (!sent) {
+    setLocalizationMessage(
+      "Unable to send initial-pose request.",
+      "danger",
+    );
+    return;
+  }
+
+  setLocalizationMessage(
+    "Initial pose request sent…",
+    "warning",
+  );
+}
+
+
+function handleLocalizationStatus(
+  rawPayload
+) {
+  try {
+    const payload = JSON.parse(rawPayload);
+
+    const status =
+      String(payload.status ?? "");
+
+    const level =
+      status === "success"
+        ? "success"
+        : status === "error"
+          ? "danger"
+          : "";
+
+    setLocalizationMessage(
+      String(
+        payload.message
+        ?? "Localization status updated"
+      ),
+      level,
+    );
+  } catch {
+    setLocalizationMessage(
+      "Received invalid localization status.",
+      "danger",
+    );
+  }
+}
+
+
+function handleSelectedMap(rawPayload) {
+  try {
+    const payload = JSON.parse(rawPayload);
+
+    state.selectedMapName =
+      String(payload.name ?? "");
+
+    state.selectedMapPath =
+      String(payload.yaml_path ?? "");
+  } catch {
+    state.selectedMapName = "";
+    state.selectedMapPath = "";
+
+    setLocalizationMessage(
+      "Received invalid selected-map data.",
+      "danger",
+    );
+  }
+
+  elements.selectedMapLabel.textContent =
+    state.selectedMapName
+      ? state.selectedMapName.toUpperCase()
+      : "NO MAP SELECTED";
+
+  renderLocalizationMapOptions();
+
+  if (state.selectedMapName) {
+    elements.localizationMapSelect.value =
+      state.selectedMapName;
+  }
+
+  updateLocalizationControls();
+  updateModeControls();
+}
+
+
+function renderLocalizationMapOptions() {
+  const previousValue =
+    state.selectedMapName
+    || elements.localizationMapSelect.value;
+
+  const completeMaps =
+    state.savedMaps.filter(
+      (map) => Boolean(map.complete)
+    );
+
+  const options = [
+    '<option value="">Select a saved map</option>',
+    ...completeMaps.map((map) => {
+      const mapName =
+        String(map.name ?? "");
+
+      return (
+        `<option value="${escapeHtml(mapName)}">`
+        + `${escapeHtml(mapName)}`
+        + "</option>"
+      );
+    }),
+  ];
+
+  elements.localizationMapSelect.innerHTML =
+    options.join("");
+
+  const previousStillExists =
+    completeMaps.some(
+      (map) =>
+        String(map.name ?? "")
+        === previousValue
+    );
+
+  if (previousStillExists) {
+    elements.localizationMapSelect.value =
+      previousValue;
+  }
+}
+
+
+function updateLocalizationControls() {
+  const completeMapCount =
+    state.savedMaps.filter(
+      (map) => Boolean(map.complete)
+    ).length;
+
+  elements.localizationMapSelect.disabled =
+    !state.connected
+    || completeMapCount === 0;
+
+  elements.selectLocalizationMapButton.disabled =
+    !state.connected
+    || !elements.localizationMapSelect.value;
+
+  const poseEnabled =
+    state.connected
+    && state.simulationState === "running"
+    && (
+      state.modeState === "localization"
+      || state.modeState === "navigation"
+    )
+    && Boolean(state.selectedMapPath);
+
+  elements.initialPoseX.disabled =
+    !poseEnabled;
+
+  elements.initialPoseY.disabled =
+    !poseEnabled;
+
+  elements.initialPoseYaw.disabled =
+    !poseEnabled;
+
+  elements.setInitialPoseButton.disabled =
+    !poseEnabled;
+}
+
+
+function setLocalizationMessage(
+  message,
+  level = "",
+) {
+  elements.localizationMessage.textContent =
+    message;
+
+  elements.localizationMessage.className =
+    `localization-message ${level}`.trim();
+}
+
+
+function escapeHtml(value) {
+  const temporaryElement =
+    document.createElement("div");
+
+  temporaryElement.textContent =
+    String(value);
+
+  return temporaryElement.innerHTML;
+}
+
+
 function updateConnectionStatus(status) {
   elements.connectionIndicator.className =
     `status-indicator ${status}`;
@@ -656,6 +1236,10 @@ function updateConnectionStatus(status) {
   if (status === "connected") {
     elements.connectionText.textContent = "ROS connected";
     updateSimulationControls();
+  updateMappingControls();
+  updateLocalizationControls();
+    updateMappingControls();
+    updateLocalizationControls();
     updateModeControls();
     return;
   }
@@ -1233,6 +1817,38 @@ function registerEventListeners() {
     "click",
     () => callModeService("stop"),
   );
+  elements.saveMapButton.addEventListener(
+    "click",
+    saveMap,
+  );
+
+  elements.mapNameInput.addEventListener(
+    "keydown",
+    (event) => {
+      if (event.key === "Enter") {
+        saveMap();
+      }
+    },
+  );
+
+  elements.selectLocalizationMapButton
+    .addEventListener(
+      "click",
+      selectLocalizationMap,
+    );
+
+  elements.localizationMapSelect
+    .addEventListener(
+      "change",
+      updateLocalizationControls,
+    );
+
+  elements.setInitialPoseButton
+    .addEventListener(
+      "click",
+      setInitialPose,
+    );
+
 }
 
 

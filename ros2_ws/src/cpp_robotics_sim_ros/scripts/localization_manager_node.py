@@ -1,0 +1,433 @@
+#!/usr/bin/env python3
+
+import json
+import math
+import re
+from pathlib import Path
+from typing import Optional
+
+import rclpy
+from geometry_msgs.msg import PoseWithCovarianceStamped
+from rclpy.node import Node
+from rclpy.qos import (
+    DurabilityPolicy,
+    HistoryPolicy,
+    QoSProfile,
+    ReliabilityPolicy,
+)
+from std_msgs.msg import String
+
+
+class LocalizationManagerNode(Node):
+    """
+    Manage saved-map selection and AMCL initial-pose requests.
+
+    Inputs:
+        /localization/select_map_request
+        /localization/initial_pose_request
+
+    Outputs:
+        /localization/selected_map
+        /localization/status
+        /initialpose
+    """
+
+    MAP_NAME_PATTERN = re.compile(
+        r"^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$"
+    )
+
+    def __init__(self) -> None:
+        super().__init__("localization_manager")
+
+        self.declare_parameter(
+            "map_directory",
+            str(
+                Path.home()
+                / ".ros"
+                / "cpp_robotics_sim"
+                / "maps"
+            ),
+        )
+        self.declare_parameter(
+            "position_covariance",
+            0.25,
+        )
+        self.declare_parameter(
+            "yaw_covariance",
+            0.06853891945200942,
+        )
+
+        self.map_directory = Path(
+            str(
+                self.get_parameter(
+                    "map_directory"
+                ).value
+            )
+        ).expanduser()
+
+        self.position_covariance = float(
+            self.get_parameter(
+                "position_covariance"
+            ).value
+        )
+        self.yaw_covariance = float(
+            self.get_parameter(
+                "yaw_covariance"
+            ).value
+        )
+
+        self.validate_parameters()
+
+        transient_qos = QoSProfile(
+            history=HistoryPolicy.KEEP_LAST,
+            depth=1,
+            reliability=ReliabilityPolicy.RELIABLE,
+            durability=DurabilityPolicy.TRANSIENT_LOCAL,
+        )
+
+        self.selected_map_publisher = (
+            self.create_publisher(
+                String,
+                "/localization/selected_map",
+                transient_qos,
+            )
+        )
+
+        self.status_publisher = self.create_publisher(
+            String,
+            "/localization/status",
+            transient_qos,
+        )
+
+        self.initial_pose_publisher = (
+            self.create_publisher(
+                PoseWithCovarianceStamped,
+                "/initialpose",
+                10,
+            )
+        )
+
+        self.select_map_subscription = (
+            self.create_subscription(
+                String,
+                "/localization/select_map_request",
+                self.select_map_callback,
+                10,
+            )
+        )
+
+        self.initial_pose_subscription = (
+            self.create_subscription(
+                String,
+                "/localization/initial_pose_request",
+                self.initial_pose_callback,
+                10,
+            )
+        )
+
+        self.mode_subscription = self.create_subscription(
+            String,
+            "/mode/status",
+            self.mode_status_callback,
+            transient_qos,
+        )
+
+        self.simulation_subscription = (
+            self.create_subscription(
+                String,
+                "/simulation/status",
+                self.simulation_status_callback,
+                transient_qos,
+            )
+        )
+
+        self.selected_map_name = ""
+        self.selected_map_path = ""
+        self.mode_state = "stopped"
+        self.simulation_state = "stopped"
+
+        self.publish_status(
+            status="ready",
+            message="Localization manager ready",
+        )
+
+        self.publish_selected_map()
+
+        self.get_logger().info(
+            "Localization manager ready"
+        )
+
+    def validate_parameters(self) -> None:
+        if self.position_covariance <= 0.0:
+            raise ValueError(
+                "position_covariance must be positive"
+            )
+
+        if self.yaw_covariance <= 0.0:
+            raise ValueError(
+                "yaw_covariance must be positive"
+            )
+
+    def mode_status_callback(
+        self,
+        message: String,
+    ) -> None:
+        self.mode_state = message.data
+
+    def simulation_status_callback(
+        self,
+        message: String,
+    ) -> None:
+        self.simulation_state = message.data
+
+    def select_map_callback(
+        self,
+        message: String,
+    ) -> None:
+        map_name = message.data.strip()
+
+        if not self.MAP_NAME_PATTERN.fullmatch(
+            map_name
+        ):
+            self.publish_status(
+                status="error",
+                message=(
+                    "Invalid map name. Use letters, "
+                    "numbers, underscores, or hyphens."
+                ),
+            )
+            return
+
+        yaml_path = (
+            self.map_directory
+            / f"{map_name}.yaml"
+        )
+        image_path = (
+            self.map_directory
+            / f"{map_name}.pgm"
+        )
+
+        if not yaml_path.is_file():
+            self.publish_status(
+                status="error",
+                message=(
+                    f"Map YAML does not exist: "
+                    f"{yaml_path}"
+                ),
+                map_name=map_name,
+            )
+            return
+
+        if not image_path.is_file():
+            self.publish_status(
+                status="error",
+                message=(
+                    f"Map image does not exist: "
+                    f"{image_path}"
+                ),
+                map_name=map_name,
+            )
+            return
+
+        self.selected_map_name = map_name
+        self.selected_map_path = str(
+            yaml_path.resolve()
+        )
+
+        self.publish_selected_map()
+
+        self.publish_status(
+            status="success",
+            message=(
+                f"Map '{map_name}' selected"
+            ),
+            map_name=map_name,
+            yaml_path=self.selected_map_path,
+        )
+
+        self.get_logger().info(
+            f"Selected map: {self.selected_map_path}"
+        )
+
+    def initial_pose_callback(
+        self,
+        message: String,
+    ) -> None:
+        if self.simulation_state != "running":
+            self.publish_status(
+                status="error",
+                message=(
+                    "Simulation must be running before "
+                    "setting the initial pose"
+                ),
+            )
+            return
+
+        if self.mode_state not in (
+            "localization",
+            "navigation",
+        ):
+            self.publish_status(
+                status="error",
+                message=(
+                    "Localization or Navigation mode "
+                    "must be active"
+                ),
+            )
+            return
+
+        if not self.selected_map_path:
+            self.publish_status(
+                status="error",
+                message=(
+                    "Select a saved map before setting "
+                    "the initial pose"
+                ),
+            )
+            return
+
+        try:
+            payload = json.loads(message.data)
+
+            x = float(payload["x"])
+            y = float(payload["y"])
+            yaw = float(payload["yaw"])
+
+        except (
+            json.JSONDecodeError,
+            KeyError,
+            TypeError,
+            ValueError,
+        ):
+            self.publish_status(
+                status="error",
+                message=(
+                    "Initial pose must contain numeric "
+                    "x, y, and yaw values"
+                ),
+            )
+            return
+
+        if not all(
+            math.isfinite(value)
+            for value in (x, y, yaw)
+        ):
+            self.publish_status(
+                status="error",
+                message=(
+                    "Initial pose values must be finite"
+                ),
+            )
+            return
+
+        pose_message = PoseWithCovarianceStamped()
+
+        pose_message.header.stamp = (
+            self.get_clock().now().to_msg()
+        )
+        pose_message.header.frame_id = "map"
+
+        pose_message.pose.pose.position.x = x
+        pose_message.pose.pose.position.y = y
+        pose_message.pose.pose.position.z = 0.0
+
+        half_yaw = yaw * 0.5
+
+        pose_message.pose.pose.orientation.z = (
+            math.sin(half_yaw)
+        )
+        pose_message.pose.pose.orientation.w = (
+            math.cos(half_yaw)
+        )
+
+        covariance = [0.0] * 36
+        covariance[0] = self.position_covariance
+        covariance[7] = self.position_covariance
+        covariance[35] = self.yaw_covariance
+
+        pose_message.pose.covariance = covariance
+
+        self.initial_pose_publisher.publish(
+            pose_message
+        )
+
+        self.publish_status(
+            status="success",
+            message=(
+                "Initial pose published: "
+                f"x={x:.2f}, y={y:.2f}, "
+                f"yaw={yaw:.2f} rad"
+            ),
+            map_name=self.selected_map_name,
+            yaml_path=self.selected_map_path,
+        )
+
+        self.get_logger().info(
+            "Published AMCL initial pose: "
+            f"x={x:.3f}, y={y:.3f}, "
+            f"yaw={yaw:.3f}"
+        )
+
+    def publish_selected_map(self) -> None:
+        payload = {
+            "name": self.selected_map_name,
+            "yaml_path": self.selected_map_path,
+        }
+
+        message = String()
+        message.data = json.dumps(payload)
+
+        if not rclpy.ok(context=self.context):
+            return
+
+        self.selected_map_publisher.publish(
+            message
+        )
+
+    def publish_status(
+        self,
+        status: str,
+        message: str,
+        map_name: str = "",
+        yaml_path: str = "",
+    ) -> None:
+        payload = {
+            "status": status,
+            "message": message,
+            "map_name": map_name,
+            "yaml_path": yaml_path,
+        }
+
+        ros_message = String()
+        ros_message.data = json.dumps(payload)
+
+        if not rclpy.ok(context=self.context):
+            return
+
+        self.status_publisher.publish(
+            ros_message
+        )
+
+
+def main(args=None) -> None:
+    rclpy.init(args=args)
+
+    node: Optional[LocalizationManagerNode] = None
+
+    try:
+        node = LocalizationManagerNode()
+        rclpy.spin(node)
+
+    except KeyboardInterrupt:
+        pass
+
+    finally:
+        if node is not None:
+            node.destroy_node()
+
+        if rclpy.ok():
+            rclpy.shutdown()
+
+
+if __name__ == "__main__":
+    main()

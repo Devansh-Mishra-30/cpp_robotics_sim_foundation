@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import json
 import os
 import signal
 import subprocess
@@ -140,6 +141,15 @@ class ModeManagerNode(Node):
             )
         )
 
+        self.selected_map_subscription = (
+            self.create_subscription(
+                String,
+                "/localization/selected_map",
+                self.selected_map_callback,
+                status_qos,
+            )
+        )
+
         self.manual_service = self.create_service(
             Trigger,
             "/mode/manual",
@@ -173,6 +183,8 @@ class ModeManagerNode(Node):
         self.mode = OperatingMode.STOPPED
         self.requested_mode = OperatingMode.STOPPED
         self.simulation_state = "unknown"
+        self.selected_map_name = ""
+        self.selected_map_path = ""
         self.last_error = ""
 
         self.monitor_timer = self.create_timer(
@@ -237,6 +249,25 @@ class ModeManagerNode(Node):
             )
 
             self.stop_current_mode()
+
+    def selected_map_callback(
+        self,
+        message: String,
+    ) -> None:
+        try:
+            payload = json.loads(message.data)
+        except json.JSONDecodeError:
+            self.get_logger().error(
+                "Received invalid selected-map payload"
+            )
+            return
+
+        self.selected_map_name = str(
+            payload.get("name", "")
+        )
+        self.selected_map_path = str(
+            payload.get("yaml_path", "")
+        )
 
     def manual_callback(
         self,
@@ -320,6 +351,21 @@ class ModeManagerNode(Node):
                 self.get_logger().warning(message)
                 return False, message
 
+            if (
+                requested_mode
+                in (
+                    OperatingMode.LOCALIZATION,
+                    OperatingMode.NAVIGATION,
+                )
+                and not self.selected_map_path
+            ):
+                message = (
+                    "Select a saved map before starting "
+                    f"{requested_mode.value.capitalize()} mode"
+                )
+                self.get_logger().warning(message)
+                return False, message
+
             if self.mode == requested_mode:
                 message = (
                     f"{requested_mode.value} mode is "
@@ -368,6 +414,14 @@ class ModeManagerNode(Node):
                     )
                 ),
             ]
+
+            if (
+                requested_mode
+                == OperatingMode.LOCALIZATION
+            ):
+                command.append(
+                    f"map:={self.selected_map_path}"
+                )
 
             self.get_logger().info(
                 "Starting operating mode: "

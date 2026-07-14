@@ -1,0 +1,6 @@
+mapping_manager:
+  ros__parameters:
+    map_directory: ~/.ros/cpp_robotics_sim/maps
+    save_timeout: 20.0
+    free_threshold: 0.25
+    occupied_threshold: 0.65

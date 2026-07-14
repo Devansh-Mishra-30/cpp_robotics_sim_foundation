@@ -211,6 +211,153 @@
       </p>
     </section>
 
+    <section
+      id="mappingPanel"
+      class="panel mapping-workflow-panel"
+    >
+      <div class="panel-heading">
+        <div>
+          <p class="eyebrow">MAP WORKFLOW</p>
+          <h2>Save Occupancy Map</h2>
+        </div>
+
+        <strong id="savedMapCount">
+          0 MAPS
+        </strong>
+      </div>
+
+      <div class="map-save-controls">
+        <label class="map-name-field">
+          <span>Map name</span>
+
+          <input
+            id="mapNameInput"
+            type="text"
+            maxlength="64"
+            placeholder="warehouse_map"
+            autocomplete="off"
+            disabled
+          >
+        </label>
+
+        <button
+          id="saveMapButton"
+          class="save-map-button"
+          type="button"
+          disabled
+        >
+          Save Map
+        </button>
+      </div>
+
+      <p class="map-name-help">
+        Use letters, numbers, underscores, or hyphens.
+      </p>
+
+      <p
+        id="mapSaveMessage"
+        class="map-save-message"
+      >
+        Enter Mapping mode to save a map.
+      </p>
+
+      <div class="saved-map-list-wrapper">
+        <h3>Saved Maps</h3>
+
+        <div
+          id="savedMapList"
+          class="saved-map-list"
+        >
+          <p class="empty-map-list">
+            No saved maps yet.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel localization-panel">
+      <div class="panel-heading">
+        <div>
+          <p class="eyebrow">LOCALIZATION</p>
+          <h2>Saved Map and Initial Pose</h2>
+        </div>
+
+        <strong id="selectedMapLabel">
+          NO MAP SELECTED
+        </strong>
+      </div>
+
+      <div class="localization-map-row">
+        <label>
+          <span>Saved map</span>
+
+          <select id="localizationMapSelect">
+            <option value="">
+              Select a saved map
+            </option>
+          </select>
+        </label>
+
+        <button
+          id="selectLocalizationMapButton"
+          type="button"
+          disabled
+        >
+          Select Map
+        </button>
+      </div>
+
+      <div class="initial-pose-grid">
+        <label>
+          <span>X position (m)</span>
+          <input
+            id="initialPoseX"
+            type="number"
+            value="0"
+            step="0.1"
+            disabled
+          >
+        </label>
+
+        <label>
+          <span>Y position (m)</span>
+          <input
+            id="initialPoseY"
+            type="number"
+            value="0"
+            step="0.1"
+            disabled
+          >
+        </label>
+
+        <label>
+          <span>Yaw (rad)</span>
+          <input
+            id="initialPoseYaw"
+            type="number"
+            value="0"
+            step="0.1"
+            disabled
+          >
+        </label>
+
+        <button
+          id="setInitialPoseButton"
+          type="button"
+          disabled
+        >
+          Set Initial Pose
+        </button>
+      </div>
+
+      <p
+        id="localizationMessage"
+        class="localization-message"
+      >
+        Select a saved map before starting Localization.
+      </p>
+    </section>
+
     <section class="main-grid">
       <article class="panel drive-panel">
         <div class="panel-heading">

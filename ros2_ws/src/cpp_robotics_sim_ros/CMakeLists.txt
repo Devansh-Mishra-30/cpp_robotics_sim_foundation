@@ -94,6 +94,8 @@ install(PROGRAMS
   scripts/keyboard_teleop_node.py
   scripts/simulation_manager_node.py
   scripts/mode_manager_node.py
+  scripts/localization_manager_node.py
+  scripts/mapping_manager_node.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

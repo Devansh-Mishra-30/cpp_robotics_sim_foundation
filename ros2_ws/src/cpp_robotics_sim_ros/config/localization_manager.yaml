@@ -1,0 +1,7 @@
+localization_manager:
+  ros__parameters:
+    map_directory: ~/.ros/cpp_robotics_sim/maps
+
+    # Variance values used in PoseWithCovarianceStamped.
+    position_covariance: 0.25
+    yaw_covariance: 0.06853891945200942
