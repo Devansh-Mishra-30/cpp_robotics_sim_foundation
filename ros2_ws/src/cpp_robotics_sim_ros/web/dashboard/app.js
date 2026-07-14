@@ -21,6 +21,7 @@ const state = {
   emergencyStop: false,
   activeSource: "unknown",
   simulationState: "unknown",
+  modeState: "stopped",
   serviceRequests: new Map(),
 
   pressedKeys: new Set(),
@@ -96,6 +97,30 @@ const elements = {
 
   resetSimulationButton:
     document.getElementById("resetSimulationButton"),
+
+  modeState:
+    document.getElementById("modeState"),
+
+  modeStateIndicator:
+    document.getElementById("modeStateIndicator"),
+
+  modeMessage:
+    document.getElementById("modeMessage"),
+
+  manualModeButton:
+    document.getElementById("manualModeButton"),
+
+  mappingModeButton:
+    document.getElementById("mappingModeButton"),
+
+  localizationModeButton:
+    document.getElementById("localizationModeButton"),
+
+  navigationModeButton:
+    document.getElementById("navigationModeButton"),
+
+  stopModeButton:
+    document.getElementById("stopModeButton"),
 };
 
 
@@ -123,6 +148,7 @@ function connectRosbridge() {
     advertiseTopics();
     subscribeToActiveSource();
     subscribeToSimulationStatus();
+    subscribeToModeStatus();
 
     publishEmergencyStop(state.emergencyStop);
 
@@ -220,6 +246,17 @@ function subscribeToSimulationStatus() {
 }
 
 
+function subscribeToModeStatus() {
+  sendRosbridgeMessage({
+    op: "subscribe",
+    topic: "/mode/status",
+    type: "std_msgs/msg/String",
+    throttle_rate: 100,
+    queue_length: 1,
+  });
+}
+
+
 function handleRosbridgeMessage(rawMessage) {
   let message;
 
@@ -260,6 +297,19 @@ function handleRosbridgeMessage(rawMessage) {
   }
 
   if (
+    message.op === "publish"
+    && message.topic === "/mode/status"
+    && message.msg
+  ) {
+    const modeState = String(
+      message.msg.data ?? "stopped"
+    );
+
+    updateModeState(modeState);
+    return;
+  }
+
+  if (
     message.op === "service_response"
     && message.id
   ) {
@@ -295,6 +345,7 @@ function callSimulationService(action) {
   );
 
   setLifecycleButtonsBusy(true);
+  setModeButtonsBusy(true);
 
   setSimulationMessage(
     `${action[0].toUpperCase()}${action.slice(1)} request sent…`,
@@ -333,6 +384,21 @@ function handleServiceResponse(message) {
   state.serviceRequests.delete(message.id);
 
   const values = message.values ?? {};
+
+  if (action.startsWith("mode:")) {
+    handleModeServiceResponse(
+      action,
+      values,
+    );
+
+    if (state.serviceRequests.size === 0) {
+      setModeButtonsBusy(false);
+      updateModeControls();
+    }
+
+    return;
+  }
+
   const successful = Boolean(values.success);
   const responseMessage = String(
     values.message
@@ -366,6 +432,14 @@ function updateSimulationState(simulationState) {
     `simulation-state-indicator ${simulationState}`;
 
   updateSimulationControls();
+  updateModeControls();
+
+  if (simulationState !== "running") {
+    setModeMessage(
+      "Start the simulation before selecting a mode.",
+      "",
+    );
+  }
 }
 
 
@@ -411,6 +485,170 @@ function setSimulationMessage(
 }
 
 
+function callModeService(mode) {
+  if (!state.connected) {
+    setModeMessage(
+      "ROS is disconnected.",
+      "danger",
+    );
+    return;
+  }
+
+  if (state.simulationState !== "running") {
+    setModeMessage(
+      "Start the simulation before selecting a mode.",
+      "warning",
+    );
+    return;
+  }
+
+  const requestId =
+    `mode-${mode}-${Date.now()}-`
+    + `${Math.random().toString(16).slice(2)}`;
+
+  state.serviceRequests.set(
+    requestId,
+    `mode:${mode}`,
+  );
+
+  setModeButtonsBusy(true);
+
+  const actionLabel =
+    mode === "stop"
+      ? "Stopping active mode"
+      : `Starting ${mode} mode`;
+
+  setModeMessage(
+    `${actionLabel}…`,
+    "warning",
+  );
+
+  const sent = sendRosbridgeMessage({
+    op: "call_service",
+    service: `/mode/${mode}`,
+    type: "std_srvs/srv/Trigger",
+    args: {},
+    id: requestId,
+  });
+
+  if (!sent) {
+    state.serviceRequests.delete(requestId);
+    updateModeControls();
+
+    setModeMessage(
+      "Unable to send mode request.",
+      "danger",
+    );
+  }
+}
+
+
+function handleModeServiceResponse(
+  action,
+  values,
+) {
+  const mode = action.slice("mode:".length);
+  const successful = Boolean(values.success);
+
+  const responseMessage = String(
+    values.message
+    ?? `${mode} request completed`
+  );
+
+  setModeMessage(
+    responseMessage,
+    successful ? "success" : "danger",
+  );
+
+  addLog(
+    `Mode ${mode}: ${responseMessage}`,
+    successful ? "success" : "danger",
+  );
+}
+
+
+function updateModeState(modeState) {
+  state.modeState = modeState;
+
+  elements.modeState.textContent =
+    modeState.toUpperCase();
+
+  elements.modeStateIndicator.className =
+    `mode-state-indicator ${modeState}`;
+
+  updateModeControls();
+}
+
+
+function updateModeControls() {
+  const simulationRunning =
+    state.simulationState === "running";
+
+  const busy =
+    state.serviceRequests.size > 0
+    || state.modeState === "starting"
+    || state.modeState === "stopping";
+
+  const enabled =
+    state.connected
+    && simulationRunning
+    && !busy;
+
+  const buttons = {
+    manual: elements.manualModeButton,
+    mapping: elements.mappingModeButton,
+    localization: elements.localizationModeButton,
+    navigation: elements.navigationModeButton,
+  };
+
+  Object.entries(buttons).forEach(
+    ([mode, button]) => {
+      button.disabled =
+        !enabled || state.modeState === mode;
+
+      button.classList.toggle(
+        "active",
+        state.modeState === mode,
+      );
+    },
+  );
+
+  const activeMode = [
+    "manual",
+    "mapping",
+    "localization",
+    "navigation",
+  ].includes(state.modeState);
+
+  elements.stopModeButton.disabled =
+    !enabled || !activeMode;
+}
+
+
+function setModeButtonsBusy(busy) {
+  if (busy) {
+    elements.manualModeButton.disabled = true;
+    elements.mappingModeButton.disabled = true;
+    elements.localizationModeButton.disabled = true;
+    elements.navigationModeButton.disabled = true;
+    elements.stopModeButton.disabled = true;
+    return;
+  }
+
+  updateModeControls();
+}
+
+
+function setModeMessage(
+  message,
+  level = "",
+) {
+  elements.modeMessage.textContent = message;
+  elements.modeMessage.className =
+    `mode-message ${level}`.trim();
+}
+
+
 function updateConnectionStatus(status) {
   elements.connectionIndicator.className =
     `status-indicator ${status}`;
@@ -418,6 +656,7 @@ function updateConnectionStatus(status) {
   if (status === "connected") {
     elements.connectionText.textContent = "ROS connected";
     updateSimulationControls();
+    updateModeControls();
     return;
   }
 
@@ -426,6 +665,7 @@ function updateConnectionStatus(status) {
       "Connecting to ROS…";
 
     setLifecycleButtonsBusy(true);
+    setModeButtonsBusy(true);
     return;
   }
 
@@ -967,6 +1207,31 @@ function registerEventListeners() {
   elements.resetSimulationButton.addEventListener(
     "click",
     () => callSimulationService("reset"),
+  );
+
+  elements.manualModeButton.addEventListener(
+    "click",
+    () => callModeService("manual"),
+  );
+
+  elements.mappingModeButton.addEventListener(
+    "click",
+    () => callModeService("mapping"),
+  );
+
+  elements.localizationModeButton.addEventListener(
+    "click",
+    () => callModeService("localization"),
+  );
+
+  elements.navigationModeButton.addEventListener(
+    "click",
+    () => callModeService("navigation"),
+  );
+
+  elements.stopModeButton.addEventListener(
+    "click",
+    () => callModeService("stop"),
   );
 }
 

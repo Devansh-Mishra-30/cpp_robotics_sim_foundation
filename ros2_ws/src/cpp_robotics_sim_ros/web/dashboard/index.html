@@ -135,6 +135,82 @@
       </p>
     </section>
 
+    <section class="panel mode-panel">
+      <div class="panel-heading mode-heading">
+        <div>
+          <p class="eyebrow">OPERATING MODE</p>
+          <h2>Robot Mode</h2>
+        </div>
+
+        <div class="mode-state-wrapper">
+          <span
+            id="modeStateIndicator"
+            class="mode-state-indicator stopped"
+          ></span>
+
+          <strong id="modeState">
+            STOPPED
+          </strong>
+        </div>
+      </div>
+
+      <div class="mode-controls">
+        <button
+          id="manualModeButton"
+          class="mode-button manual"
+          type="button"
+          disabled
+        >
+          <strong>Manual</strong>
+          <small>Keyboard, gamepad, or dashboard control</small>
+        </button>
+
+        <button
+          id="mappingModeButton"
+          class="mode-button mapping"
+          type="button"
+          disabled
+        >
+          <strong>Mapping</strong>
+          <small>Launch SLAM Toolbox</small>
+        </button>
+
+        <button
+          id="localizationModeButton"
+          class="mode-button localization"
+          type="button"
+          disabled
+        >
+          <strong>Localization</strong>
+          <small>Load map and launch AMCL</small>
+        </button>
+
+        <button
+          id="navigationModeButton"
+          class="mode-button navigation"
+          type="button"
+          disabled
+        >
+          <strong>Navigation</strong>
+          <small>Launch the Nav2 stack</small>
+        </button>
+
+        <button
+          id="stopModeButton"
+          class="mode-button stop"
+          type="button"
+          disabled
+        >
+          <strong>Stop Mode</strong>
+          <small>Stop the active auxiliary stack</small>
+        </button>
+      </div>
+
+      <p id="modeMessage" class="mode-message">
+        Start the simulation before selecting a mode.
+      </p>
+    </section>
+
     <section class="main-grid">
       <article class="panel drive-panel">
         <div class="panel-heading">
