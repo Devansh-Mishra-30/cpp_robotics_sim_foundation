@@ -1,0 +1,13 @@
+mode_manager:
+  ros__parameters:
+    launch_package: cpp_robotics_sim_ros
+
+    mapping_launch_file: slam_mapping.launch.py
+    localization_launch_file: amcl_localization.launch.py
+    navigation_launch_file: nav2_navigation.launch.py
+
+    managed_use_sim_time: true
+
+    startup_grace_period: 3.0
+    shutdown_timeout: 10.0
+    kill_timeout: 3.0

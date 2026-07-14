@@ -51,6 +51,25 @@ def generate_launch_description():
         ],
     )
 
+    mode_manager_config = (
+    package_share
+    / "config"
+    / "mode_manager.yaml"
+    )
+
+    mode_manager = Node(
+        package="cpp_robotics_sim_ros",
+        executable="mode_manager_node.py",
+        name="mode_manager",
+        output="screen",
+        parameters=[
+            str(mode_manager_config),
+            {
+                "use_sim_time": False,
+            },
+        ],
+    )
+
     rosbridge_websocket = Node(
         package="rosbridge_server",
         executable="rosbridge_websocket",
@@ -97,6 +116,7 @@ def generate_launch_description():
                 description="Dashboard HTTP port",
             ),
             simulation_manager,
+            mode_manager,
             rosbridge_websocket,
             dashboard_server,
         ]
