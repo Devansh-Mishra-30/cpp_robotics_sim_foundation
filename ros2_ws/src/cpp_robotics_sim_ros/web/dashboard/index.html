@@ -358,6 +358,116 @@
       </p>
     </section>
 
+    <section class="panel navigation-goal-panel">
+      <div class="panel-heading">
+        <div>
+          <p class="eyebrow">NAV2 GOAL CONTROL</p>
+          <h2>Navigation Goal</h2>
+        </div>
+
+        <div class="navigation-state-wrapper">
+          <span
+            id="navigationStateIndicator"
+            class="navigation-state-indicator inactive"
+          ></span>
+
+          <strong id="navigationGoalState">
+            INACTIVE
+          </strong>
+        </div>
+      </div>
+
+      <div class="navigation-goal-grid">
+        <label>
+          <span>Goal X (m)</span>
+          <input
+            id="navigationGoalX"
+            type="number"
+            value="1.0"
+            step="0.1"
+            disabled
+          >
+        </label>
+
+        <label>
+          <span>Goal Y (m)</span>
+          <input
+            id="navigationGoalY"
+            type="number"
+            value="0.0"
+            step="0.1"
+            disabled
+          >
+        </label>
+
+        <label>
+          <span>Goal yaw (rad)</span>
+          <input
+            id="navigationGoalYaw"
+            type="number"
+            value="0.0"
+            step="0.1"
+            disabled
+          >
+        </label>
+
+        <button
+          id="sendNavigationGoalButton"
+          class="send-navigation-goal-button"
+          type="button"
+          disabled
+        >
+          Send Goal
+        </button>
+
+        <button
+          id="cancelNavigationGoalButton"
+          class="cancel-navigation-goal-button"
+          type="button"
+          disabled
+        >
+          Cancel Goal
+        </button>
+      </div>
+
+      <div class="navigation-feedback-grid">
+        <article class="navigation-feedback-card">
+          <span>Distance remaining</span>
+          <strong id="navigationDistanceRemaining">
+            —
+          </strong>
+        </article>
+
+        <article class="navigation-feedback-card">
+          <span>Estimated time remaining</span>
+          <strong id="navigationEstimatedTime">
+            —
+          </strong>
+        </article>
+
+        <article class="navigation-feedback-card">
+          <span>Navigation elapsed time</span>
+          <strong id="navigationElapsedTime">
+            —
+          </strong>
+        </article>
+
+        <article class="navigation-feedback-card">
+          <span>Recovery count</span>
+          <strong id="navigationRecoveryCount">
+            0
+          </strong>
+        </article>
+      </div>
+
+      <p
+        id="navigationGoalMessage"
+        class="navigation-goal-message"
+      >
+        Enter Navigation mode to send a goal.
+      </p>
+    </section>
+
     <section class="main-grid">
       <article class="panel drive-panel">
         <div class="panel-heading">

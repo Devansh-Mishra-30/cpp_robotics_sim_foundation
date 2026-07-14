@@ -26,6 +26,19 @@ const state = {
   savedMaps: [],
   selectedMapName: "",
   selectedMapPath: "",
+
+  navigationState: "inactive",
+  navigationGoalActive: false,
+  navigationRequestPending: false,
+  navigationResult: "",
+
+  navigationFeedback: {
+    distanceRemaining: null,
+    estimatedTimeRemaining: null,
+    navigationTime: null,
+    recoveryCount: 0,
+  },
+
   serviceRequests: new Map(),
 
   pressedKeys: new Set(),
@@ -166,6 +179,66 @@ const elements = {
 
   localizationMessage:
     document.getElementById("localizationMessage"),
+
+  navigationStateIndicator:
+    document.getElementById(
+      "navigationStateIndicator"
+    ),
+
+  navigationGoalState:
+    document.getElementById(
+      "navigationGoalState"
+    ),
+
+  navigationGoalX:
+    document.getElementById(
+      "navigationGoalX"
+    ),
+
+  navigationGoalY:
+    document.getElementById(
+      "navigationGoalY"
+    ),
+
+  navigationGoalYaw:
+    document.getElementById(
+      "navigationGoalYaw"
+    ),
+
+  sendNavigationGoalButton:
+    document.getElementById(
+      "sendNavigationGoalButton"
+    ),
+
+  cancelNavigationGoalButton:
+    document.getElementById(
+      "cancelNavigationGoalButton"
+    ),
+
+  navigationDistanceRemaining:
+    document.getElementById(
+      "navigationDistanceRemaining"
+    ),
+
+  navigationEstimatedTime:
+    document.getElementById(
+      "navigationEstimatedTime"
+    ),
+
+  navigationElapsedTime:
+    document.getElementById(
+      "navigationElapsedTime"
+    ),
+
+  navigationRecoveryCount:
+    document.getElementById(
+      "navigationRecoveryCount"
+    ),
+
+  navigationGoalMessage:
+    document.getElementById(
+      "navigationGoalMessage"
+    ),
 };
 
 
@@ -198,6 +271,8 @@ function connectRosbridge() {
     subscribeToSavedMaps();
     subscribeToLocalizationStatus();
     subscribeToSelectedMap();
+    subscribeToNavigationStatus();
+    subscribeToNavigationFeedback();
 
     publishEmergencyStop(state.emergencyStop);
 
@@ -346,6 +421,27 @@ function subscribeToSelectedMap() {
 }
 
 
+function subscribeToNavigationStatus() {
+  sendRosbridgeMessage({
+    op: "subscribe",
+    topic: "/navigation/status",
+    type: "std_msgs/msg/String",
+    queue_length: 1,
+  });
+}
+
+
+function subscribeToNavigationFeedback() {
+  sendRosbridgeMessage({
+    op: "subscribe",
+    topic: "/navigation/feedback",
+    type: "std_msgs/msg/String",
+    throttle_rate: 100,
+    queue_length: 1,
+  });
+}
+
+
 function handleRosbridgeMessage(rawMessage) {
   let message;
 
@@ -431,6 +527,24 @@ function handleRosbridgeMessage(rawMessage) {
     && message.msg
   ) {
     handleSelectedMap(message.msg.data);
+    return;
+  }
+
+  if (
+    message.op === "publish"
+    && message.topic === "/navigation/status"
+    && message.msg
+  ) {
+    handleNavigationStatus(message.msg.data);
+    return;
+  }
+
+  if (
+    message.op === "publish"
+    && message.topic === "/navigation/feedback"
+    && message.msg
+  ) {
+    handleNavigationFeedback(message.msg.data);
     return;
   }
 
@@ -567,6 +681,7 @@ function updateSimulationState(simulationState) {
   }
   updateMappingControls();
   updateLocalizationControls();
+  updateNavigationControls();
 }
 
 
@@ -706,6 +821,7 @@ function updateModeState(modeState) {
   updateModeControls();
   updateMappingControls();
   updateLocalizationControls();
+  updateNavigationControls();
 }
 
 
@@ -1218,6 +1334,444 @@ function setLocalizationMessage(
 }
 
 
+
+function sendNavigationGoal() {
+  if (!state.connected) {
+    setNavigationGoalMessage(
+      "ROS is disconnected.",
+      "danger",
+    );
+    return;
+  }
+
+  if (state.simulationState !== "running") {
+    setNavigationGoalMessage(
+      "Simulation must be running.",
+      "warning",
+    );
+    return;
+  }
+
+  if (state.modeState !== "navigation") {
+    setNavigationGoalMessage(
+      "Navigation mode must be active.",
+      "warning",
+    );
+    return;
+  }
+
+  if (
+    state.navigationGoalActive
+    || state.navigationRequestPending
+  ) {
+    setNavigationGoalMessage(
+      "Cancel the active goal before sending another.",
+      "warning",
+    );
+    return;
+  }
+
+  const x = Number(
+    elements.navigationGoalX.value
+  );
+
+  const y = Number(
+    elements.navigationGoalY.value
+  );
+
+  const yaw = Number(
+    elements.navigationGoalYaw.value
+  );
+
+  if (![x, y, yaw].every(Number.isFinite)) {
+    setNavigationGoalMessage(
+      "Goal X, Y, and yaw must be finite numbers.",
+      "danger",
+    );
+    return;
+  }
+
+  const sent = sendRosbridgeMessage({
+    op: "publish",
+    topic: "/navigation/goal_request",
+    msg: {
+      data: JSON.stringify({
+        x,
+        y,
+        yaw,
+      }),
+    },
+  });
+
+  if (!sent) {
+    setNavigationGoalMessage(
+      "Unable to send navigation goal.",
+      "danger",
+    );
+    return;
+  }
+
+  state.navigationRequestPending = true;
+  state.navigationResult = "";
+
+  setNavigationGoalMessage(
+    `Goal request sent: x=${x.toFixed(2)}, `
+    + `y=${y.toFixed(2)}, `
+    + `yaw=${yaw.toFixed(2)} rad`,
+    "warning",
+  );
+
+  updateNavigationControls();
+
+  addLog(
+    `Navigation goal requested: `
+    + `x=${x.toFixed(2)}, `
+    + `y=${y.toFixed(2)}, `
+    + `yaw=${yaw.toFixed(2)}`,
+    "info",
+  );
+}
+
+
+function cancelNavigationGoal() {
+  if (!state.connected) {
+    setNavigationGoalMessage(
+      "ROS is disconnected.",
+      "danger",
+    );
+    return;
+  }
+
+  if (state.modeState !== "navigation") {
+    setNavigationGoalMessage(
+      "Navigation mode is not active.",
+      "warning",
+    );
+    return;
+  }
+
+  if (
+    !state.navigationGoalActive
+    && !state.navigationRequestPending
+  ) {
+    setNavigationGoalMessage(
+      "There is no active navigation goal.",
+      "warning",
+    );
+    return;
+  }
+
+  const sent = sendRosbridgeMessage({
+    op: "publish",
+    topic: "/navigation/cancel_request",
+    msg: {
+      data: JSON.stringify({
+        cancel: true,
+      }),
+    },
+  });
+
+  if (!sent) {
+    setNavigationGoalMessage(
+      "Unable to send cancellation request.",
+      "danger",
+    );
+    return;
+  }
+
+  setNavigationGoalMessage(
+    "Cancel request sent…",
+    "warning",
+  );
+
+  addLog(
+    "Navigation goal cancellation requested.",
+    "warning",
+  );
+}
+
+
+function handleNavigationStatus(rawPayload) {
+  let payload;
+
+  try {
+    payload = JSON.parse(rawPayload);
+  } catch {
+    state.navigationState = "error";
+    state.navigationGoalActive = false;
+    state.navigationRequestPending = false;
+
+    setNavigationGoalMessage(
+      "Received invalid navigation status.",
+      "danger",
+    );
+
+    updateNavigationDisplay();
+    updateNavigationControls();
+    return;
+  }
+
+  const navigationState =
+    String(payload.state ?? "unknown");
+
+  const previousState =
+    state.navigationState;
+
+  state.navigationState = navigationState;
+
+  state.navigationGoalActive =
+    Boolean(payload.goal_active);
+
+  state.navigationRequestPending =
+    navigationState === "waiting_for_server"
+    || navigationState === "sending";
+
+  state.navigationResult =
+    String(payload.result ?? "");
+
+  if (
+    payload.feedback
+    && typeof payload.feedback === "object"
+    && Object.keys(payload.feedback).length > 0
+  ) {
+    updateNavigationFeedbackValues(
+      payload.feedback
+    );
+  }
+
+  const level =
+    navigationState === "succeeded"
+      ? "success"
+      : (
+          navigationState === "aborted"
+          || navigationState === "rejected"
+          || navigationState === "invalid_request"
+          || navigationState === "server_unavailable"
+        )
+        ? "danger"
+        : (
+            navigationState === "waiting_for_server"
+            || navigationState === "sending"
+            || navigationState === "accepted"
+            || navigationState === "canceling"
+            || navigationState === "cancel_pending"
+            || navigationState === "canceled"
+          )
+          ? "warning"
+          : "";
+
+  const statusMessage = String(
+    payload.message
+    ?? "Navigation status updated"
+  );
+
+  setNavigationGoalMessage(
+    statusMessage,
+    level,
+  );
+
+  updateNavigationDisplay();
+  updateNavigationControls();
+
+  if (
+    previousState !== navigationState
+    && [
+      "succeeded",
+      "canceled",
+      "aborted",
+      "rejected",
+      "server_unavailable",
+      "invalid_request",
+    ].includes(navigationState)
+  ) {
+    addLog(
+      `Navigation ${navigationState}: `
+      + statusMessage,
+      navigationState === "succeeded"
+        ? "success"
+        : navigationState === "canceled"
+          ? "warning"
+          : "danger",
+    );
+  }
+}
+
+
+function handleNavigationFeedback(rawPayload) {
+  let payload;
+
+  try {
+    payload = JSON.parse(rawPayload);
+  } catch {
+    setNavigationGoalMessage(
+      "Received invalid navigation feedback.",
+      "danger",
+    );
+    return;
+  }
+
+  updateNavigationFeedbackValues(payload);
+
+  if (payload.state) {
+    const feedbackState =
+      String(payload.state);
+
+    if (
+      feedbackState === "navigating"
+      && state.navigationState === "accepted"
+    ) {
+      state.navigationState = "navigating";
+    }
+  }
+
+  updateNavigationDisplay();
+  updateNavigationControls();
+}
+
+
+function updateNavigationFeedbackValues(payload) {
+  const finiteOrNull = (value) => {
+    if (value === null || value === undefined) {
+      return null;
+    }
+
+    const number = Number(value);
+
+    return Number.isFinite(number)
+      ? number
+      : null;
+  };
+
+  state.navigationFeedback.distanceRemaining =
+    finiteOrNull(payload.distance_remaining);
+
+  state.navigationFeedback.estimatedTimeRemaining =
+    finiteOrNull(payload.estimated_time_remaining);
+
+  state.navigationFeedback.navigationTime =
+    finiteOrNull(payload.navigation_time);
+
+  const recoveryCount =
+    Number(payload.recovery_count);
+
+  state.navigationFeedback.recoveryCount =
+    Number.isInteger(recoveryCount)
+    && recoveryCount >= 0
+      ? recoveryCount
+      : 0;
+}
+
+
+function formatNavigationDistance(value) {
+  return Number.isFinite(value)
+    ? `${value.toFixed(2)} m`
+    : "—";
+}
+
+
+function formatNavigationTime(value) {
+  if (!Number.isFinite(value)) {
+    return "—";
+  }
+
+  if (value < 60.0) {
+    return `${value.toFixed(1)} s`;
+  }
+
+  const minutes = Math.floor(value / 60.0);
+  const seconds = value - minutes * 60.0;
+
+  return `${minutes}m ${seconds.toFixed(1)}s`;
+}
+
+
+function updateNavigationDisplay() {
+  const displayState =
+    state.modeState === "navigation"
+      ? state.navigationState
+      : "inactive";
+
+  elements.navigationGoalState.textContent =
+    displayState
+      .replaceAll("_", " ")
+      .toUpperCase();
+
+  elements.navigationStateIndicator.className =
+    `navigation-state-indicator ${displayState}`;
+
+  elements.navigationDistanceRemaining.textContent =
+    formatNavigationDistance(
+      state.navigationFeedback.distanceRemaining
+    );
+
+  elements.navigationEstimatedTime.textContent =
+    formatNavigationTime(
+      state.navigationFeedback.estimatedTimeRemaining
+    );
+
+  elements.navigationElapsedTime.textContent =
+    formatNavigationTime(
+      state.navigationFeedback.navigationTime
+    );
+
+  elements.navigationRecoveryCount.textContent =
+    String(
+      state.navigationFeedback.recoveryCount
+    );
+}
+
+
+function updateNavigationControls() {
+  const navigationModeActive =
+    state.connected
+    && state.simulationState === "running"
+    && state.modeState === "navigation";
+
+  const goalBusy =
+    state.navigationGoalActive
+    || state.navigationRequestPending;
+
+  elements.navigationGoalX.disabled =
+    !navigationModeActive || goalBusy;
+
+  elements.navigationGoalY.disabled =
+    !navigationModeActive || goalBusy;
+
+  elements.navigationGoalYaw.disabled =
+    !navigationModeActive || goalBusy;
+
+  elements.sendNavigationGoalButton.disabled =
+    !navigationModeActive || goalBusy;
+
+  elements.cancelNavigationGoalButton.disabled =
+    !navigationModeActive || !goalBusy;
+
+  updateNavigationDisplay();
+
+  if (
+    !navigationModeActive
+    && !goalBusy
+  ) {
+    setNavigationGoalMessage(
+      "Enter Navigation mode to send a goal.",
+      "",
+    );
+  }
+}
+
+
+function setNavigationGoalMessage(
+  message,
+  level = "",
+) {
+  elements.navigationGoalMessage.textContent =
+    message;
+
+  elements.navigationGoalMessage.className =
+    `navigation-goal-message ${level}`.trim();
+}
+
+
 function escapeHtml(value) {
   const temporaryElement =
     document.createElement("div");
@@ -1241,6 +1795,7 @@ function updateConnectionStatus(status) {
     updateMappingControls();
     updateLocalizationControls();
     updateModeControls();
+    updateNavigationControls();
     return;
   }
 
@@ -1849,12 +2404,41 @@ function registerEventListeners() {
       setInitialPose,
     );
 
+  elements.sendNavigationGoalButton
+    .addEventListener(
+      "click",
+      sendNavigationGoal,
+    );
+
+  elements.cancelNavigationGoalButton
+    .addEventListener(
+      "click",
+      cancelNavigationGoal,
+    );
+
+  [
+    elements.navigationGoalX,
+    elements.navigationGoalY,
+    elements.navigationGoalYaw,
+  ].forEach((input) => {
+    input.addEventListener(
+      "keydown",
+      (event) => {
+        if (event.key === "Enter") {
+          sendNavigationGoal();
+        }
+      },
+    );
+  });
+
 }
 
 
 function initialize() {
   registerEventListeners();
   updateCommandDisplay(0.0, 0.0);
+  updateNavigationDisplay();
+  updateNavigationControls();
   connectRosbridge();
 }
 

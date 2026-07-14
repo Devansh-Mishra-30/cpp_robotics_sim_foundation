@@ -96,6 +96,7 @@ install(PROGRAMS
   scripts/mode_manager_node.py
   scripts/localization_manager_node.py
   scripts/mapping_manager_node.py
+  scripts/navigation_goal_manager_node.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

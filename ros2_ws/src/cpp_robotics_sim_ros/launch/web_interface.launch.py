@@ -37,6 +37,8 @@ PROCESS_PATTERNS = (
     "mode_manager_node.py",
     "mapping_manager_node.py",
     "localization_manager_node.py",
+    "navigation_goal_manager_node.py",
+    "cmd_vel_twist_bridge.py",
     "rosbridge_websocket",
     "python3 -m http.server 8080",
     "ros2_control.launch.py",
@@ -492,6 +494,22 @@ def generate_launch_description():
         ],
     )
 
+
+    navigation_goal_manager = Node(
+        package=PROJECT_PACKAGE,
+        executable="navigation_goal_manager_node.py",
+        name="navigation_goal_manager",
+        output="screen",
+        parameters=[
+            {
+                "use_sim_time": True,
+                "action_name": "/navigate_to_pose",
+                "goal_frame": "map",
+                "server_wait_timeout": 2.0,
+            },
+        ],
+    )
+
     rosbridge_websocket = Node(
         package="rosbridge_server",
         executable="rosbridge_websocket",
@@ -575,6 +593,7 @@ def generate_launch_description():
             mode_manager,
             mapping_manager,
             localization_manager,
+            navigation_goal_manager,
             rosbridge_websocket,
             dashboard_server,
             browser_action,
