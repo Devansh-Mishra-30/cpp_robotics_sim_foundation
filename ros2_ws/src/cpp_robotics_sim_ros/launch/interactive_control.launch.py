@@ -16,6 +16,7 @@ from launch_ros.substitutions import FindPackageShare
 
 
 def generate_launch_description():
+    world = LaunchConfiguration("world")
     use_sim_time = LaunchConfiguration("use_sim_time")
 
     package_share = FindPackageShare(
@@ -33,6 +34,7 @@ def generate_launch_description():
             )
         ),
         launch_arguments={
+            "world": world,
             "use_sim_time": use_sim_time,
         }.items(),
     )
@@ -65,6 +67,17 @@ def generate_launch_description():
 
     return LaunchDescription(
         [
+            DeclareLaunchArgument(
+                "world",
+                default_value=PathJoinSubstitution(
+                    [
+                        package_share,
+                        "worlds",
+                        "empty_diffbot_world.sdf",
+                    ]
+                ),
+                description="Path to Gazebo world SDF file",
+            ),
             DeclareLaunchArgument(
                 "use_sim_time",
                 default_value="true",

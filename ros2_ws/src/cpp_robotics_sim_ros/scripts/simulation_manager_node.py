@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import json
 import os
 import signal
 import subprocess
@@ -15,6 +16,9 @@ from rclpy.qos import (
     HistoryPolicy,
     QoSProfile,
     ReliabilityPolicy,
+)
+from ament_index_python.packages import (
+    get_package_share_directory,
 )
 from std_msgs.msg import String
 from std_srvs.srv import Trigger
@@ -54,6 +58,26 @@ class SimulationManagerNode(Node):
         )
 
         self.declare_parameter(
+            "default_environment",
+            "warehouse",
+        )
+        self.declare_parameter(
+            "environment_names",
+            [
+                "warehouse",
+                "hospital",
+            ],
+        )
+        self.declare_parameter(
+            "warehouse_world_file",
+            "warehouse_world.sdf",
+        )
+        self.declare_parameter(
+            "hospital_world_file",
+            "hospital_world.sdf",
+        )
+
+        self.declare_parameter(
             "startup_grace_period",
             4.0,
         )
@@ -77,6 +101,38 @@ class SimulationManagerNode(Node):
                 "managed_use_sim_time"
             ).value
         )
+
+        self.environment_names = [
+            str(name)
+            for name in self.get_parameter(
+                "environment_names"
+            ).value
+        ]
+        self.selected_environment = str(
+            self.get_parameter(
+                "default_environment"
+            ).value
+        )
+
+        self.environment_world_files = {
+            "warehouse": str(
+                self.get_parameter(
+                    "warehouse_world_file"
+                ).value
+            ),
+            "hospital": str(
+                self.get_parameter(
+                    "hospital_world_file"
+                ).value
+            ),
+        }
+
+        self.package_share_directory = (
+            get_package_share_directory(
+                self.launch_package
+            )
+        )
+
         self.startup_grace_period = float(
             self.get_parameter("startup_grace_period").value
         )
@@ -100,6 +156,23 @@ class SimulationManagerNode(Node):
             String,
             "/simulation/status",
             status_qos,
+        )
+
+        self.environment_status_publisher = (
+            self.create_publisher(
+                String,
+                "/simulation/environment_status",
+                status_qos,
+            )
+        )
+
+        self.environment_request_subscription = (
+            self.create_subscription(
+                String,
+                "/simulation/environment_request",
+                self.environment_request_callback,
+                10,
+            )
         )
 
         self.start_service = self.create_service(
@@ -131,6 +204,12 @@ class SimulationManagerNode(Node):
         )
 
         self.set_state(SimulationState.STOPPED)
+        self.publish_environment_status(
+            state="ready",
+            message=(
+                "Environment selection ready"
+            ),
+        )
 
         self.get_logger().info(
             "Simulation manager ready"
@@ -151,6 +230,44 @@ class SimulationManagerNode(Node):
                 "launch_file must not be empty"
             )
 
+        if not self.environment_names:
+            raise ValueError(
+                "environment_names must not be empty"
+            )
+
+        if (
+            self.selected_environment
+            not in self.environment_names
+        ):
+            raise ValueError(
+                "default_environment must be one of "
+                f"{self.environment_names}"
+            )
+
+        missing_world_entries = [
+            environment
+            for environment in self.environment_names
+            if environment
+            not in self.environment_world_files
+        ]
+
+        if missing_world_entries:
+            raise ValueError(
+                "Missing world-file configuration for: "
+                f"{missing_world_entries}"
+            )
+
+        for environment in self.environment_names:
+            world_file = self.environment_world_files[
+                environment
+            ]
+
+            if not world_file:
+                raise ValueError(
+                    "World filename must not be empty for "
+                    f"{environment}"
+                )
+
         if self.startup_grace_period < 0.0:
             raise ValueError(
                 "startup_grace_period must not be negative"
@@ -165,6 +282,129 @@ class SimulationManagerNode(Node):
             raise ValueError(
                 "kill_timeout must be greater than zero"
             )
+
+    def environment_request_callback(
+        self,
+        message: String,
+    ) -> None:
+        requested_environment = message.data.strip().lower()
+
+        if not requested_environment:
+            self.publish_environment_status(
+                state="invalid_request",
+                message=(
+                    "Environment request must not be empty"
+                ),
+            )
+            return
+
+        if (
+            requested_environment
+            not in self.environment_names
+        ):
+            self.publish_environment_status(
+                state="invalid_request",
+                message=(
+                    "Unsupported environment: "
+                    f"{requested_environment}"
+                ),
+            )
+            return
+
+        with self.process_lock:
+            if (
+                self.process_is_running()
+                or self.state
+                in (
+                    SimulationState.STARTING,
+                    SimulationState.RUNNING,
+                    SimulationState.STOPPING,
+                )
+            ):
+                self.publish_environment_status(
+                    state="locked",
+                    message=(
+                        "Stop the simulation before changing "
+                        "the environment"
+                    ),
+                )
+                return
+
+            self.selected_environment = (
+                requested_environment
+            )
+
+        self.get_logger().info(
+            "Selected simulation environment: "
+            f"{self.selected_environment}"
+        )
+
+        self.publish_environment_status(
+            state="selected",
+            message=(
+                "Selected environment: "
+                f"{self.selected_environment}"
+            ),
+        )
+
+    def resolve_selected_world_path(self) -> str:
+        world_filename = self.environment_world_files[
+            self.selected_environment
+        ]
+
+        world_path = os.path.join(
+            self.package_share_directory,
+            "worlds",
+            world_filename,
+        )
+
+        if not os.path.isfile(world_path):
+            raise FileNotFoundError(
+                "World file does not exist: "
+                f"{world_path}"
+            )
+
+        return world_path
+
+    def publish_environment_status(
+        self,
+        state: str,
+        message: str,
+    ) -> None:
+        if not rclpy.ok(context=self.context):
+            return
+
+        world_filename = self.environment_world_files.get(
+            self.selected_environment,
+            "",
+        )
+
+        payload = {
+            "state": state,
+            "message": message,
+            "selected_environment": (
+                self.selected_environment
+            ),
+            "available_environments": (
+                self.environment_names
+            ),
+            "world_file": world_filename,
+            "selection_locked": (
+                self.state
+                != SimulationState.STOPPED
+                or self.process_is_running()
+            ),
+        }
+
+        ros_message = String()
+        ros_message.data = json.dumps(
+            payload,
+            separators=(",", ":"),
+        )
+
+        self.environment_status_publisher.publish(
+            ros_message
+        )
 
     def start_callback(
         self,
@@ -236,11 +476,30 @@ class SimulationManagerNode(Node):
             self.last_error = ""
             self.set_state(SimulationState.STARTING)
 
+            try:
+                selected_world_path = (
+                    self.resolve_selected_world_path()
+                )
+            except (KeyError, FileNotFoundError) as error:
+                self.last_error = str(error)
+                self.set_state(SimulationState.ERROR)
+
+                self.publish_environment_status(
+                    state="error",
+                    message=self.last_error,
+                )
+
+                self.get_logger().error(
+                    self.last_error
+                )
+                return False, self.last_error
+
             command = [
                 "ros2",
                 "launch",
                 self.launch_package,
                 self.launch_file,
+                f"world:={selected_world_path}",
                 f"use_sim_time:={'true' if self.managed_use_sim_time else 'false'}",
             ]
 
@@ -280,6 +539,13 @@ class SimulationManagerNode(Node):
                 return False, self.last_error
 
             self.set_state(SimulationState.RUNNING)
+            self.publish_environment_status(
+                state="running",
+                message=(
+                    "Simulation running in "
+                    f"{self.selected_environment}"
+                ),
+            )
 
             message = (
                 f"Simulation started with PID "
@@ -373,6 +639,13 @@ class SimulationManagerNode(Node):
 
             self.cleanup_remaining_processes()
             self.set_state(SimulationState.STOPPED)
+            self.publish_environment_status(
+                state="selected",
+                message=(
+                    "Simulation stopped; environment "
+                    "selection unlocked"
+                ),
+            )
 
             message = "Simulation stopped successfully"
 

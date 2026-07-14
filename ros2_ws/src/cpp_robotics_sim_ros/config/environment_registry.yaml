@@ -1,0 +1,10 @@
+simulation_manager:
+  ros__parameters:
+    default_environment: warehouse
+
+    environment_names:
+      - warehouse
+      - hospital
+
+    warehouse_world_file: warehouse_world.sdf
+    hospital_world_file: hospital_world.sdf

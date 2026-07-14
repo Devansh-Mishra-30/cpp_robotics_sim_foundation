@@ -400,6 +400,12 @@ def generate_launch_description():
         / "simulation_manager.yaml"
     )
 
+    environment_registry_config = (
+        package_share
+        / "config"
+        / "environment_registry.yaml"
+    )
+
     mode_manager_config = (
         package_share
         / "config"
@@ -421,6 +427,7 @@ def generate_launch_description():
     required_paths = (
         dashboard_directory,
         simulation_manager_config,
+        environment_registry_config,
         mode_manager_config,
         mapping_manager_config,
         localization_manager_config,
@@ -449,6 +456,7 @@ def generate_launch_description():
         output="screen",
         parameters=[
             str(simulation_manager_config),
+            str(environment_registry_config),
             {
                 "use_sim_time": False,
             },
