@@ -71,6 +71,70 @@
       </article>
     </section>
 
+    <section class="panel simulation-panel">
+      <div class="panel-heading simulation-heading">
+        <div>
+          <p class="eyebrow">SIMULATION LIFECYCLE</p>
+          <h2>Simulation Manager</h2>
+        </div>
+
+        <div class="simulation-state-wrapper">
+          <span
+            id="simulationStateIndicator"
+            class="simulation-state-indicator stopped"
+          ></span>
+
+          <strong id="simulationState">
+            STOPPED
+          </strong>
+        </div>
+      </div>
+
+      <div class="simulation-controls">
+        <button
+          id="startSimulationButton"
+          class="lifecycle-button start"
+          type="button"
+        >
+          <span class="lifecycle-icon">▶</span>
+          <span>
+            <strong>Start</strong>
+            <small>Launch Gazebo and control stack</small>
+          </span>
+        </button>
+
+        <button
+          id="stopSimulationButton"
+          class="lifecycle-button stop"
+          type="button"
+          disabled
+        >
+          <span class="lifecycle-icon">■</span>
+          <span>
+            <strong>Stop</strong>
+            <small>Shut down simulation safely</small>
+          </span>
+        </button>
+
+        <button
+          id="resetSimulationButton"
+          class="lifecycle-button reset"
+          type="button"
+          disabled
+        >
+          <span class="lifecycle-icon">↻</span>
+          <span>
+            <strong>Reset</strong>
+            <small>Restart from a clean state</small>
+          </span>
+        </button>
+      </div>
+
+      <p id="simulationMessage" class="simulation-message">
+        Simulation manager is ready.
+      </p>
+    </section>
+
     <section class="main-grid">
       <article class="panel drive-panel">
         <div class="panel-heading">

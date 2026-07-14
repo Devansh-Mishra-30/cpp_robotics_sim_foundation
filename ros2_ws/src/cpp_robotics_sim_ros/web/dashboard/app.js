@@ -20,6 +20,8 @@ const state = {
 
   emergencyStop: false,
   activeSource: "unknown",
+  simulationState: "unknown",
+  serviceRequests: new Map(),
 
   pressedKeys: new Set(),
   activePointerButton: null,
@@ -76,6 +78,24 @@ const elements = {
 
   driveButtons:
     document.querySelectorAll(".drive-button[data-linear]"),
+
+  simulationState:
+    document.getElementById("simulationState"),
+
+  simulationStateIndicator:
+    document.getElementById("simulationStateIndicator"),
+
+  simulationMessage:
+    document.getElementById("simulationMessage"),
+
+  startSimulationButton:
+    document.getElementById("startSimulationButton"),
+
+  stopSimulationButton:
+    document.getElementById("stopSimulationButton"),
+
+  resetSimulationButton:
+    document.getElementById("resetSimulationButton"),
 };
 
 
@@ -102,6 +122,7 @@ function connectRosbridge() {
 
     advertiseTopics();
     subscribeToActiveSource();
+    subscribeToSimulationStatus();
 
     publishEmergencyStop(state.emergencyStop);
 
@@ -188,6 +209,17 @@ function subscribeToActiveSource() {
 }
 
 
+function subscribeToSimulationStatus() {
+  sendRosbridgeMessage({
+    op: "subscribe",
+    topic: "/simulation/status",
+    type: "std_msgs/msg/String",
+    throttle_rate: 100,
+    queue_length: 1,
+  });
+}
+
+
 function handleRosbridgeMessage(rawMessage) {
   let message;
 
@@ -206,9 +238,176 @@ function handleRosbridgeMessage(rawMessage) {
     && message.topic === "/control/active_source"
     && message.msg
   ) {
-    const source = String(message.msg.data ?? "unknown");
+    const source = String(
+      message.msg.data ?? "unknown"
+    );
+
     updateActiveSource(source);
+    return;
   }
+
+  if (
+    message.op === "publish"
+    && message.topic === "/simulation/status"
+    && message.msg
+  ) {
+    const simulationState = String(
+      message.msg.data ?? "unknown"
+    );
+
+    updateSimulationState(simulationState);
+    return;
+  }
+
+  if (
+    message.op === "service_response"
+    && message.id
+  ) {
+    handleServiceResponse(message);
+  }
+}
+
+
+function makeServiceRequestId(action) {
+  return (
+    `simulation-${action}-`
+    + `${Date.now()}-`
+    + `${Math.random().toString(16).slice(2)}`
+  );
+}
+
+
+function callSimulationService(action) {
+  if (!state.connected) {
+    setSimulationMessage(
+      "ROS is disconnected.",
+      "danger",
+    );
+    return;
+  }
+
+  const service = `/simulation/${action}`;
+  const requestId = makeServiceRequestId(action);
+
+  state.serviceRequests.set(
+    requestId,
+    action,
+  );
+
+  setLifecycleButtonsBusy(true);
+
+  setSimulationMessage(
+    `${action[0].toUpperCase()}${action.slice(1)} request sent…`,
+    "warning",
+  );
+
+  const sent = sendRosbridgeMessage({
+    op: "call_service",
+    service,
+    type: "std_srvs/srv/Trigger",
+    args: {},
+    id: requestId,
+  });
+
+  if (!sent) {
+    state.serviceRequests.delete(requestId);
+    setLifecycleButtonsBusy(false);
+
+    setSimulationMessage(
+      "Unable to send service request.",
+      "danger",
+    );
+  }
+}
+
+
+function handleServiceResponse(message) {
+  const action = state.serviceRequests.get(
+    message.id
+  );
+
+  if (!action) {
+    return;
+  }
+
+  state.serviceRequests.delete(message.id);
+
+  const values = message.values ?? {};
+  const successful = Boolean(values.success);
+  const responseMessage = String(
+    values.message
+    ?? `${action} request completed`
+  );
+
+  setSimulationMessage(
+    responseMessage,
+    successful ? "success" : "danger",
+  );
+
+  addLog(
+    `Simulation ${action}: ${responseMessage}`,
+    successful ? "success" : "danger",
+  );
+
+  if (state.serviceRequests.size === 0) {
+    setLifecycleButtonsBusy(false);
+    updateSimulationControls();
+  }
+}
+
+
+function updateSimulationState(simulationState) {
+  state.simulationState = simulationState;
+
+  elements.simulationState.textContent =
+    simulationState.toUpperCase();
+
+  elements.simulationStateIndicator.className =
+    `simulation-state-indicator ${simulationState}`;
+
+  updateSimulationControls();
+}
+
+
+function updateSimulationControls() {
+  const busy =
+    state.serviceRequests.size > 0
+    || state.simulationState === "starting"
+    || state.simulationState === "stopping";
+
+  const running =
+    state.simulationState === "running";
+
+  elements.startSimulationButton.disabled =
+    busy || running || !state.connected;
+
+  elements.stopSimulationButton.disabled =
+    busy || !running || !state.connected;
+
+  elements.resetSimulationButton.disabled =
+    busy || !running || !state.connected;
+}
+
+
+function setLifecycleButtonsBusy(busy) {
+  if (busy) {
+    elements.startSimulationButton.disabled = true;
+    elements.stopSimulationButton.disabled = true;
+    elements.resetSimulationButton.disabled = true;
+    return;
+  }
+
+  updateSimulationControls();
+}
+
+
+function setSimulationMessage(
+  message,
+  level = "",
+) {
+  elements.simulationMessage.textContent = message;
+  elements.simulationMessage.className =
+    `simulation-message ${level}`.trim();
 }
 
 
@@ -218,15 +417,27 @@ function updateConnectionStatus(status) {
 
   if (status === "connected") {
     elements.connectionText.textContent = "ROS connected";
+    updateSimulationControls();
     return;
   }
 
   if (status === "connecting") {
-    elements.connectionText.textContent = "Connecting to ROS…";
+    elements.connectionText.textContent =
+      "Connecting to ROS…";
+
+    setLifecycleButtonsBusy(true);
     return;
   }
 
-  elements.connectionText.textContent = "ROS disconnected";
+  elements.connectionText.textContent =
+    "ROS disconnected";
+
+  setLifecycleButtonsBusy(true);
+
+  setSimulationMessage(
+    "Simulation controls unavailable while ROS is disconnected.",
+    "danger",
+  );
 }
 
 
@@ -741,6 +952,21 @@ function registerEventListeners() {
     () => {
       publishVelocity(0.0, 0.0);
     },
+  );
+
+  elements.startSimulationButton.addEventListener(
+    "click",
+    () => callSimulationService("start"),
+  );
+
+  elements.stopSimulationButton.addEventListener(
+    "click",
+    () => callSimulationService("stop"),
+  );
+
+  elements.resetSimulationButton.addEventListener(
+    "click",
+    () => callSimulationService("reset"),
   );
 }
 

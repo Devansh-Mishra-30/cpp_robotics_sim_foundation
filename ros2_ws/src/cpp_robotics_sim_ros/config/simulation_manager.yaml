@@ -3,7 +3,9 @@ simulation_manager:
     launch_package: cpp_robotics_sim_ros
     launch_file: interactive_control.launch.py
 
-    use_sim_time: true
+    # Controls the simulation launched by this manager.
+    # The manager itself continues using wall time.
+    managed_use_sim_time: true
 
     startup_grace_period: 4.0
     shutdown_timeout: 10.0

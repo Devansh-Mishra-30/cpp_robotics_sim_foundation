@@ -48,6 +48,10 @@ class SimulationManagerNode(Node):
             "launch_file",
             "interactive_control.launch.py",
         )
+        self.declare_parameter(
+            "managed_use_sim_time",
+            True,
+        )
 
         self.declare_parameter(
             "startup_grace_period",
@@ -68,8 +72,10 @@ class SimulationManagerNode(Node):
         self.launch_file = str(
             self.get_parameter("launch_file").value
         )
-        self.use_sim_time = bool(
-            self.get_parameter("use_sim_time").value
+        self.managed_use_sim_time = bool(
+            self.get_parameter(
+                "managed_use_sim_time"
+            ).value
         )
         self.startup_grace_period = float(
             self.get_parameter("startup_grace_period").value
@@ -235,7 +241,7 @@ class SimulationManagerNode(Node):
                 "launch",
                 self.launch_package,
                 self.launch_file,
-                f"use_sim_time:={'true' if self.use_sim_time else 'false'}",
+                f"use_sim_time:={'true' if self.managed_use_sim_time else 'false'}",
             ]
 
             self.get_logger().info(

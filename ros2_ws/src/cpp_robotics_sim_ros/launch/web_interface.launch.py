@@ -1,30 +1,54 @@
+from pathlib import Path
+
+from ament_index_python.packages import (
+    get_package_share_directory,
+)
 from launch import LaunchDescription
 from launch.actions import (
     DeclareLaunchArgument,
     ExecuteProcess,
 )
-from launch.substitutions import (
-    LaunchConfiguration,
-    PathJoinSubstitution,
-)
+from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
-from launch_ros.substitutions import FindPackageShare
 
 
 def generate_launch_description():
-    websocket_port = LaunchConfiguration("websocket_port")
-    dashboard_port = LaunchConfiguration("dashboard_port")
-
-    package_share = FindPackageShare(
-        "cpp_robotics_sim_ros"
+    websocket_port = LaunchConfiguration(
+        "websocket_port"
+    )
+    dashboard_port = LaunchConfiguration(
+        "dashboard_port"
     )
 
-    dashboard_directory = PathJoinSubstitution(
-        [
-            package_share,
-            "web",
-            "dashboard",
-        ]
+    package_share = Path(
+        get_package_share_directory(
+            "cpp_robotics_sim_ros"
+        )
+    )
+
+    dashboard_directory = (
+        package_share / "web" / "dashboard"
+    )
+
+    manager_config = (
+        package_share
+        / "config"
+        / "simulation_manager.yaml"
+    )
+
+    simulation_manager = Node(
+        package="cpp_robotics_sim_ros",
+        executable="simulation_manager_node.py",
+        name="simulation_manager",
+        output="screen",
+        parameters=[
+            str(manager_config),
+            {
+                # The manager must remain responsive while
+                # Gazebo and /clock are not running.
+                "use_sim_time": False,
+            },
+        ],
     )
 
     rosbridge_websocket = Node(
@@ -55,7 +79,7 @@ def generate_launch_description():
             "--bind",
             "0.0.0.0",
             "--directory",
-            dashboard_directory,
+            str(dashboard_directory),
         ],
         output="screen",
     )
@@ -72,6 +96,7 @@ def generate_launch_description():
                 default_value="8080",
                 description="Dashboard HTTP port",
             ),
+            simulation_manager,
             rosbridge_websocket,
             dashboard_server,
         ]
