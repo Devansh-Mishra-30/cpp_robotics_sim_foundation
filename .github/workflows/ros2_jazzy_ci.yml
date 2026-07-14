@@ -3,10 +3,10 @@ name: ROS 2 Jazzy CI
 on:
   push:
     branches:
-      - main
+      - master
   pull_request:
     branches:
-      - main
+      - master
   workflow_dispatch:
 
 jobs:
@@ -17,6 +17,9 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Run source syntax checks
+        run: ./scripts/check_syntax.sh
 
       - name: Set up ROS 2 apt repository
         run: |
@@ -57,7 +60,10 @@ jobs:
         run: |
           source /opt/ros/jazzy/setup.bash
           cd ros2_ws
-          colcon test --packages-select cpp_robotics_sim_ros --event-handlers console_direct+
+          colcon test \
+            --packages-select cpp_robotics_sim_ros \
+            --event-handlers console_direct+ \
+            --return-code-on-test-failure
           colcon test-result --verbose
 
       - name: Upload test logs

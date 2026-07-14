@@ -71,6 +71,22 @@ class NavigationGoalManagerNode(Node):
             "server_wait_timeout",
             2.0,
         )
+        self.declare_parameter(
+            "minimum_goal_x",
+            -9.5,
+        )
+        self.declare_parameter(
+            "maximum_goal_x",
+            9.5,
+        )
+        self.declare_parameter(
+            "minimum_goal_y",
+            -7.5,
+        )
+        self.declare_parameter(
+            "maximum_goal_y",
+            7.5,
+        )
 
         self.action_name = str(
             self.get_parameter("action_name").value
@@ -81,6 +97,26 @@ class NavigationGoalManagerNode(Node):
         self.server_wait_timeout = float(
             self.get_parameter(
                 "server_wait_timeout"
+            ).value
+        )
+        self.minimum_goal_x = float(
+            self.get_parameter(
+                "minimum_goal_x"
+            ).value
+        )
+        self.maximum_goal_x = float(
+            self.get_parameter(
+                "maximum_goal_x"
+            ).value
+        )
+        self.minimum_goal_y = float(
+            self.get_parameter(
+                "minimum_goal_y"
+            ).value
+        )
+        self.maximum_goal_y = float(
+            self.get_parameter(
+                "maximum_goal_y"
             ).value
         )
 
@@ -196,6 +232,33 @@ class NavigationGoalManagerNode(Node):
             raise ValueError(
                 "server_wait_timeout must be greater "
                 "than zero"
+            )
+
+        goal_bounds = (
+            self.minimum_goal_x,
+            self.maximum_goal_x,
+            self.minimum_goal_y,
+            self.maximum_goal_y,
+        )
+
+        if not all(
+            math.isfinite(value)
+            for value in goal_bounds
+        ):
+            raise ValueError(
+                "Navigation goal bounds must be finite"
+            )
+
+        if self.minimum_goal_x >= self.maximum_goal_x:
+            raise ValueError(
+                "minimum_goal_x must be less than "
+                "maximum_goal_x"
+            )
+
+        if self.minimum_goal_y >= self.maximum_goal_y:
+            raise ValueError(
+                "minimum_goal_y must be less than "
+                "maximum_goal_y"
             )
 
     def mode_status_callback(
@@ -524,6 +587,28 @@ class NavigationGoalManagerNode(Node):
         ):
             return None, (
                 "Navigation goal values must be finite"
+            )
+
+        if not (
+            self.minimum_goal_x
+            <= x
+            <= self.maximum_goal_x
+        ):
+            return None, (
+                "Navigation goal x must be within "
+                f"[{self.minimum_goal_x}, "
+                f"{self.maximum_goal_x}]"
+            )
+
+        if not (
+            self.minimum_goal_y
+            <= y
+            <= self.maximum_goal_y
+        ):
+            return None, (
+                "Navigation goal y must be within "
+                f"[{self.minimum_goal_y}, "
+                f"{self.maximum_goal_y}]"
             )
 
         return {

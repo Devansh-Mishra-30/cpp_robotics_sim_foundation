@@ -112,6 +112,43 @@ install(PROGRAMS
 # They are fast unit tests and will be reused in CI later.
 if(BUILD_TESTING)
   find_package(ament_cmake_gtest REQUIRED)
+  find_package(ament_cmake_pytest REQUIRED)
+
+  ament_add_pytest_test(
+    test_navigation_goal_validation
+    test/test_navigation_goal_validation.py
+    TIMEOUT 30
+  )
+
+  ament_add_pytest_test(
+    test_map_name_validation
+    test/test_map_name_validation.py
+    TIMEOUT 30
+  )
+
+  ament_add_pytest_test(
+    test_environment_validation
+    test/test_environment_validation.py
+    TIMEOUT 30
+  )
+
+  ament_add_pytest_test(
+    test_localization_environment_switch
+    test/test_localization_environment_switch.py
+    TIMEOUT 30
+  )
+
+  ament_add_pytest_test(
+    test_mode_transition_rules
+    test/test_mode_transition_rules.py
+    TIMEOUT 30
+  )
+
+  ament_add_pytest_test(
+    test_safe_map_path_resolution
+    test/test_safe_map_path_resolution.py
+    TIMEOUT 30
+  )
 
   ament_add_gtest(test_day86_core
     test/test_day86_core.cpp

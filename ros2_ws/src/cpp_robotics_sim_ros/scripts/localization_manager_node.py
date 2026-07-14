@@ -240,6 +240,27 @@ class LocalizationManagerNode(Node):
                 ),
             )
 
+    @staticmethod
+    def resolve_path_within_root(
+        root_directory: Path,
+        *path_parts: str,
+    ) -> Path:
+        resolved_root = root_directory.expanduser().resolve()
+
+        candidate_path = resolved_root.joinpath(
+            *path_parts
+        ).resolve()
+
+        try:
+            candidate_path.relative_to(resolved_root)
+        except ValueError as error:
+            raise ValueError(
+                "Resolved map path escapes the configured "
+                "map directory"
+            ) from error
+
+        return candidate_path
+
     def parse_map_request(
         self,
         raw_request: str,
@@ -295,16 +316,33 @@ class LocalizationManagerNode(Node):
             )
             return
 
-        environment_yaml_path = (
-            self.map_directory
-            / environment
-            / f"{map_name}.yaml"
-        )
+        try:
+            environment_yaml_path = (
+                self.resolve_path_within_root(
+                    self.map_directory,
+                    environment,
+                    f"{map_name}.yaml",
+                )
+            )
 
-        legacy_yaml_path = (
-            self.map_directory
-            / f"{map_name}.yaml"
-        )
+            legacy_yaml_path = (
+                self.resolve_path_within_root(
+                    self.map_directory,
+                    f"{map_name}.yaml",
+                )
+            )
+
+        except ValueError:
+            self.publish_status(
+                status="error",
+                message=(
+                    "Invalid map path. The requested map "
+                    "must remain inside the configured "
+                    "map directory."
+                ),
+                map_name=map_name,
+            )
+            return
 
         if environment_yaml_path.is_file():
             yaml_path = environment_yaml_path
