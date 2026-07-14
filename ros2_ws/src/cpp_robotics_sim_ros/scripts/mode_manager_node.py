@@ -415,9 +415,9 @@ class ModeManagerNode(Node):
                 ),
             ]
 
-            if (
-                requested_mode
-                == OperatingMode.LOCALIZATION
+            if requested_mode in (
+                OperatingMode.LOCALIZATION,
+                OperatingMode.NAVIGATION,
             ):
                 command.append(
                     f"map:={self.selected_map_path}"

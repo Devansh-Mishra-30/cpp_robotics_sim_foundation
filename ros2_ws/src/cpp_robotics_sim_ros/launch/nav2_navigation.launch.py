@@ -20,6 +20,7 @@ def generate_launch_description():
     use_sim_time = LaunchConfiguration(
         "use_sim_time"
     )
+    map_yaml = LaunchConfiguration("map")
 
     package_share_dir = get_package_share_directory(
         "cpp_robotics_sim_ros"
@@ -28,31 +29,16 @@ def generate_launch_description():
         "nav2_bringup"
     )
 
-    nav2_launch = os.path.join(
-        nav2_bringup_dir,
-        "launch",
-        "navigation_launch.py",
-    )
-
     nav2_params = os.path.join(
         package_share_dir,
         "nav2",
         "diffbot_nav2_params.yaml",
     )
 
-    cmd_vel_bridge = Node(
-        package="cpp_robotics_sim_ros",
-        executable="cmd_vel_twist_bridge.py",
-        name="cmd_vel_twist_bridge",
-        output="screen",
-        parameters=[
-            {
-                "use_sim_time": use_sim_time,
-                "input_topic": "/cmd_vel",
-                "output_topic": "/cmd_vel/navigation",
-                "frame_id": "base_link",
-            },
-        ],
+    localization_launch_file = os.path.join(
+        nav2_bringup_dir,
+        "launch",
+        "localization_launch.py",
     )
 
     scan_frame_bridge = Node(
@@ -72,11 +58,27 @@ def generate_launch_description():
         output="screen",
     )
 
-    nav2_stack = IncludeLaunchDescription(
+    cmd_vel_bridge = Node(
+        package="cpp_robotics_sim_ros",
+        executable="cmd_vel_twist_bridge.py",
+        name="cmd_vel_twist_bridge",
+        output="screen",
+        parameters=[
+            {
+                "use_sim_time": use_sim_time,
+                "input_topic": "/cmd_vel",
+                "output_topic": "/cmd_vel/navigation",
+                "frame_id": "base_link",
+            },
+        ],
+    )
+
+    localization_stack = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
-            nav2_launch
+            localization_launch_file
         ),
         launch_arguments={
+            "map": map_yaml,
             "use_sim_time": use_sim_time,
             "params_file": nav2_params,
             "autostart": "true",
@@ -84,12 +86,135 @@ def generate_launch_description():
         }.items(),
     )
 
-    delayed_nav2_stack = TimerAction(
-        period=3.0,
+    controller_server = Node(
+        package="nav2_controller",
+        executable="controller_server",
+        name="controller_server",
+        output="screen",
+        parameters=[
+            nav2_params,
+            {
+                "use_sim_time": use_sim_time,
+            },
+        ],
+        remappings=[
+            (
+                "/cmd_vel",
+                "/cmd_vel",
+            ),
+        ],
+    )
+
+    planner_server = Node(
+        package="nav2_planner",
+        executable="planner_server",
+        name="planner_server",
+        output="screen",
+        parameters=[
+            nav2_params,
+            {
+                "use_sim_time": use_sim_time,
+            },
+        ],
+    )
+
+    behavior_server = Node(
+        package="nav2_behaviors",
+        executable="behavior_server",
+        name="behavior_server",
+        output="screen",
+        parameters=[
+            nav2_params,
+            {
+                "use_sim_time": use_sim_time,
+            },
+        ],
+    )
+
+    bt_navigator = Node(
+        package="nav2_bt_navigator",
+        executable="bt_navigator",
+        name="bt_navigator",
+        output="screen",
+        parameters=[
+            nav2_params,
+            {
+                "use_sim_time": use_sim_time,
+            },
+        ],
+    )
+
+    waypoint_follower = Node(
+        package="nav2_waypoint_follower",
+        executable="waypoint_follower",
+        name="waypoint_follower",
+        output="screen",
+        parameters=[
+            nav2_params,
+            {
+                "use_sim_time": use_sim_time,
+            },
+        ],
+    )
+
+    velocity_smoother = Node(
+        package="nav2_velocity_smoother",
+        executable="velocity_smoother",
+        name="velocity_smoother",
+        output="screen",
+        parameters=[
+            nav2_params,
+            {
+                "use_sim_time": use_sim_time,
+            },
+        ],
+        remappings=[
+            (
+                "/cmd_vel",
+                "/cmd_vel",
+            ),
+            (
+                "/cmd_vel_smoothed",
+                "/cmd_vel",
+            ),
+        ],
+    )
+
+    lifecycle_manager_navigation = Node(
+        package="nav2_lifecycle_manager",
+        executable="lifecycle_manager",
+        name="lifecycle_manager_navigation",
+        output="screen",
+        parameters=[
+            {
+                "use_sim_time": use_sim_time,
+                "autostart": True,
+                "bond_timeout": 0.0,
+                "node_names": [
+                    "controller_server",
+                    "planner_server",
+                    "behavior_server",
+                    "bt_navigator",
+                    "waypoint_follower",
+                    "velocity_smoother",
+                ],
+            },
+        ],
+    )
+
+    delayed_navigation_stack = TimerAction(
+        period=4.0,
         actions=[
-            cmd_vel_bridge,
             scan_frame_bridge,
-            nav2_stack,
+            cmd_vel_bridge,
+            localization_stack,
+            controller_server,
+            planner_server,
+            behavior_server,
+            bt_navigator,
+            waypoint_follower,
+            velocity_smoother,
+            lifecycle_manager_navigation,
         ],
     )
 
@@ -100,6 +225,12 @@ def generate_launch_description():
                 default_value="true",
                 description="Use Gazebo simulation time",
             ),
-            delayed_nav2_stack,
+            DeclareLaunchArgument(
+                "map",
+                description=(
+                    "Absolute path to saved map YAML"
+                ),
+            ),
+            delayed_navigation_stack,
         ]
     )
