@@ -141,8 +141,19 @@ class LocalizationManagerNode(Node):
             )
         )
 
+        self.environment_subscription = (
+            self.create_subscription(
+                String,
+                "/simulation/environment_status",
+                self.environment_status_callback,
+                transient_qos,
+            )
+        )
+
         self.selected_map_name = ""
         self.selected_map_path = ""
+        self.selected_map_environment = ""
+        self.selected_environment = ""
         self.mode_state = "stopped"
         self.simulation_state = "stopped"
 
@@ -180,11 +191,97 @@ class LocalizationManagerNode(Node):
     ) -> None:
         self.simulation_state = message.data
 
+    def environment_status_callback(
+        self,
+        message: String,
+    ) -> None:
+        try:
+            payload = json.loads(message.data)
+        except json.JSONDecodeError:
+            self.get_logger().warning(
+                "Ignoring malformed environment status"
+            )
+            return
+
+        environment = str(
+            payload.get(
+                "selected_environment",
+                "",
+            )
+        ).strip().lower()
+
+        if not environment:
+            return
+
+        environment_changed = (
+            self.selected_environment
+            and environment
+            != self.selected_environment
+        )
+
+        self.selected_environment = environment
+
+        if (
+            environment_changed
+            and self.selected_map_environment
+            not in ("", "legacy", environment)
+        ):
+            self.selected_map_name = ""
+            self.selected_map_path = ""
+            self.selected_map_environment = ""
+
+            self.publish_selected_map()
+
+            self.publish_status(
+                status="ready",
+                message=(
+                    "Selected map cleared because the "
+                    "simulation environment changed"
+                ),
+            )
+
+    def parse_map_request(
+        self,
+        raw_request: str,
+    ) -> tuple[str, str]:
+        raw_request = raw_request.strip()
+
+        if raw_request.startswith("{"):
+            payload = json.loads(raw_request)
+
+            map_name = str(
+                payload.get("name", "")
+            ).strip()
+
+            environment = str(
+                payload.get(
+                    "environment",
+                    self.selected_environment,
+                )
+            ).strip().lower()
+
+            return map_name, environment
+
+        return raw_request, self.selected_environment
+
     def select_map_callback(
         self,
         message: String,
     ) -> None:
-        map_name = message.data.strip()
+        try:
+            map_name, environment = (
+                self.parse_map_request(message.data)
+            )
+        except (
+            json.JSONDecodeError,
+            TypeError,
+            ValueError,
+        ):
+            self.publish_status(
+                status="error",
+                message="Invalid map-selection request",
+            )
+            return
 
         if not self.MAP_NAME_PATTERN.fullmatch(
             map_name
@@ -198,14 +295,28 @@ class LocalizationManagerNode(Node):
             )
             return
 
-        yaml_path = (
+        environment_yaml_path = (
+            self.map_directory
+            / environment
+            / f"{map_name}.yaml"
+        )
+
+        legacy_yaml_path = (
             self.map_directory
             / f"{map_name}.yaml"
         )
-        image_path = (
-            self.map_directory
-            / f"{map_name}.pgm"
-        )
+
+        if environment_yaml_path.is_file():
+            yaml_path = environment_yaml_path
+            map_environment = environment
+        elif legacy_yaml_path.is_file():
+            yaml_path = legacy_yaml_path
+            map_environment = "legacy"
+        else:
+            yaml_path = environment_yaml_path
+            map_environment = environment
+
+        image_path = yaml_path.with_suffix(".pgm")
 
         if not yaml_path.is_file():
             self.publish_status(
@@ -233,15 +344,22 @@ class LocalizationManagerNode(Node):
         self.selected_map_path = str(
             yaml_path.resolve()
         )
+        self.selected_map_environment = (
+            map_environment
+        )
 
         self.publish_selected_map()
 
         self.publish_status(
             status="success",
             message=(
-                f"Map '{map_name}' selected"
+                f"Map '{map_name}' selected for "
+                f"{self.selected_map_environment}"
             ),
             map_name=map_name,
+            environment=(
+                self.selected_map_environment
+            ),
             yaml_path=self.selected_map_path,
         )
 
@@ -371,6 +489,9 @@ class LocalizationManagerNode(Node):
     def publish_selected_map(self) -> None:
         payload = {
             "name": self.selected_map_name,
+            "environment": (
+                self.selected_map_environment
+            ),
             "yaml_path": self.selected_map_path,
         }
 
@@ -389,12 +510,14 @@ class LocalizationManagerNode(Node):
         status: str,
         message: str,
         map_name: str = "",
+        environment: str = "",
         yaml_path: str = "",
     ) -> None:
         payload = {
             "status": status,
             "message": message,
             "map_name": map_name,
+            "environment": environment,
             "yaml_path": yaml_path,
         }
 

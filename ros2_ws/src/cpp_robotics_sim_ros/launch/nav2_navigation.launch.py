@@ -100,7 +100,7 @@ def generate_launch_description():
         remappings=[
             (
                 "/cmd_vel",
-                "/cmd_vel",
+                "/cmd_vel_nav_raw",
             ),
         ],
     )
@@ -128,6 +128,12 @@ def generate_launch_description():
             {
                 "use_sim_time": use_sim_time,
             },
+        ],
+        remappings=[
+            (
+                "/cmd_vel",
+                "/cmd_vel_nav_raw",
+            ),
         ],
     )
 
@@ -171,7 +177,7 @@ def generate_launch_description():
         remappings=[
             (
                 "/cmd_vel",
-                "/cmd_vel",
+                "/cmd_vel_nav_raw",
             ),
             (
                 "/cmd_vel_smoothed",

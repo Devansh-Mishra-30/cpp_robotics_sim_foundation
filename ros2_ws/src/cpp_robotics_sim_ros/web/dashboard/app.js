@@ -36,6 +36,7 @@ const state = {
   savedMaps: [],
   selectedMapName: "",
   selectedMapPath: "",
+  selectedMapEnvironment: "",
 
   navigationState: "inactive",
   navigationGoalActive: false,
@@ -769,6 +770,7 @@ function handleEnvironmentStatus(rawPayload) {
   );
 
   updateEnvironmentDisplay();
+  renderSavedMaps();
   updateEnvironmentControls();
 
   if (
@@ -847,12 +849,24 @@ function updateEnvironmentControls() {
     && !state.environmentSelectionLocked
     && !simulationBusy;
 
+  const configuredEnvironments =
+    new Set([
+      "warehouse",
+      "hospital",
+      ...state.availableEnvironments.map(
+        (environment) =>
+          String(environment).trim().toLowerCase()
+      ),
+    ]);
+
   elements.environmentButtons.forEach((button) => {
     const buttonEnvironment =
-      String(button.dataset.environment);
+      String(button.dataset.environment)
+        .trim()
+        .toLowerCase();
 
     const environmentAvailable =
-      state.availableEnvironments.includes(
+      configuredEnvironments.has(
         buttonEnvironment
       );
 
@@ -988,7 +1002,11 @@ function handleServiceResponse(message) {
 
   if (state.serviceRequests.size === 0) {
     setLifecycleButtonsBusy(false);
+    setEnvironmentControlsBusy(false);
+    setModeButtonsBusy(false);
     updateSimulationControls();
+    updateEnvironmentControls();
+    updateModeControls();
   }
 }
 
@@ -1172,6 +1190,16 @@ function updateModeControls() {
     && simulationRunning
     && !busy;
 
+  const activeModes = [
+    "manual",
+    "mapping",
+    "localization",
+    "navigation",
+  ];
+
+  const activeMode =
+    activeModes.includes(state.modeState);
+
   const buttons = {
     manual: elements.manualModeButton,
     mapping: elements.mappingModeButton,
@@ -1190,7 +1218,7 @@ function updateModeControls() {
 
       button.disabled =
         !enabled
-        || state.modeState === mode
+        || activeMode
         || requiresSelectedMap;
 
       button.classList.toggle(
@@ -1199,13 +1227,6 @@ function updateModeControls() {
       );
     },
   );
-
-  const activeMode = [
-    "manual",
-    "mapping",
-    "localization",
-    "navigation",
-  ].includes(state.modeState);
 
   elements.stopModeButton.disabled =
     !enabled || !activeMode;
@@ -1366,33 +1387,73 @@ function handleSavedMaps(rawPayload) {
 }
 
 
+function mapsForSelectedEnvironment() {
+  return state.savedMaps.filter((map) => {
+    const environment =
+      String(map.environment ?? "legacy")
+        .trim()
+        .toLowerCase();
+
+    const legacy =
+      Boolean(map.legacy)
+      || environment === "legacy";
+
+    return (
+      legacy
+      || environment
+        === state.selectedEnvironment
+    );
+  });
+}
+
+
 function renderSavedMaps() {
+  const visibleMaps =
+    mapsForSelectedEnvironment();
+
   elements.savedMapCount.textContent =
-    `${state.savedMaps.length} `
-    + `${state.savedMaps.length === 1
+    `${visibleMaps.length} `
+    + `${visibleMaps.length === 1
       ? "MAP"
       : "MAPS"}`;
 
-  if (state.savedMaps.length === 0) {
+  if (visibleMaps.length === 0) {
     elements.savedMapList.innerHTML =
       '<p class="empty-map-list">'
-      + "No saved maps yet."
+      + "No maps saved for this environment."
       + "</p>";
   } else {
     elements.savedMapList.innerHTML =
-      state.savedMaps
+      visibleMaps
         .map((map) => {
           const mapName =
             String(map.name ?? "");
 
+          const environment =
+            String(
+              map.environment ?? "legacy"
+            );
+
+          const legacy =
+            Boolean(map.legacy)
+            || environment === "legacy";
+
           const complete =
             Boolean(map.complete);
+
+          const environmentLabel =
+            legacy
+              ? "Legacy map"
+              : formatEnvironmentName(
+                  environment
+                );
 
           return `
             <div class="saved-map-item">
               <strong>${escapeHtml(mapName)}</strong>
               <small>
-                ${complete ? "Ready" : "Incomplete"}
+                ${escapeHtml(environmentLabel)}
+                · ${complete ? "Ready" : "Incomplete"}
               </small>
             </div>
           `;
@@ -1429,13 +1490,85 @@ function setMapSaveMessage(
 
 
 function selectLocalizationMap() {
-  const mapName =
-    elements.localizationMapSelect.value;
+  const rawValue =
+    String(
+      elements.localizationMapSelect.value
+      ?? ""
+    ).trim();
 
-  if (!mapName) {
+  if (!rawValue) {
     setLocalizationMessage(
       "Choose a saved map.",
       "warning",
+    );
+    return;
+  }
+
+  let decodedValue = rawValue;
+
+  const decoder =
+    document.createElement("textarea");
+
+  decoder.innerHTML = rawValue;
+  decodedValue = decoder.value;
+
+  let selection = null;
+
+  try {
+    selection = JSON.parse(decodedValue);
+  } catch {
+    const matchingMap =
+      mapsForSelectedEnvironment().find(
+        (map) =>
+          String(map.name ?? "")
+          === decodedValue
+      );
+
+    if (matchingMap) {
+      const mapEnvironment =
+        String(
+          matchingMap.environment
+          ?? state.selectedEnvironment
+        ).trim().toLowerCase();
+
+      const legacy =
+        Boolean(matchingMap.legacy)
+        || mapEnvironment === "legacy";
+
+      selection = {
+        name: String(matchingMap.name ?? ""),
+        environment:
+          legacy
+            ? state.selectedEnvironment
+            : mapEnvironment,
+      };
+    }
+  }
+
+  if (
+    !selection
+    || typeof selection !== "object"
+  ) {
+    setLocalizationMessage(
+      "Invalid map selection.",
+      "danger",
+    );
+    return;
+  }
+
+  const mapName =
+    String(selection.name ?? "").trim();
+
+  const environment =
+    String(
+      selection.environment
+      ?? state.selectedEnvironment
+    ).trim().toLowerCase();
+
+  if (!mapName || !environment) {
+    setLocalizationMessage(
+      "Invalid map name or environment.",
+      "danger",
     );
     return;
   }
@@ -1444,7 +1577,10 @@ function selectLocalizationMap() {
     op: "publish",
     topic: "/localization/select_map_request",
     msg: {
-      data: mapName,
+      data: JSON.stringify({
+        name: mapName,
+        environment,
+      }),
     },
   });
 
@@ -1457,11 +1593,11 @@ function selectLocalizationMap() {
   }
 
   setLocalizationMessage(
-    `Selecting map '${mapName}'…`,
+    `Selecting map '${mapName}' for `
+    + `${formatEnvironmentName(environment)}…`,
     "warning",
   );
 }
-
 
 function setInitialPose() {
   const x = Number(
@@ -1550,9 +1686,15 @@ function handleSelectedMap(rawPayload) {
 
     state.selectedMapPath =
       String(payload.yaml_path ?? "");
+
+    state.selectedMapEnvironment =
+      String(payload.environment ?? "")
+        .trim()
+        .toLowerCase();
   } catch {
     state.selectedMapName = "";
     state.selectedMapPath = "";
+    state.selectedMapEnvironment = "";
 
     setLocalizationMessage(
       "Received invalid selected-map data.",
@@ -1562,65 +1704,117 @@ function handleSelectedMap(rawPayload) {
 
   elements.selectedMapLabel.textContent =
     state.selectedMapName
-      ? state.selectedMapName.toUpperCase()
+      ? (
+          state.selectedMapName.toUpperCase()
+          + (
+              state.selectedMapEnvironment
+                ? " · "
+                  + state.selectedMapEnvironment
+                    .replaceAll("_", " ")
+                    .toUpperCase()
+                : ""
+            )
+        )
       : "NO MAP SELECTED";
 
   renderLocalizationMapOptions();
-
-  if (state.selectedMapName) {
-    elements.localizationMapSelect.value =
-      state.selectedMapName;
-  }
-
   updateLocalizationControls();
   updateModeControls();
 }
 
 
 function renderLocalizationMapOptions() {
-  const previousValue =
-    state.selectedMapName
-    || elements.localizationMapSelect.value;
-
   const completeMaps =
-    state.savedMaps.filter(
+    mapsForSelectedEnvironment().filter(
       (map) => Boolean(map.complete)
     );
 
-  const options = [
-    '<option value="">Select a saved map</option>',
-    ...completeMaps.map((map) => {
-      const mapName =
-        String(map.name ?? "");
+  const previousValue =
+    elements.localizationMapSelect.value;
 
-      return (
-        `<option value="${escapeHtml(mapName)}">`
-        + `${escapeHtml(mapName)}`
-        + "</option>"
-      );
-    }),
-  ];
+  elements.localizationMapSelect
+    .replaceChildren();
 
-  elements.localizationMapSelect.innerHTML =
-    options.join("");
+  const placeholderOption =
+    document.createElement("option");
 
-  const previousStillExists =
-    completeMaps.some(
-      (map) =>
-        String(map.name ?? "")
-        === previousValue
+  placeholderOption.value = "";
+  placeholderOption.textContent =
+    "Select a saved map";
+
+  elements.localizationMapSelect.appendChild(
+    placeholderOption
+  );
+
+  completeMaps.forEach((map) => {
+    const mapName =
+      String(map.name ?? "").trim();
+
+    const mapEnvironment =
+      String(
+        map.environment
+        ?? state.selectedEnvironment
+      ).trim().toLowerCase();
+
+    const legacy =
+      Boolean(map.legacy)
+      || mapEnvironment === "legacy";
+
+    const requestEnvironment =
+      legacy
+        ? state.selectedEnvironment
+        : mapEnvironment;
+
+    const option =
+      document.createElement("option");
+
+    option.value = JSON.stringify({
+      name: mapName,
+      environment: requestEnvironment,
+    });
+
+    option.textContent =
+      legacy
+        ? `${mapName} (Legacy)`
+        : (
+            `${mapName} (`
+            + `${formatEnvironmentName(
+              mapEnvironment
+            )})`
+          );
+
+    elements.localizationMapSelect.appendChild(
+      option
+    );
+  });
+
+  const selectedValue =
+    state.selectedMapName
+      ? JSON.stringify({
+          name: state.selectedMapName,
+          environment:
+            state.selectedMapEnvironment
+            || state.selectedEnvironment,
+        })
+      : previousValue;
+
+  const matchingOption =
+    Array.from(
+      elements.localizationMapSelect.options
+    ).some(
+      (option) =>
+        option.value === selectedValue
     );
 
-  if (previousStillExists) {
+  if (matchingOption) {
     elements.localizationMapSelect.value =
-      previousValue;
+      selectedValue;
   }
 }
 
-
 function updateLocalizationControls() {
   const completeMapCount =
-    state.savedMaps.filter(
+    mapsForSelectedEnvironment().filter(
       (map) => Boolean(map.complete)
     ).length;
 
@@ -1862,6 +2056,21 @@ function handleNavigationStatus(rawPayload) {
   state.navigationResult =
     String(payload.result ?? "");
 
+  const terminalNavigationStates = new Set([
+    "succeeded",
+    "canceled",
+    "aborted",
+    "rejected",
+    "invalid_request",
+    "server_unavailable",
+  ]);
+
+  if (terminalNavigationStates.has(navigationState)) {
+    state.navigationFeedback.distanceRemaining = 0.0;
+    state.navigationFeedback.estimatedTimeRemaining = 0.0;
+
+  }
+
   if (
     payload.feedback
     && typeof payload.feedback === "object"
@@ -1870,6 +2079,11 @@ function handleNavigationStatus(rawPayload) {
     updateNavigationFeedbackValues(
       payload.feedback
     );
+  }
+
+  if (terminalNavigationStates.has(navigationState)) {
+    state.navigationFeedback.distanceRemaining = 0.0;
+    state.navigationFeedback.estimatedTimeRemaining = 0.0;
   }
 
   const level =
@@ -1931,36 +2145,30 @@ function handleNavigationStatus(rawPayload) {
 
 
 function handleNavigationFeedback(rawPayload) {
-  let payload;
+  if (
+    !state.navigationGoalActive
+    || state.navigationState === "succeeded"
+    || state.navigationState === "canceled"
+    || state.navigationState === "aborted"
+    || state.navigationState === "rejected"
+    || state.navigationState === "invalid_request"
+    || state.navigationState === "server_unavailable"
+  ) {
+    return;
+  }
 
   try {
-    payload = JSON.parse(rawPayload);
+    const payload = JSON.parse(rawPayload);
+
+    updateNavigationFeedbackValues(payload);
+    updateNavigationDisplay();
   } catch {
     setNavigationGoalMessage(
       "Received invalid navigation feedback.",
       "danger",
     );
-    return;
   }
-
-  updateNavigationFeedbackValues(payload);
-
-  if (payload.state) {
-    const feedbackState =
-      String(payload.state);
-
-    if (
-      feedbackState === "navigating"
-      && state.navigationState === "accepted"
-    ) {
-      state.navigationState = "navigating";
-    }
-  }
-
-  updateNavigationDisplay();
-  updateNavigationControls();
 }
-
 
 function updateNavigationFeedbackValues(payload) {
   const finiteOrNull = (value) => {

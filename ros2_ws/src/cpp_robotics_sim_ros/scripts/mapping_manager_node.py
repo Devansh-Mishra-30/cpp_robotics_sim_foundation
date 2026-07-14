@@ -110,8 +110,18 @@ class MappingManagerNode(Node):
             )
         )
 
+        self.environment_subscription = (
+            self.create_subscription(
+                String,
+                "/simulation/environment_status",
+                self.environment_status_callback,
+                transient_qos,
+            )
+        )
+
         self.mode_state = "stopped"
         self.simulation_state = "stopped"
+        self.selected_environment = ""
         self.save_in_progress = False
         self.save_lock = threading.Lock()
 
@@ -162,6 +172,36 @@ class MappingManagerNode(Node):
         message: String,
     ) -> None:
         self.simulation_state = message.data
+
+    def environment_status_callback(
+        self,
+        message: String,
+    ) -> None:
+        try:
+            payload = json.loads(message.data)
+        except json.JSONDecodeError:
+            self.get_logger().warning(
+                "Ignoring malformed environment status"
+            )
+            return
+
+        environment = str(
+            payload.get(
+                "selected_environment",
+                "",
+            )
+        ).strip().lower()
+
+        if environment:
+            environment_changed = (
+                environment
+                != self.selected_environment
+            )
+
+            self.selected_environment = environment
+
+            if environment_changed:
+                self.publish_saved_maps()
 
     def save_request_callback(
         self,
@@ -216,6 +256,11 @@ class MappingManagerNode(Node):
                 "saving a map"
             )
 
+        if not self.selected_environment:
+            return (
+                "No simulation environment is selected"
+            )
+
         if not map_name:
             return "Map name must not be empty"
 
@@ -233,14 +278,28 @@ class MappingManagerNode(Node):
         self,
         map_name: str,
     ) -> None:
+        environment_directory = (
+            self.map_directory
+            / self.selected_environment
+        )
+
+        environment_directory.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+
         output_prefix = (
-            self.map_directory / map_name
+            environment_directory / map_name
         )
 
         self.publish_status(
             status="saving",
-            message=f"Saving map '{map_name}'...",
+            message=(
+                f"Saving map '{map_name}' for "
+                f"{self.selected_environment}..."
+            ),
             map_name=map_name,
+            environment=self.selected_environment,
         )
 
         command = [
@@ -290,15 +349,20 @@ class MappingManagerNode(Node):
                         f"'{map_name}': {details}"
                     ),
                     map_name=map_name,
+                    environment=(
+                        self.selected_environment
+                    ),
                 )
                 return
 
             self.publish_status(
                 status="success",
                 message=(
-                    f"Map '{map_name}' saved successfully"
+                    f"Map '{map_name}' saved successfully "
+                    f"for {self.selected_environment}"
                 ),
                 map_name=map_name,
+                environment=self.selected_environment,
                 yaml_path=str(yaml_path),
                 image_path=str(pgm_path),
             )
@@ -312,6 +376,7 @@ class MappingManagerNode(Node):
                     f"Saving map '{map_name}' timed out"
                 ),
                 map_name=map_name,
+                environment=self.selected_environment,
             )
 
         except OSError as error:
@@ -321,6 +386,7 @@ class MappingManagerNode(Node):
                     f"Unable to run map saver: {error}"
                 ),
                 map_name=map_name,
+                environment=self.selected_environment,
             )
 
         finally:
@@ -332,6 +398,7 @@ class MappingManagerNode(Node):
         status: str,
         message: str,
         map_name: str = "",
+        environment: str = "",
         yaml_path: str = "",
         image_path: str = "",
     ) -> None:
@@ -339,6 +406,7 @@ class MappingManagerNode(Node):
             "status": status,
             "message": message,
             "map_name": map_name,
+            "environment": environment,
             "yaml_path": yaml_path,
             "image_path": image_path,
         }
@@ -355,17 +423,42 @@ class MappingManagerNode(Node):
         maps = []
 
         for yaml_path in sorted(
-            self.map_directory.glob("*.yaml")
+            self.map_directory.rglob("*.yaml")
         ):
             image_path = yaml_path.with_suffix(
                 ".pgm"
             )
 
+            relative_path = yaml_path.relative_to(
+                self.map_directory
+            )
+
+            if len(relative_path.parts) > 1:
+                environment = relative_path.parts[0]
+                legacy = False
+            else:
+                environment = "legacy"
+                legacy = True
+
+            if (
+                self.selected_environment
+                and not legacy
+                and environment
+                != self.selected_environment
+            ):
+                continue
+
             maps.append(
                 {
                     "name": yaml_path.stem,
-                    "yaml_path": str(yaml_path),
-                    "image_path": str(image_path),
+                    "environment": environment,
+                    "legacy": legacy,
+                    "yaml_path": str(
+                        yaml_path.resolve()
+                    ),
+                    "image_path": str(
+                        image_path.resolve()
+                    ),
                     "complete": image_path.exists(),
                 }
             )

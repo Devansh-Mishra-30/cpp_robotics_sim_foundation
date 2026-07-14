@@ -549,12 +549,76 @@ class ModeManagerNode(Node):
         except ProcessLookupError:
             pass
 
+    def cleanup_orphan_scan_frame_bridges(
+        self,
+    ) -> None:
+        """
+        Remove scan-frame bridge processes that escaped the
+        managed ros2-launch process group and were adopted by
+        PID 1.
+
+        The match is intentionally restricted to this project's
+        exact static transform and node name.
+        """
+        pattern = (
+            "static_transform_publisher "
+            "0 0 0 0 0 0 "
+            "lidar_link "
+            "diffbot/base_link/diffbot_lidar "
+            "--ros-args -r __node:=scan_frame_bridge"
+        )
+
+        try:
+            result = subprocess.run(
+                [
+                    "pkill",
+                    "-TERM",
+                    "-f",
+                    pattern,
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=self.kill_timeout,
+            )
+        except (
+            OSError,
+            subprocess.SubprocessError,
+        ) as error:
+            if rclpy.ok(context=self.context):
+                self.get_logger().warning(
+                    "Unable to clean orphan scan-frame "
+                    f"bridge: {error}"
+                )
+            return
+
+        # pkill returns:
+        #   0 when at least one process matched
+        #   1 when nothing matched
+        if (
+            result.returncode == 0
+            and rclpy.ok(context=self.context)
+        ):
+            self.get_logger().info(
+                "Cleaned orphan scan-frame bridge process"
+            )
+        elif (
+            result.returncode not in (0, 1)
+            and rclpy.ok(context=self.context)
+        ):
+            self.get_logger().warning(
+                "Scan-frame bridge cleanup returned code "
+                f"{result.returncode}"
+            )
+
+
     def stop_current_mode(
         self,
     ) -> tuple[bool, str]:
         with self.process_lock:
             if not self.process_is_running():
                 self.clear_finished_process()
+                self.cleanup_orphan_scan_frame_bridges()
                 self.requested_mode = OperatingMode.STOPPED
                 self.publish_mode(OperatingMode.STOPPED)
 
@@ -659,6 +723,8 @@ class ModeManagerNode(Node):
                 process_group_id
             )
             self.process_group_id = None
+
+            self.cleanup_orphan_scan_frame_bridges()
 
             self.requested_mode = OperatingMode.STOPPED
             self.publish_mode(OperatingMode.STOPPED)
