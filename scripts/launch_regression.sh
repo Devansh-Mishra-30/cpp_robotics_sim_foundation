@@ -135,8 +135,15 @@ wait_for_node()
   local deadline=$((SECONDS + STARTUP_TIMEOUT_SECONDS))
 
   while ((SECONDS < deadline)); do
-    if ros2 node list |
-      grep -Fxq "${node_name}"; then
+    local node_list
+
+    node_list="$(
+      ros2 node list 2>/dev/null
+    )"
+
+    if grep -Fxq \
+      -- "${node_name}" \
+      <<<"${node_list}"; then
       return 0
     fi
 
@@ -160,8 +167,15 @@ wait_for_topic()
   local deadline=$((SECONDS + STARTUP_TIMEOUT_SECONDS))
 
   while ((SECONDS < deadline)); do
-    if ros2 topic list |
-      grep -Fxq "${topic_name}"; then
+    local topic_list
+
+    topic_list="$(
+      ros2 topic list 2>/dev/null
+    )"
+
+    if grep -Fxq \
+      -- "${topic_name}" \
+      <<<"${topic_list}"; then
       return 0
     fi
 
