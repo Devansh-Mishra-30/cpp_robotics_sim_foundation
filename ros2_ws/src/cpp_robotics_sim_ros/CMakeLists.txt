@@ -56,17 +56,6 @@ ament_target_dependencies(
   diagnostic_msgs
 )
 
-add_executable(
-  performance_benchmark
-  src/performance_benchmark.cpp
-)
-
-target_include_directories(
-  performance_benchmark
-  PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
-)
-
 # -----------------------------------------------------------------------------
 # Install C++ executables
 # -----------------------------------------------------------------------------
@@ -74,7 +63,6 @@ target_include_directories(
 install(
   TARGETS
     sim_node
-    performance_benchmark
   DESTINATION lib/${PROJECT_NAME}
 )
 
@@ -112,17 +100,10 @@ install(
 install(
   PROGRAMS
     scripts/noisy_odom_node.py
-    scripts/trajectory_validation_recorder.py
-    scripts/plot_trajectory_validation.py
     scripts/cmd_vel_twist_bridge.py
     scripts/nav2_lifecycle_check.sh
     scripts/nav2_costmap_check.sh
     scripts/nav2_planner_controller_check.sh
-    scripts/localization_comparison_recorder.py
-    scripts/plot_localization_comparison.py
-    scripts/covariance_analysis.py
-    scripts/localization_fusion_recorder.py
-    scripts/plot_localization_fusion.py
     scripts/command_mux_node.py
     scripts/keyboard_teleop_node.py
     scripts/simulation_manager_node.py

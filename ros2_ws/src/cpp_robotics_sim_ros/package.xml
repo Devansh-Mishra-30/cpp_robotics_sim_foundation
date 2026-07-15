@@ -9,8 +9,8 @@
 
   <description>
     ROS 2 mobile robot simulation platform with Gazebo, ros2_control,
-    SLAM, AMCL localization, Nav2 navigation, validation tooling,
-    and a browser-based control dashboard.
+    SLAM, AMCL localization, Nav2 navigation, and a browser-based
+    control dashboard.
   </description>
 
   <maintainer email="devansh30mishra@gmail.com">
@@ -72,9 +72,8 @@
   <exec_depend>slam_toolbox</exec_depend>
   <exec_depend>robot_localization</exec_depend>
 
-  <!-- Browser interface and analysis tooling -->
+  <!-- Browser interface -->
   <exec_depend>rosbridge_server</exec_depend>
-  <exec_depend>python3-matplotlib</exec_depend>
 
   <!-- Tests and quality checks -->
   <test_depend>ament_lint_auto</test_depend>

@@ -7,9 +7,6 @@ ros2_ws/install/
 ros2_ws/log/
 
 # Standalone C++ build artifacts
-standalone_cpp/build/
-standalone_cpp/out/
-standalone_cpp/x64/
 out/
 x64/
 bin/
@@ -32,18 +29,16 @@ __pycache__/
 coverage.xml
 htmlcov/
 
-# ROS and simulation-generated data
-bags/*
-!bags/README.md
+# Generated ROS, simulation, and analysis evidence
+bags/
+data/
+plots/
 ros2_ws/bags/
 *.bag
 *.db3
 *.mcap
 *.log
-
-# Generated numeric outputs
 *.csv
-!data/.gitkeep
 
 # Temporary files
 tmp/
