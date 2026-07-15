@@ -76,6 +76,9 @@ main() {
   printf '\n=== Headless integration test ===\n'
   "${REPO_ROOT}/scripts/headless_smoke_test.sh"
 
+  printf '\n=== Public launcher lifecycle test ===\n'
+  "${REPO_ROOT}/scripts/run_lifecycle_test.sh"
+
   printf '\nAll unit and integration tests completed successfully.\n'
 }
 

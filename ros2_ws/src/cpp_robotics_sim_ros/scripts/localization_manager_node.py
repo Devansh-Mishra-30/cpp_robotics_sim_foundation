@@ -14,6 +14,7 @@ from typing import Optional
 
 from geometry_msgs.msg import PoseWithCovarianceStamped
 import rclpy
+from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from rclpy.qos import (
     DurabilityPolicy,
@@ -585,7 +586,10 @@ def main(args=None) -> None:
         node = LocalizationManagerNode()
         rclpy.spin(node)
 
-    except KeyboardInterrupt:
+    except (
+        KeyboardInterrupt,
+        ExternalShutdownException,
+    ):
         pass
 
     finally:

@@ -37,6 +37,7 @@ RUN apt-get update \
         build-essential \
         cmake \
         git \
+        iproute2 \
         nodejs \
         python3 \
         python3-colcon-common-extensions \

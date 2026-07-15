@@ -62,3 +62,46 @@ jobs:
         with:
           name: colcon-test-logs
           path: ros2_ws/log/
+
+  docker-build-and-test:
+    name: Build and test Docker image
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: |
+          docker build \
+            --tag cpp-robotics-sim:ci \
+            .
+
+      - name: Run complete test suite inside Docker
+        run: |
+          docker run \
+            --rm \
+            --init \
+            --network host \
+            --name cpp-robotics-sim-ci-test \
+            cpp-robotics-sim:ci \
+            bash -lc '
+              cd /workspace
+              ./scripts/test.sh
+            '
+
+      - name: Verify Docker cleanup
+        if: always()
+        run: |
+          remaining_container="$(
+            docker ps -a \
+              --filter "name=cpp-robotics-sim-ci-test" \
+              --format '{{.ID}}'
+          )"
+
+          if [[ -n "${remaining_container}" ]]; then
+            docker rm -f cpp-robotics-sim-ci-test
+            printf 'ERROR: Docker test container remained after execution.\n' \
+              >&2
+            exit 1
+          fi

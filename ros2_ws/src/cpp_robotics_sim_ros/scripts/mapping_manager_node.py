@@ -14,6 +14,7 @@ import threading
 from typing import Optional
 
 import rclpy
+from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from rclpy.qos import (
     DurabilityPolicy,
@@ -485,7 +486,10 @@ def main(args=None) -> None:
         node = MappingManagerNode()
         rclpy.spin(node)
 
-    except KeyboardInterrupt:
+    except (
+        KeyboardInterrupt,
+        ExternalShutdownException,
+    ):
         pass
 
     finally:

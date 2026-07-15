@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 
+# Copyright 2026 Devansh Mishra
+#
+# Licensed under the MIT License. See LICENSE in the project root for details.
+
 set -euo pipefail
 
 SCRIPT_DIR="$(
@@ -23,6 +27,12 @@ DASHBOARD_PORT="${DASHBOARD_PORT:-8080}"
 ROSBRIDGE_PORT="${ROSBRIDGE_PORT:-9090}"
 OPEN_BROWSER="${OPEN_BROWSER:-true}"
 
+SHUTDOWN_TIMEOUT_SECONDS="${SHUTDOWN_TIMEOUT_SECONDS:-15}"
+
+LAUNCH_PID=""
+BROWSER_PID=""
+SHUTDOWN_STARTED=false
+
 require_command() {
   local command_name="$1"
 
@@ -41,9 +51,9 @@ detect_wsl_ip() {
       ip -4 route get 1.1.1.1 2>/dev/null |
         awk '
           {
-            for (index = 1; index <= NF; index++) {
-              if ($index == "src") {
-                print $(index + 1)
+            for (field_number = 1; field_number <= NF; field_number++) {
+              if ($field_number == "src") {
+                print $(field_number + 1)
                 exit
               }
             }
@@ -80,13 +90,13 @@ open_windows_browser() {
       -NoProfile \
       -Command \
       "Start-Process '${dashboard_url}'" \
-      >/dev/null 2>&1 &
+      >/dev/null 2>&1
     return 0
   fi
 
   if command -v cmd.exe >/dev/null 2>&1; then
     cmd.exe /C start "" "${dashboard_url}" \
-      >/dev/null 2>&1 &
+      >/dev/null 2>&1
     return 0
   fi
 
@@ -95,10 +105,119 @@ open_windows_browser() {
     "${dashboard_url}"
 }
 
+process_group_exists() {
+  local process_group_id="$1"
+
+  kill -0 -- "-${process_group_id}" 2>/dev/null
+}
+
+wait_for_process_group_exit() {
+  local process_group_id="$1"
+  local timeout_seconds="$2"
+  local deadline=$((SECONDS + timeout_seconds))
+
+  while ((SECONDS < deadline)); do
+    if ! process_group_exists "${process_group_id}"; then
+      return 0
+    fi
+
+    sleep 0.25
+  done
+
+  return 1
+}
+
+stop_browser_helper() {
+  if [[ -z "${BROWSER_PID}" ]]; then
+    return 0
+  fi
+
+  if kill -0 "${BROWSER_PID}" 2>/dev/null; then
+    kill -TERM "${BROWSER_PID}" 2>/dev/null || true
+  fi
+
+  wait "${BROWSER_PID}" 2>/dev/null || true
+  BROWSER_PID=""
+}
+
+stop_launcher() {
+  if [[ "${SHUTDOWN_STARTED}" == "true" ]]; then
+    return 0
+  fi
+
+  SHUTDOWN_STARTED=true
+  stop_browser_helper
+
+  if [[ -z "${LAUNCH_PID}" ]]; then
+    return 0
+  fi
+
+  if ! process_group_exists "${LAUNCH_PID}"; then
+    wait "${LAUNCH_PID}" 2>/dev/null || true
+    LAUNCH_PID=""
+    return 0
+  fi
+
+  printf '\nStopping dashboard stack with SIGINT...\n'
+  kill -INT -- "-${LAUNCH_PID}" 2>/dev/null || true
+
+  if wait_for_process_group_exit \
+    "${LAUNCH_PID}" \
+    "${SHUTDOWN_TIMEOUT_SECONDS}"; then
+    wait "${LAUNCH_PID}" 2>/dev/null || true
+    LAUNCH_PID=""
+    printf 'Dashboard stack stopped cleanly.\n'
+    return 0
+  fi
+
+  printf 'Dashboard stack did not stop after SIGINT; '
+  printf 'sending SIGTERM.\n'
+
+  kill -TERM -- "-${LAUNCH_PID}" 2>/dev/null || true
+
+  if wait_for_process_group_exit \
+    "${LAUNCH_PID}" \
+    5; then
+    wait "${LAUNCH_PID}" 2>/dev/null || true
+    LAUNCH_PID=""
+    printf 'Dashboard stack stopped after SIGTERM.\n'
+    return 0
+  fi
+
+  printf 'Dashboard stack did not stop after SIGTERM; '
+  printf 'sending SIGKILL.\n' >&2
+
+  kill -KILL -- "-${LAUNCH_PID}" 2>/dev/null || true
+  wait "${LAUNCH_PID}" 2>/dev/null || true
+  LAUNCH_PID=""
+
+  return 1
+}
+
+handle_signal() {
+  local signal_name="$1"
+
+  printf '\nReceived %s.\n' "${signal_name}"
+  stop_launcher
+}
+
+cleanup() {
+  local exit_code=$?
+
+  stop_browser_helper
+
+  if [[ "${SHUTDOWN_STARTED}" != "true" ]]; then
+    stop_launcher || exit_code=1
+  fi
+
+  return "${exit_code}"
+}
+
 main() {
   require_command ros2
   require_command awk
   require_command hostname
+  require_command setsid
 
   if [[ ! -f "${ROS_SETUP}" ]]; then
     printf 'ERROR: ROS 2 setup file not found: %s\n' \
@@ -122,6 +241,7 @@ main() {
 
   local wsl_ip
   local dashboard_url
+  local launch_status
 
   wsl_ip="$(detect_wsl_ip)"
   dashboard_url="http://${wsl_ip}:${DASHBOARD_PORT}/"
@@ -133,17 +253,56 @@ main() {
   printf 'Rosbridge port:   %s\n' "${ROSBRIDGE_PORT}"
   printf '\nPress Ctrl+C to stop the dashboard stack.\n\n'
 
-  (
-    sleep 3
-    open_windows_browser "${dashboard_url}"
-  ) &
+  trap 'handle_signal SIGINT' INT
+  trap 'handle_signal SIGTERM' TERM
+  trap cleanup EXIT
 
-  exec ros2 launch \
+  if [[ "${OPEN_BROWSER}" == "true" ]]; then
+    (
+      sleep 3
+      open_windows_browser "${dashboard_url}"
+    ) &
+
+    BROWSER_PID=$!
+  fi
+
+  python3 -c '
+import os
+import signal
+import sys
+
+os.setsid()
+signal.signal(signal.SIGINT, signal.SIG_DFL)
+signal.signal(signal.SIGTERM, signal.SIG_DFL)
+os.execvp(sys.argv[1], sys.argv[1:])
+' \
+    ros2 launch \
     "${PACKAGE_NAME}" \
     "${LAUNCH_FILE}" \
     dashboard_port:="${DASHBOARD_PORT}" \
     websocket_port:="${ROSBRIDGE_PORT}" \
-    open_browser:=false
+    open_browser:=false &
+
+  LAUNCH_PID=$!
+
+  set +e
+  wait "${LAUNCH_PID}"
+  launch_status=$?
+  set -e
+
+  LAUNCH_PID=""
+
+  if [[ "${SHUTDOWN_STARTED}" == "true" ]]; then
+    return 0
+  fi
+
+  if ((launch_status != 0)); then
+    printf 'ERROR: dashboard launcher exited with code %s.\n' \
+      "${launch_status}" >&2
+    return "${launch_status}"
+  fi
+
+  printf 'Dashboard launcher exited normally.\n'
 }
 
 main "$@"

@@ -14,6 +14,7 @@ from action_msgs.msg import GoalStatus
 from nav2_msgs.action import NavigateToPose
 import rclpy
 from rclpy.action import ActionClient
+from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from rclpy.qos import (
     DurabilityPolicy,
@@ -1182,7 +1183,10 @@ def main(args=None) -> None:
         node = NavigationGoalManagerNode()
         rclpy.spin(node)
 
-    except KeyboardInterrupt:
+    except (
+        KeyboardInterrupt,
+        ExternalShutdownException,
+    ):
         pass
 
     finally:
