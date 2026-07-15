@@ -232,3 +232,483 @@ def test_failed_stop_prevents_mode_change() -> None:
     assert 'process did not stop' in message
     assert len(stop_calls) == 1
     assert published_modes == []
+
+
+def test_parameter_validation_accepts_valid_values() -> None:
+    manager = object.__new__(ModeManagerNode)
+
+    manager.launch_package = ' cpp_robotics_sim_ros '
+    manager.launch_files = {
+        OperatingMode.MAPPING:
+            ' slam_mapping.launch.py ',
+        OperatingMode.LOCALIZATION:
+            ' amcl_localization.launch.py ',
+        OperatingMode.NAVIGATION:
+            ' nav2_navigation.launch.py ',
+    }
+    manager.startup_grace_period = 0.0
+    manager.shutdown_timeout = 10.0
+    manager.kill_timeout = 3.0
+
+    manager.validate_parameters()
+
+    assert manager.launch_package == (
+        'cpp_robotics_sim_ros'
+    )
+    assert manager.launch_files[
+        OperatingMode.MAPPING
+    ] == 'slam_mapping.launch.py'
+
+
+def test_parameter_validation_rejects_non_finite_values() -> None:
+    invalid_values = (
+        float('nan'),
+        float('inf'),
+        float('-inf'),
+    )
+
+    for invalid_value in invalid_values:
+        manager = object.__new__(ModeManagerNode)
+
+        manager.launch_package = (
+            'cpp_robotics_sim_ros'
+        )
+        manager.launch_files = {
+            OperatingMode.MAPPING:
+                'slam_mapping.launch.py',
+            OperatingMode.LOCALIZATION:
+                'amcl_localization.launch.py',
+            OperatingMode.NAVIGATION:
+                'nav2_navigation.launch.py',
+        }
+        manager.startup_grace_period = (
+            invalid_value
+        )
+        manager.shutdown_timeout = 10.0
+        manager.kill_timeout = 3.0
+
+        try:
+            manager.validate_parameters()
+        except ValueError:
+            continue
+
+        raise AssertionError(
+            f'Expected ValueError for {invalid_value}'
+        )
+
+
+def test_parameter_validation_rejects_empty_launch_values() -> None:
+    manager = object.__new__(ModeManagerNode)
+
+    manager.launch_package = '   '
+    manager.launch_files = {
+        OperatingMode.MAPPING:
+            'slam_mapping.launch.py',
+        OperatingMode.LOCALIZATION:
+            'amcl_localization.launch.py',
+        OperatingMode.NAVIGATION:
+            'nav2_navigation.launch.py',
+    }
+    manager.startup_grace_period = 0.0
+    manager.shutdown_timeout = 10.0
+    manager.kill_timeout = 3.0
+
+    try:
+        manager.validate_parameters()
+    except ValueError as error:
+        assert 'launch_package' in str(error)
+        return
+
+    raise AssertionError(
+        'Expected empty launch_package to fail'
+    )
+
+
+def test_selected_map_callback_accepts_object_payload() -> None:
+    manager = object.__new__(ModeManagerNode)
+
+    manager.selected_map_name = ''
+    manager.selected_map_path = ''
+
+    logger = FakeLogger()
+    manager.get_logger = lambda: logger
+
+    message = MODULE.String()
+    message.data = (
+        '{"name": " warehouse ", '
+        '"yaml_path": " /tmp/warehouse.yaml "}'
+    )
+
+    manager.selected_map_callback(message)
+
+    assert manager.selected_map_name == 'warehouse'
+    assert manager.selected_map_path == (
+        '/tmp/warehouse.yaml'
+    )
+    assert logger.messages == []
+
+
+def test_selected_map_callback_rejects_non_object_payload() -> None:
+    manager = object.__new__(ModeManagerNode)
+
+    manager.selected_map_name = 'existing'
+    manager.selected_map_path = (
+        '/tmp/existing.yaml'
+    )
+
+    logger = FakeLogger()
+    manager.get_logger = lambda: logger
+
+    message = MODULE.String()
+    message.data = '["not", "an", "object"]'
+
+    manager.selected_map_callback(message)
+
+    assert manager.selected_map_name == 'existing'
+    assert manager.selected_map_path == (
+        '/tmp/existing.yaml'
+    )
+    assert logger.messages == [
+        (
+            'error',
+            'Selected-map payload must be a JSON object',
+        )
+    ]
+
+
+def test_selected_map_callback_rejects_invalid_json() -> None:
+    manager = object.__new__(ModeManagerNode)
+
+    manager.selected_map_name = 'existing'
+    manager.selected_map_path = (
+        '/tmp/existing.yaml'
+    )
+
+    logger = FakeLogger()
+    manager.get_logger = lambda: logger
+
+    message = MODULE.String()
+    message.data = '{invalid json'
+
+    manager.selected_map_callback(message)
+
+    assert manager.selected_map_name == 'existing'
+    assert manager.selected_map_path == (
+        '/tmp/existing.yaml'
+    )
+    assert logger.messages == [
+        (
+            'error',
+            'Received invalid selected-map payload',
+        )
+    ]
+
+
+def test_shutdown_is_idempotent(monkeypatch) -> None:
+    manager = object.__new__(ModeManagerNode)
+
+    manager._context = object()
+    manager.shutdown_complete = False
+
+    stop_calls = []
+    manager.stop_current_mode = lambda: (
+        stop_calls.append(True)
+        or (True, 'Operating mode stopped')
+    )
+
+    monkeypatch.setattr(
+        MODULE.rclpy,
+        'ok',
+        lambda context=None: False,
+    )
+
+    manager.shutdown()
+    manager.shutdown()
+
+    assert manager.shutdown_complete is True
+    assert len(stop_calls) == 1
+
+
+class FakeProcess:
+    """Provide controllable process state for manager tests."""
+
+    def __init__(
+        self,
+        *,
+        pid: int = 1234,
+        return_code=None,
+    ) -> None:
+        """Initialize the fake process."""
+        self.pid = pid
+        self.returncode = return_code
+
+    def poll(self):
+        """Return the configured process result."""
+        return self.returncode
+
+
+def make_process_monitor_manager(
+    *,
+    process_return_code,
+    mode=OperatingMode.NAVIGATION,
+    requested_mode=OperatingMode.NAVIGATION,
+):
+    """Create a manager configured for process-monitor tests."""
+    manager = object.__new__(ModeManagerNode)
+
+    manager.process_lock = threading.RLock()
+    manager.process = FakeProcess(
+        return_code=process_return_code,
+    )
+    manager.process_group_id = 4321
+    manager.mode = mode
+    manager.requested_mode = requested_mode
+    manager.last_error = ''
+
+    logger = FakeLogger()
+    manager.get_logger = lambda: logger
+
+    published_modes = []
+
+    def publish_mode(mode_to_publish) -> None:
+        published_modes.append(mode_to_publish)
+        manager.mode = mode_to_publish
+
+    terminated_groups = []
+
+    manager.publish_mode = publish_mode
+    manager.terminate_process_group = (
+        lambda process_group_id:
+            terminated_groups.append(
+                process_group_id
+            )
+    )
+
+    return (
+        manager,
+        logger,
+        published_modes,
+        terminated_groups,
+    )
+
+
+def test_monitor_process_ignores_running_process() -> None:
+    """Keep manager state unchanged while process is running."""
+    (
+        manager,
+        logger,
+        published_modes,
+        terminated_groups,
+    ) = make_process_monitor_manager(
+        process_return_code=None,
+    )
+
+    manager.monitor_process()
+
+    assert manager.process is not None
+    assert manager.process_group_id == 4321
+    assert published_modes == []
+    assert terminated_groups == []
+    assert logger.messages == []
+
+
+def test_monitor_process_reports_unexpected_exit(
+    monkeypatch,
+) -> None:
+    """Report an unexpected managed-process exit."""
+    (
+        manager,
+        logger,
+        published_modes,
+        terminated_groups,
+    ) = make_process_monitor_manager(
+        process_return_code=7,
+    )
+
+    manager._context = object()
+
+    monkeypatch.setattr(
+        MODULE.rclpy,
+        'ok',
+        lambda context=None: True,
+    )
+
+    manager.monitor_process()
+
+    assert manager.process is None
+    assert manager.process_group_id is None
+    assert terminated_groups == [4321]
+    assert published_modes == [
+        OperatingMode.ERROR
+    ]
+    assert manager.last_error == (
+        'navigation mode exited unexpectedly '
+        'with return code 7'
+    )
+    assert logger.messages == [
+        (
+            'error',
+            manager.last_error,
+        )
+    ]
+
+
+def test_monitor_process_accepts_expected_stop() -> None:
+    """Convert an expected stopping-process exit to stopped."""
+    (
+        manager,
+        logger,
+        published_modes,
+        terminated_groups,
+    ) = make_process_monitor_manager(
+        process_return_code=0,
+        mode=OperatingMode.STOPPING,
+    )
+
+    manager.monitor_process()
+
+    assert manager.process is None
+    assert manager.process_group_id is None
+    assert terminated_groups == [4321]
+    assert published_modes == [
+        OperatingMode.STOPPED
+    ]
+    assert manager.last_error == ''
+    assert logger.messages == []
+
+
+def test_clear_finished_process_cleans_process_group() -> None:
+    """Clear a completed process and terminate its remaining group."""
+    manager = object.__new__(ModeManagerNode)
+
+    manager.process = FakeProcess(
+        return_code=0,
+    )
+    manager.process_group_id = 6789
+
+    terminated_groups = []
+    manager.terminate_process_group = (
+        lambda process_group_id:
+            terminated_groups.append(
+                process_group_id
+            )
+    )
+
+    manager.clear_finished_process()
+
+    assert manager.process is None
+    assert manager.process_group_id is None
+    assert terminated_groups == [6789]
+
+
+def test_clear_finished_process_preserves_running_process() -> None:
+    """Preserve manager state while its process remains active."""
+    manager = object.__new__(ModeManagerNode)
+
+    process = FakeProcess(
+        return_code=None,
+    )
+    manager.process = process
+    manager.process_group_id = 6789
+
+    terminated_groups = []
+    manager.terminate_process_group = (
+        lambda process_group_id:
+            terminated_groups.append(
+                process_group_id
+            )
+    )
+
+    manager.clear_finished_process()
+
+    assert manager.process is process
+    assert manager.process_group_id == 6789
+    assert terminated_groups == []
+
+
+def test_terminate_process_group_returns_true_when_absent() -> None:
+    """Treat an already absent process group as successfully stopped."""
+    manager = object.__new__(ModeManagerNode)
+
+    manager.process_group_exists = (
+        lambda process_group_id: False
+    )
+
+    assert manager.terminate_process_group(1234) is True
+
+
+def test_terminate_process_group_confirms_sigterm_exit(
+    monkeypatch,
+) -> None:
+    """Confirm successful termination after SIGTERM."""
+    manager = object.__new__(ModeManagerNode)
+
+    manager._context = object()
+    manager.kill_timeout = 0.2
+
+    existence_results = iter((True, False))
+    manager.process_group_exists = (
+        lambda process_group_id:
+            next(existence_results)
+    )
+
+    sent_signals = []
+
+    monkeypatch.setattr(
+        MODULE.rclpy,
+        'ok',
+        lambda context=None: False,
+    )
+    monkeypatch.setattr(
+        MODULE.os,
+        'killpg',
+        lambda process_group_id, sent_signal:
+            sent_signals.append(
+                (process_group_id, sent_signal)
+            ),
+    )
+
+    result = manager.terminate_process_group(1234)
+
+    assert result is True
+    assert sent_signals == [
+        (1234, MODULE.signal.SIGTERM)
+    ]
+
+
+def test_terminate_process_group_reports_sigkill_survivor(
+    monkeypatch,
+) -> None:
+    """Return failure when a process group survives SIGKILL."""
+    manager = object.__new__(ModeManagerNode)
+
+    manager._context = object()
+    manager.kill_timeout = 0.0
+
+    manager.process_group_exists = (
+        lambda process_group_id: True
+    )
+
+    sent_signals = []
+
+    monkeypatch.setattr(
+        MODULE.rclpy,
+        'ok',
+        lambda context=None: False,
+    )
+    monkeypatch.setattr(
+        MODULE.os,
+        'killpg',
+        lambda process_group_id, sent_signal:
+            sent_signals.append(
+                (process_group_id, sent_signal)
+            ),
+    )
+
+    result = manager.terminate_process_group(1234)
+
+    assert result is False
+    assert sent_signals == [
+        (1234, MODULE.signal.SIGTERM),
+        (1234, MODULE.signal.SIGKILL),
+    ]

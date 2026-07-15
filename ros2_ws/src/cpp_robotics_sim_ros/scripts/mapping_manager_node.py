@@ -7,6 +7,7 @@
 
 
 import json
+import math
 from pathlib import Path
 import re
 import subprocess
@@ -144,9 +145,13 @@ class MappingManagerNode(Node):
         )
 
     def validate_parameters(self) -> None:
-        if self.save_timeout <= 0.0:
+        if (
+            not math.isfinite(self.save_timeout)
+            or self.save_timeout <= 0.0
+        ):
             raise ValueError(
-                'save_timeout must be greater than zero'
+                'save_timeout must be finite and '
+                'greater than zero'
             )
 
         if not 0.0 <= self.free_threshold <= 1.0:
@@ -172,13 +177,13 @@ class MappingManagerNode(Node):
         self,
         message: String,
     ) -> None:
-        self.mode_state = message.data
+        self.mode_state = message.data.strip()
 
     def simulation_status_callback(
         self,
         message: String,
     ) -> None:
-        self.simulation_state = message.data
+        self.simulation_state = message.data.strip()
 
     def environment_status_callback(
         self,
@@ -192,23 +197,37 @@ class MappingManagerNode(Node):
             )
             return
 
-        environment = str(
-            payload.get(
-                'selected_environment',
-                '',
+        if not isinstance(payload, dict):
+            self.get_logger().warning(
+                'Ignoring non-object environment status'
             )
-        ).strip().lower()
+            return
 
-        if environment:
-            environment_changed = (
-                environment
-                != self.selected_environment
+        raw_environment = payload.get(
+            'selected_environment',
+            '',
+        )
+
+        if (
+            not isinstance(raw_environment, str)
+            or not raw_environment.strip()
+        ):
+            self.get_logger().warning(
+                'Ignoring invalid environment status value'
             )
+            return
 
-            self.selected_environment = environment
+        environment = raw_environment.strip().lower()
 
-            if environment_changed:
-                self.publish_saved_maps()
+        environment_changed = (
+            environment
+            != self.selected_environment
+        )
+
+        self.selected_environment = environment
+
+        if environment_changed:
+            self.publish_saved_maps()
 
     def save_request_callback(
         self,
@@ -239,10 +258,14 @@ class MappingManagerNode(Node):
                 return
 
             self.save_in_progress = True
+            environment = self.selected_environment
 
         thread = threading.Thread(
             target=self.save_map,
-            args=(map_name,),
+            args=(
+                map_name,
+                environment,
+            ),
             daemon=True,
         )
         thread.start()
@@ -284,52 +307,86 @@ class MappingManagerNode(Node):
     def save_map(
         self,
         map_name: str,
+        environment: str,
     ) -> None:
-        environment_directory = (
-            self.map_directory
-            / self.selected_environment
-        )
-
-        environment_directory.mkdir(
-            parents=True,
-            exist_ok=True,
-        )
-
-        output_prefix = (
-            environment_directory / map_name
-        )
-
-        self.publish_status(
-            status='saving',
-            message=(
-                f"Saving map '{map_name}' for "
-                f'{self.selected_environment}...'
-            ),
-            map_name=map_name,
-            environment=self.selected_environment,
-        )
-
-        command = [
-            'ros2',
-            'run',
-            'nav2_map_server',
-            'map_saver_cli',
-            '-f',
-            str(output_prefix),
-            '--free',
-            str(self.free_threshold),
-            '--occ',
-            str(self.occupied_threshold),
-        ]
-
         try:
-            result = subprocess.run(
-                command,
-                capture_output=True,
-                text=True,
-                timeout=self.save_timeout,
-                check=False,
+            environment_directory = (
+                self.map_directory
+                / environment
             )
+
+            try:
+                environment_directory.mkdir(
+                    parents=True,
+                    exist_ok=True,
+                )
+            except OSError as error:
+                self.publish_status(
+                    status='error',
+                    message=(
+                        'Unable to prepare map directory: '
+                        f'{error}'
+                    ),
+                    map_name=map_name,
+                    environment=environment,
+                )
+                return
+
+            output_prefix = (
+                environment_directory / map_name
+            )
+
+            self.publish_status(
+                status='saving',
+                message=(
+                    f"Saving map '{map_name}' for "
+                    f'{environment}...'
+                ),
+                map_name=map_name,
+                environment=environment,
+            )
+
+            command = [
+                'ros2',
+                'run',
+                'nav2_map_server',
+                'map_saver_cli',
+                '-f',
+                str(output_prefix),
+                '--free',
+                str(self.free_threshold),
+                '--occ',
+                str(self.occupied_threshold),
+            ]
+
+            try:
+                result = subprocess.run(
+                    command,
+                    capture_output=True,
+                    text=True,
+                    timeout=self.save_timeout,
+                    check=False,
+                )
+            except subprocess.TimeoutExpired:
+                self.publish_status(
+                    status='error',
+                    message=(
+                        f"Saving map '{map_name}' timed out"
+                    ),
+                    map_name=map_name,
+                    environment=environment,
+                )
+                return
+            except OSError as error:
+                self.publish_status(
+                    status='error',
+                    message=(
+                        f'Unable to run map saver: {error}'
+                    ),
+                    map_name=map_name,
+                    environment=environment,
+                )
+                return
 
             yaml_path = output_prefix.with_suffix(
                 '.yaml'
@@ -356,9 +413,7 @@ class MappingManagerNode(Node):
                         f"'{map_name}': {details}"
                     ),
                     map_name=map_name,
-                    environment=(
-                        self.selected_environment
-                    ),
+                    environment=environment,
                 )
                 return
 
@@ -366,35 +421,15 @@ class MappingManagerNode(Node):
                 status='success',
                 message=(
                     f"Map '{map_name}' saved successfully "
-                    f'for {self.selected_environment}'
+                    f'for {environment}'
                 ),
                 map_name=map_name,
-                environment=self.selected_environment,
+                environment=environment,
                 yaml_path=str(yaml_path),
                 image_path=str(pgm_path),
             )
 
             self.publish_saved_maps()
-
-        except subprocess.TimeoutExpired:
-            self.publish_status(
-                status='error',
-                message=(
-                    f"Saving map '{map_name}' timed out"
-                ),
-                map_name=map_name,
-                environment=self.selected_environment,
-            )
-
-        except OSError as error:
-            self.publish_status(
-                status='error',
-                message=(
-                    f'Unable to run map saver: {error}'
-                ),
-                map_name=map_name,
-                environment=self.selected_environment,
-            )
 
         finally:
             with self.save_lock:
