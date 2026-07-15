@@ -1,14 +1,22 @@
 #!/usr/bin/env python3
+# Copyright 2026 Devansh Mishra
+#
+# Use of this source code is governed by an MIT-style
+# license that can be found in the LICENSE file or at
+# https://opensource.org/licenses/MIT.
 
+from enum import Enum
 import json
 import os
 import signal
 import subprocess
 import threading
 import time
-from enum import Enum
 from typing import Optional
 
+from ament_index_python.packages import (
+    get_package_share_directory,
+)
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import (
@@ -17,112 +25,103 @@ from rclpy.qos import (
     QoSProfile,
     ReliabilityPolicy,
 )
-from ament_index_python.packages import (
-    get_package_share_directory,
-)
 from std_msgs.msg import String
 from std_srvs.srv import Trigger
 
 
 class SimulationState(str, Enum):
-    STOPPED = "stopped"
-    STARTING = "starting"
-    RUNNING = "running"
-    STOPPING = "stopping"
-    ERROR = "error"
+    STOPPED = 'stopped'
+    STARTING = 'starting'
+    RUNNING = 'running'
+    STOPPING = 'stopping'
+    ERROR = 'error'
 
 
 class SimulationManagerNode(Node):
-    """
-    Start, stop, reset, and monitor the simulation launch process.
-
-    The manager launches the simulation in a separate Unix process group.
-    This allows all child processes started by ros2 launch to be stopped
-    together rather than leaving Gazebo or ROS nodes orphaned.
-    """
+    """Manage simulation startup, state, and shutdown."""
 
     def __init__(self) -> None:
-        super().__init__("simulation_manager")
+        super().__init__('simulation_manager')
 
         self.declare_parameter(
-            "launch_package",
-            "cpp_robotics_sim_ros",
+            'launch_package',
+            'cpp_robotics_sim_ros',
         )
         self.declare_parameter(
-            "launch_file",
-            "interactive_control.launch.py",
+            'launch_file',
+            'interactive_control.launch.py',
         )
         self.declare_parameter(
-            "managed_use_sim_time",
+            'managed_use_sim_time',
             True,
         )
 
         self.declare_parameter(
-            "default_environment",
-            "warehouse",
+            'default_environment',
+            'warehouse',
         )
         self.declare_parameter(
-            "environment_names",
+            'environment_names',
             [
-                "warehouse",
-                "hospital",
+                'warehouse',
+                'hospital',
             ],
         )
         self.declare_parameter(
-            "warehouse_world_file",
-            "warehouse_world.sdf",
+            'warehouse_world_file',
+            'warehouse_world.sdf',
         )
         self.declare_parameter(
-            "hospital_world_file",
-            "hospital_world.sdf",
+            'hospital_world_file',
+            'hospital_world.sdf',
         )
 
         self.declare_parameter(
-            "startup_grace_period",
+            'startup_grace_period',
             4.0,
         )
         self.declare_parameter(
-            "shutdown_timeout",
+            'shutdown_timeout',
             10.0,
         )
         self.declare_parameter(
-            "kill_timeout",
+            'kill_timeout',
             3.0,
         )
 
         self.launch_package = str(
-            self.get_parameter("launch_package").value
+            self.get_parameter('launch_package').value
         )
         self.launch_file = str(
-            self.get_parameter("launch_file").value
+            self.get_parameter('launch_file').value
         )
         self.managed_use_sim_time = bool(
             self.get_parameter(
-                "managed_use_sim_time"
+                'managed_use_sim_time'
             ).value
         )
 
         self.environment_names = [
             str(name)
             for name in self.get_parameter(
-                "environment_names"
+                'environment_names'
             ).value
         ]
         self.selected_environment = str(
             self.get_parameter(
-                "default_environment"
+                'default_environment'
             ).value
         )
 
         self.environment_world_files = {
-            "warehouse": str(
+            'warehouse': str(
                 self.get_parameter(
-                    "warehouse_world_file"
+                    'warehouse_world_file'
                 ).value
             ),
-            "hospital": str(
+            'hospital': str(
                 self.get_parameter(
-                    "hospital_world_file"
+                    'hospital_world_file'
                 ).value
             ),
         }
@@ -134,13 +133,13 @@ class SimulationManagerNode(Node):
         )
 
         self.startup_grace_period = float(
-            self.get_parameter("startup_grace_period").value
+            self.get_parameter('startup_grace_period').value
         )
         self.shutdown_timeout = float(
-            self.get_parameter("shutdown_timeout").value
+            self.get_parameter('shutdown_timeout').value
         )
         self.kill_timeout = float(
-            self.get_parameter("kill_timeout").value
+            self.get_parameter('kill_timeout').value
         )
 
         self.validate_parameters()
@@ -154,14 +153,14 @@ class SimulationManagerNode(Node):
 
         self.status_publisher = self.create_publisher(
             String,
-            "/simulation/status",
+            '/simulation/status',
             status_qos,
         )
 
         self.environment_status_publisher = (
             self.create_publisher(
                 String,
-                "/simulation/environment_status",
+                '/simulation/environment_status',
                 status_qos,
             )
         )
@@ -169,7 +168,7 @@ class SimulationManagerNode(Node):
         self.environment_request_subscription = (
             self.create_subscription(
                 String,
-                "/simulation/environment_request",
+                '/simulation/environment_request',
                 self.environment_request_callback,
                 10,
             )
@@ -177,26 +176,26 @@ class SimulationManagerNode(Node):
 
         self.start_service = self.create_service(
             Trigger,
-            "/simulation/start",
+            '/simulation/start',
             self.start_callback,
         )
 
         self.stop_service = self.create_service(
             Trigger,
-            "/simulation/stop",
+            '/simulation/stop',
             self.stop_callback,
         )
 
         self.reset_service = self.create_service(
             Trigger,
-            "/simulation/reset",
+            '/simulation/reset',
             self.reset_callback,
         )
 
         self.process: Optional[subprocess.Popen] = None
         self.process_lock = threading.RLock()
         self.state = SimulationState.STOPPED
-        self.last_error = ""
+        self.last_error = ''
 
         self.monitor_timer = self.create_timer(
             0.5,
@@ -205,34 +204,34 @@ class SimulationManagerNode(Node):
 
         self.set_state(SimulationState.STOPPED)
         self.publish_environment_status(
-            state="ready",
+            state='ready',
             message=(
-                "Environment selection ready"
+                'Environment selection ready'
             ),
         )
 
         self.get_logger().info(
-            "Simulation manager ready"
+            'Simulation manager ready'
         )
         self.get_logger().info(
-            f"Managed launch: "
-            f"{self.launch_package} {self.launch_file}"
+            f'Managed launch: '
+            f'{self.launch_package} {self.launch_file}'
         )
 
     def validate_parameters(self) -> None:
         if not self.launch_package:
             raise ValueError(
-                "launch_package must not be empty"
+                'launch_package must not be empty'
             )
 
         if not self.launch_file:
             raise ValueError(
-                "launch_file must not be empty"
+                'launch_file must not be empty'
             )
 
         if not self.environment_names:
             raise ValueError(
-                "environment_names must not be empty"
+                'environment_names must not be empty'
             )
 
         if (
@@ -240,8 +239,8 @@ class SimulationManagerNode(Node):
             not in self.environment_names
         ):
             raise ValueError(
-                "default_environment must be one of "
-                f"{self.environment_names}"
+                'default_environment must be one of '
+                f'{self.environment_names}'
             )
 
         missing_world_entries = [
@@ -253,8 +252,8 @@ class SimulationManagerNode(Node):
 
         if missing_world_entries:
             raise ValueError(
-                "Missing world-file configuration for: "
-                f"{missing_world_entries}"
+                'Missing world-file configuration for: '
+                f'{missing_world_entries}'
             )
 
         for environment in self.environment_names:
@@ -264,23 +263,23 @@ class SimulationManagerNode(Node):
 
             if not world_file:
                 raise ValueError(
-                    "World filename must not be empty for "
-                    f"{environment}"
+                    'World filename must not be empty for '
+                    f'{environment}'
                 )
 
         if self.startup_grace_period < 0.0:
             raise ValueError(
-                "startup_grace_period must not be negative"
+                'startup_grace_period must not be negative'
             )
 
         if self.shutdown_timeout <= 0.0:
             raise ValueError(
-                "shutdown_timeout must be greater than zero"
+                'shutdown_timeout must be greater than zero'
             )
 
         if self.kill_timeout <= 0.0:
             raise ValueError(
-                "kill_timeout must be greater than zero"
+                'kill_timeout must be greater than zero'
             )
 
     def environment_request_callback(
@@ -291,9 +290,9 @@ class SimulationManagerNode(Node):
 
         if not requested_environment:
             self.publish_environment_status(
-                state="invalid_request",
+                state='invalid_request',
                 message=(
-                    "Environment request must not be empty"
+                    'Environment request must not be empty'
                 ),
             )
             return
@@ -303,10 +302,10 @@ class SimulationManagerNode(Node):
             not in self.environment_names
         ):
             self.publish_environment_status(
-                state="invalid_request",
+                state='invalid_request',
                 message=(
-                    "Unsupported environment: "
-                    f"{requested_environment}"
+                    'Unsupported environment: '
+                    f'{requested_environment}'
                 ),
             )
             return
@@ -322,10 +321,10 @@ class SimulationManagerNode(Node):
                 )
             ):
                 self.publish_environment_status(
-                    state="locked",
+                    state='locked',
                     message=(
-                        "Stop the simulation before changing "
-                        "the environment"
+                        'Stop the simulation before changing '
+                        'the environment'
                     ),
                 )
                 return
@@ -335,15 +334,15 @@ class SimulationManagerNode(Node):
             )
 
         self.get_logger().info(
-            "Selected simulation environment: "
-            f"{self.selected_environment}"
+            'Selected simulation environment: '
+            f'{self.selected_environment}'
         )
 
         self.publish_environment_status(
-            state="selected",
+            state='selected',
             message=(
-                "Selected environment: "
-                f"{self.selected_environment}"
+                'Selected environment: '
+                f'{self.selected_environment}'
             ),
         )
 
@@ -354,14 +353,14 @@ class SimulationManagerNode(Node):
 
         world_path = os.path.join(
             self.package_share_directory,
-            "worlds",
+            'worlds',
             world_filename,
         )
 
         if not os.path.isfile(world_path):
             raise FileNotFoundError(
-                "World file does not exist: "
-                f"{world_path}"
+                'World file does not exist: '
+                f'{world_path}'
             )
 
         return world_path
@@ -376,20 +375,20 @@ class SimulationManagerNode(Node):
 
         world_filename = self.environment_world_files.get(
             self.selected_environment,
-            "",
+            '',
         )
 
         payload = {
-            "state": state,
-            "message": message,
-            "selected_environment": (
+            'state': state,
+            'message': message,
+            'selected_environment': (
                 self.selected_environment
             ),
-            "available_environments": (
+            'available_environments': (
                 self.environment_names
             ),
-            "world_file": world_filename,
-            "selection_locked": (
+            'world_file': world_filename,
+            'selection_locked': (
                 self.state
                 != SimulationState.STOPPED
                 or self.process_is_running()
@@ -399,7 +398,7 @@ class SimulationManagerNode(Node):
         ros_message = String()
         ros_message.data = json.dumps(
             payload,
-            separators=(",", ":"),
+            separators=(',', ':'),
         )
 
         self.environment_status_publisher.publish(
@@ -438,7 +437,7 @@ class SimulationManagerNode(Node):
         del request
 
         self.get_logger().info(
-            "Simulation reset requested"
+            'Simulation reset requested'
         )
 
         stopped, stop_message = self.stop_simulation()
@@ -446,7 +445,7 @@ class SimulationManagerNode(Node):
         if not stopped:
             response.success = False
             response.message = (
-                f"Reset failed while stopping: {stop_message}"
+                f'Reset failed while stopping: {stop_message}'
             )
             return response
 
@@ -456,9 +455,9 @@ class SimulationManagerNode(Node):
 
         response.success = started
         response.message = (
-            "Simulation reset successfully"
+            'Simulation reset successfully'
             if started
-            else f"Reset failed while starting: {start_message}"
+            else f'Reset failed while starting: {start_message}'
         )
 
         return response
@@ -467,13 +466,13 @@ class SimulationManagerNode(Node):
         with self.process_lock:
             if self.process_is_running():
                 message = (
-                    "Simulation is already running"
+                    'Simulation is already running'
                 )
                 self.get_logger().warning(message)
                 return False, message
 
             self.clear_finished_process()
-            self.last_error = ""
+            self.last_error = ''
             self.set_state(SimulationState.STARTING)
 
             try:
@@ -485,7 +484,7 @@ class SimulationManagerNode(Node):
                 self.set_state(SimulationState.ERROR)
 
                 self.publish_environment_status(
-                    state="error",
+                    state='error',
                     message=self.last_error,
                 )
 
@@ -495,17 +494,17 @@ class SimulationManagerNode(Node):
                 return False, self.last_error
 
             command = [
-                "ros2",
-                "launch",
+                'ros2',
+                'launch',
                 self.launch_package,
                 self.launch_file,
-                f"world:={selected_world_path}",
+                f'world:={selected_world_path}',
                 f"use_sim_time:={'true' if self.managed_use_sim_time else 'false'}",
             ]
 
             self.get_logger().info(
-                "Starting simulation: "
-                + " ".join(command)
+                'Starting simulation: '
+                + ' '.join(command)
             )
 
             try:
@@ -519,7 +518,7 @@ class SimulationManagerNode(Node):
                 self.set_state(SimulationState.ERROR)
 
                 message = (
-                    f"Failed to start simulation: {error}"
+                    f'Failed to start simulation: {error}'
                 )
                 self.get_logger().error(message)
                 return False, message
@@ -529,8 +528,8 @@ class SimulationManagerNode(Node):
             if self.process.poll() is not None:
                 return_code = self.process.returncode
                 self.last_error = (
-                    "Simulation launch exited during startup "
-                    f"with return code {return_code}"
+                    'Simulation launch exited during startup '
+                    f'with return code {return_code}'
                 )
                 self.process = None
                 self.set_state(SimulationState.ERROR)
@@ -540,16 +539,16 @@ class SimulationManagerNode(Node):
 
             self.set_state(SimulationState.RUNNING)
             self.publish_environment_status(
-                state="running",
+                state='running',
                 message=(
-                    "Simulation running in "
-                    f"{self.selected_environment}"
+                    'Simulation running in '
+                    f'{self.selected_environment}'
                 ),
             )
 
             message = (
-                f"Simulation started with PID "
-                f"{self.process.pid}"
+                f'Simulation started with PID '
+                f'{self.process.pid}'
             )
             self.get_logger().info(message)
             return True, message
@@ -561,7 +560,7 @@ class SimulationManagerNode(Node):
                 self.cleanup_remaining_processes()
                 self.set_state(SimulationState.STOPPED)
 
-                message = "Simulation is already stopped"
+                message = 'Simulation is already stopped'
                 self.get_logger().info(message)
                 return True, message
 
@@ -573,7 +572,7 @@ class SimulationManagerNode(Node):
             self.set_state(SimulationState.STOPPING)
 
             self.get_logger().info(
-                f"Stopping simulation process group {process_pid}"
+                f'Stopping simulation process group {process_pid}'
             )
 
             try:
@@ -588,8 +587,8 @@ class SimulationManagerNode(Node):
 
             except subprocess.TimeoutExpired:
                 self.get_logger().warning(
-                    "Simulation did not stop after SIGINT; "
-                    "sending SIGTERM"
+                    'Simulation did not stop after SIGINT; '
+                    'sending SIGTERM'
                 )
 
                 try:
@@ -603,8 +602,8 @@ class SimulationManagerNode(Node):
 
                 except subprocess.TimeoutExpired:
                     self.get_logger().error(
-                        "Simulation did not stop after SIGTERM; "
-                        "sending SIGKILL"
+                        'Simulation did not stop after SIGTERM; '
+                        'sending SIGKILL'
                     )
 
                     try:
@@ -621,7 +620,7 @@ class SimulationManagerNode(Node):
 
             except ProcessLookupError:
                 self.get_logger().warning(
-                    "Simulation process group no longer exists"
+                    'Simulation process group no longer exists'
                 )
 
             except (OSError, subprocess.SubprocessError) as error:
@@ -629,7 +628,7 @@ class SimulationManagerNode(Node):
                 self.set_state(SimulationState.ERROR)
 
                 message = (
-                    f"Failed to stop simulation cleanly: {error}"
+                    f'Failed to stop simulation cleanly: {error}'
                 )
                 self.get_logger().error(message)
                 return False, message
@@ -640,14 +639,14 @@ class SimulationManagerNode(Node):
             self.cleanup_remaining_processes()
             self.set_state(SimulationState.STOPPED)
             self.publish_environment_status(
-                state="selected",
+                state='selected',
                 message=(
-                    "Simulation stopped; environment "
-                    "selection unlocked"
+                    'Simulation stopped; environment '
+                    'selection unlocked'
                 ),
             )
 
-            message = "Simulation stopped successfully"
+            message = 'Simulation stopped successfully'
 
             if rclpy.ok(context=self.context):
                 self.get_logger().info(message)
@@ -675,8 +674,8 @@ class SimulationManagerNode(Node):
                 return
 
             self.last_error = (
-                "Simulation process exited unexpectedly "
-                f"with return code {return_code}"
+                'Simulation process exited unexpectedly '
+                f'with return code {return_code}'
             )
 
             self.set_state(SimulationState.ERROR)
@@ -722,29 +721,30 @@ class SimulationManagerNode(Node):
 
         if state_changed:
             self.get_logger().info(
-                f"Simulation state: {new_state.value}"
+                f'Simulation state: {new_state.value}'
             )
 
     def cleanup_remaining_processes(self) -> None:
         """
-        Remove known simulation processes that may detach from the
-        ros2 launch process group.
+        Remove known detached simulation processes.
 
-        This is a fallback after normal process-group shutdown.
+        This is a fallback for processes that escape the managed
+        ROS 2 launch process group after normal process-group
+        shutdown.
         """
         process_patterns = [
-            "gz sim",
-            "gzserver",
-            "gzclient",
-            "ros2 launch cpp_robotics_sim_ros "
-            "interactive_control.launch.py",
+            'gz sim',
+            'gzserver',
+            'gzclient',
+            'ros2 launch cpp_robotics_sim_ros '
+            'interactive_control.launch.py',
         ]
 
         for pattern in process_patterns:
             result = subprocess.run(
                 [
-                    "pgrep",
-                    "-f",
+                    'pgrep',
+                    '-f',
                     pattern,
                 ],
                 capture_output=True,
@@ -769,15 +769,15 @@ class SimulationManagerNode(Node):
                 try:
                     os.kill(process_id, signal.SIGTERM)
                     self.get_logger().warning(
-                        "Terminated remaining process "
-                        f"{process_id}: {pattern}"
+                        'Terminated remaining process '
+                        f'{process_id}: {pattern}'
                     )
                 except ProcessLookupError:
                     pass
                 except PermissionError as error:
                     self.get_logger().error(
-                        f"Unable to terminate process "
-                        f"{process_id}: {error}"
+                        f'Unable to terminate process '
+                        f'{process_id}: {error}'
                     )
 
         time.sleep(1.0)
@@ -785,8 +785,8 @@ class SimulationManagerNode(Node):
         for pattern in process_patterns:
             result = subprocess.run(
                 [
-                    "pgrep",
-                    "-f",
+                    'pgrep',
+                    '-f',
                     pattern,
                 ],
                 capture_output=True,
@@ -806,21 +806,21 @@ class SimulationManagerNode(Node):
                 try:
                     os.kill(process_id, signal.SIGKILL)
                     self.get_logger().error(
-                        "Force-killed remaining process "
-                        f"{process_id}: {pattern}"
+                        'Force-killed remaining process '
+                        f'{process_id}: {pattern}'
                     )
                 except ProcessLookupError:
                     pass
                 except PermissionError as error:
                     self.get_logger().error(
-                        f"Unable to force-kill process "
-                        f"{process_id}: {error}"
+                        f'Unable to force-kill process '
+                        f'{process_id}: {error}'
                     )
 
     def shutdown(self) -> None:
         if rclpy.ok(context=self.context):
             self.get_logger().info(
-                "Simulation manager shutting down"
+                'Simulation manager shutting down'
             )
 
         success, message = self.stop_simulation()
@@ -833,7 +833,7 @@ class SimulationManagerNode(Node):
 
         if rclpy.ok(context=self.context):
             self.get_logger().info(
-                "Simulation shutdown cleanup complete"
+                'Simulation shutdown cleanup complete'
             )
 
 
@@ -858,5 +858,5 @@ def main(args=None) -> None:
             rclpy.shutdown()
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

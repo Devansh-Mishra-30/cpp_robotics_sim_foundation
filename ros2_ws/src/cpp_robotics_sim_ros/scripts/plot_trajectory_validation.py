@@ -1,4 +1,10 @@
 #!/usr/bin/env python3
+# Copyright 2026 Devansh Mishra
+#
+# Use of this source code is governed by an MIT-style
+# license that can be found in the LICENSE file or at
+# https://opensource.org/licenses/MIT.
+
 
 import argparse
 import csv
@@ -8,7 +14,7 @@ from pathlib import Path
 import matplotlib
 matplotlib.use('Agg')
 
-import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt  # noqa: E402
 
 
 REQUIRED_COLUMNS = [
@@ -261,16 +267,20 @@ def write_report(data, rows, csv_path, plot_path, report_path):
     )
 
     lines = [
-        '# Day 85 — Trajectory Validation Report',
+        '# Trajectory Validation Report',
         '',
         '## Purpose',
         '',
-        'This report validates the Gazebo `ros2_control` differential-drive stack by comparing commanded velocity, actual odometry, and noisy odometry.',
+        (
+            'This report validates the Gazebo `ros2_control` '
+            'differential-drive stack by comparing commanded '
+            'velocity, actual odometry, and noisy odometry.'
+        ),
         '',
         'The validation data comes from:',
         '',
         '```txt',
-        'data/day84_trajectory_validation.csv',
+        'data/trajectory_validation.csv',
         '```',
         '',
         'The generated plot is:',
@@ -336,21 +346,42 @@ def write_report(data, rows, csv_path, plot_path, report_path):
         '',
         'The commanded velocity columns show the desired robot motion.',
         '',
-        'The actual odometry columns show the executed robot motion reported by the Gazebo `diff_drive_controller`.',
+        (
+            'The actual odometry columns show the executed '
+            'robot motion reported by the Gazebo '
+            '`diff_drive_controller`.'
+        ),
         '',
-        'The noisy odometry columns show a controlled noisy measurement stream created from actual odometry.',
+        (
+            'The noisy odometry columns show a controlled noisy '
+            'measurement stream created from actual odometry.'
+        ),
         '',
-        'The actual and noisy trajectories should be close but not identical. The difference between them represents simulated measurement uncertainty.',
+        (
+            'The actual and noisy trajectories should be close '
+            'but not identical. The difference between them '
+            'represents simulated measurement uncertainty.'
+        ),
         '',
         '---',
         '',
         '## Interview Explanation',
         '',
-        'Day 85 converts raw validation data into engineering evidence.',
+        'This workflow converts raw validation data into engineering evidence.',
         '',
-        'Instead of only saying the robot moves in Gazebo, this report shows that the system can record command signals, actual odometry feedback, noisy measurement feedback, and quantitative trajectory metrics.',
+        (
+            'Instead of only saying the robot moves in Gazebo, '
+            'this report shows that the system can record '
+            'command signals, actual odometry feedback, noisy '
+            'measurement feedback, and quantitative trajectory '
+            'metrics.'
+        ),
         '',
-        'This is important for robotics simulation engineering because simulation behavior must be measurable, repeatable, and comparable.',
+        (
+            'This is important for robotics simulation '
+            'engineering because simulation behavior must be '
+            'measurable, repeatable, and comparable.'
+        ),
         '',
         '---',
         '',
@@ -365,14 +396,14 @@ def write_report(data, rows, csv_path, plot_path, report_path):
         '',
         '---',
         '',
-        '## Day 85 Completion Criteria',
+        '## Completion Criteria',
         '',
-        'Day 85 is complete when:',
+        'Validation is complete when:',
         '',
         '- `plots/trajectory_validation.png` exists.',
         '- `docs/trajectory_validation_report.md` exists.',
         '- The report contains path length, final pose, noise error, and velocity metrics.',
-        '- Day 68 regression still passes.',
+        '- The launch regression still passes.',
         '',
     ]
 
@@ -382,12 +413,12 @@ def write_report(data, rows, csv_path, plot_path, report_path):
 
 def main():
     parser = argparse.ArgumentParser(
-        description='Generate Day 85 trajectory validation plot and report.'
+        description='Generate the trajectory validation plot and report.'
     )
 
     parser.add_argument(
         '--csv',
-        default='data/day84_trajectory_validation.csv',
+        default='data/trajectory_validation.csv',
         help='Input CSV path.'
     )
 

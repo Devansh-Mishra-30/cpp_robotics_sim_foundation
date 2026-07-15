@@ -1,4 +1,10 @@
 #!/usr/bin/env python3
+# Copyright 2026 Devansh Mishra
+#
+# Use of this source code is governed by an MIT-style
+# license that can be found in the LICENSE file or at
+# https://opensource.org/licenses/MIT.
+
 
 import importlib.util
 from pathlib import Path
@@ -10,12 +16,12 @@ import pytest
 def load_localization_manager_module() -> ModuleType:
     script_path = (
         Path(__file__).resolve().parents[1]
-        / "scripts"
-        / "localization_manager_node.py"
+        / 'scripts'
+        / 'localization_manager_node.py'
     )
 
     specification = importlib.util.spec_from_file_location(
-        "localization_manager_node",
+        'localization_manager_node',
         script_path,
     )
 
@@ -24,7 +30,7 @@ def load_localization_manager_module() -> ModuleType:
         or specification.loader is None
     ):
         raise RuntimeError(
-            "Unable to load localization manager module"
+            'Unable to load localization manager module'
         )
 
     module = importlib.util.module_from_spec(
@@ -46,15 +52,15 @@ def test_resolves_environment_map_inside_root(
     result = (
         LocalizationManagerNode.resolve_path_within_root(
             tmp_path,
-            "warehouse",
-            "test_map.yaml",
+            'warehouse',
+            'test_map.yaml',
         )
     )
 
     assert result == (
         tmp_path.resolve()
-        / "warehouse"
-        / "test_map.yaml"
+        / 'warehouse'
+        / 'test_map.yaml'
     )
 
 
@@ -64,26 +70,26 @@ def test_resolves_legacy_map_inside_root(
     result = (
         LocalizationManagerNode.resolve_path_within_root(
             tmp_path,
-            "test_map.yaml",
+            'test_map.yaml',
         )
     )
 
     assert result == (
         tmp_path.resolve()
-        / "test_map.yaml"
+        / 'test_map.yaml'
     )
 
 
 @pytest.mark.parametrize(
-    "unsafe_environment",
+    'unsafe_environment',
     [
-        "..",
-        "../outside",
-        "../../tmp",
-        "../../../etc",
-        "/tmp",
-        "/etc",
-        "warehouse/../../outside",
+        '..',
+        '../outside',
+        '../../tmp',
+        '../../../etc',
+        '/tmp',
+        '/etc',
+        'warehouse/../../outside',
     ],
 )
 def test_rejects_environment_path_escape(
@@ -92,12 +98,12 @@ def test_rejects_environment_path_escape(
 ) -> None:
     with pytest.raises(
         ValueError,
-        match="escapes",
+        match='escapes',
     ):
         LocalizationManagerNode.resolve_path_within_root(
             tmp_path,
             unsafe_environment,
-            "test_map.yaml",
+            'test_map.yaml',
         )
 
 
@@ -106,12 +112,12 @@ def test_rejects_map_filename_path_escape(
 ) -> None:
     with pytest.raises(
         ValueError,
-        match="escapes",
+        match='escapes',
     ):
         LocalizationManagerNode.resolve_path_within_root(
             tmp_path,
-            "warehouse",
-            "../../../outside.yaml",
+            'warehouse',
+            '../../../outside.yaml',
         )
 
 
@@ -120,22 +126,22 @@ def test_rejects_absolute_map_filename(
 ) -> None:
     with pytest.raises(
         ValueError,
-        match="escapes",
+        match='escapes',
     ):
         LocalizationManagerNode.resolve_path_within_root(
             tmp_path,
-            "warehouse",
-            "/tmp/outside.yaml",
+            'warehouse',
+            '/tmp/outside.yaml',
         )
 
 
 def test_rejects_symlink_escape(
     tmp_path: Path,
 ) -> None:
-    outside_directory = tmp_path.parent / "outside_maps"
+    outside_directory = tmp_path.parent / 'outside_maps'
     outside_directory.mkdir(exist_ok=True)
 
-    symlink_path = tmp_path / "linked_environment"
+    symlink_path = tmp_path / 'linked_environment'
     symlink_path.symlink_to(
         outside_directory,
         target_is_directory=True,
@@ -143,10 +149,10 @@ def test_rejects_symlink_escape(
 
     with pytest.raises(
         ValueError,
-        match="escapes",
+        match='escapes',
     ):
         LocalizationManagerNode.resolve_path_within_root(
             tmp_path,
-            "linked_environment",
-            "test_map.yaml",
+            'linked_environment',
+            'test_map.yaml',
         )

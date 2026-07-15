@@ -1,8 +1,14 @@
 #!/usr/bin/env python3
+# Copyright 2026 Devansh Mishra
+#
+# Use of this source code is governed by an MIT-style
+# license that can be found in the LICENSE file or at
+# https://opensource.org/licenses/MIT.
+
 
 import importlib.util
-import threading
 from pathlib import Path
+import threading
 from types import ModuleType
 
 import pytest
@@ -12,12 +18,12 @@ from std_msgs.msg import String
 def load_simulation_manager_module() -> ModuleType:
     script_path = (
         Path(__file__).resolve().parents[1]
-        / "scripts"
-        / "simulation_manager_node.py"
+        / 'scripts'
+        / 'simulation_manager_node.py'
     )
 
     specification = importlib.util.spec_from_file_location(
-        "simulation_manager_node",
+        'simulation_manager_node',
         script_path,
     )
 
@@ -26,7 +32,7 @@ def load_simulation_manager_module() -> ModuleType:
         or specification.loader is None
     ):
         raise RuntimeError(
-            "Unable to load simulation manager module"
+            'Unable to load simulation manager module'
         )
 
     module = importlib.util.module_from_spec(
@@ -49,10 +55,10 @@ def make_manager(
     manager = object.__new__(SimulationManagerNode)
 
     manager.environment_names = [
-        "warehouse",
-        "hospital",
+        'warehouse',
+        'hospital',
     ]
-    manager.selected_environment = "warehouse"
+    manager.selected_environment = 'warehouse'
     manager.state = state
     manager.process_lock = threading.RLock()
 
@@ -63,8 +69,8 @@ def make_manager(
         lambda *, state, message:
         published_statuses.append(
             {
-                "state": state,
-                "message": message,
+                'state': state,
+                'message': message,
             }
         )
     )
@@ -89,12 +95,12 @@ def environment_message(value: str) -> String:
 
 
 @pytest.mark.parametrize(
-    "requested_environment",
+    'requested_environment',
     [
-        "warehouse",
-        "hospital",
-        " Warehouse ",
-        "HOSPITAL",
+        'warehouse',
+        'hospital',
+        ' Warehouse ',
+        'HOSPITAL',
     ],
 )
 def test_accepts_allowlisted_environments(
@@ -109,20 +115,20 @@ def test_accepts_allowlisted_environments(
     assert manager.selected_environment == (
         requested_environment.strip().lower()
     )
-    assert statuses[-1]["state"] == "selected"
+    assert statuses[-1]['state'] == 'selected'
 
 
 @pytest.mark.parametrize(
-    "requested_environment",
+    'requested_environment',
     [
-        "",
-        " ",
-        "office",
-        "warehouse/../hospital",
-        "../warehouse",
-        "../../tmp",
-        "warehouse;rm",
-        "warehouse map",
+        '',
+        ' ',
+        'office',
+        'warehouse/../hospital',
+        '../warehouse',
+        '../../tmp',
+        'warehouse;rm',
+        'warehouse map',
     ],
 )
 def test_rejects_unsupported_environments(
@@ -134,14 +140,14 @@ def test_rejects_unsupported_environments(
         environment_message(requested_environment)
     )
 
-    assert manager.selected_environment == "warehouse"
-    assert statuses[-1]["state"] == (
-        "invalid_request"
+    assert manager.selected_environment == 'warehouse'
+    assert statuses[-1]['state'] == (
+        'invalid_request'
     )
 
 
 @pytest.mark.parametrize(
-    "state",
+    'state',
     [
         SimulationState.STARTING,
         SimulationState.RUNNING,
@@ -156,11 +162,11 @@ def test_rejects_environment_change_while_busy(
     )
 
     manager.environment_request_callback(
-        environment_message("hospital")
+        environment_message('hospital')
     )
 
-    assert manager.selected_environment == "warehouse"
-    assert statuses[-1]["state"] == "locked"
+    assert manager.selected_environment == 'warehouse'
+    assert statuses[-1]['state'] == 'locked'
 
 
 def test_rejects_environment_change_when_process_runs() -> None:
@@ -170,11 +176,11 @@ def test_rejects_environment_change_when_process_runs() -> None:
     )
 
     manager.environment_request_callback(
-        environment_message("hospital")
+        environment_message('hospital')
     )
 
-    assert manager.selected_environment == "warehouse"
-    assert statuses[-1]["state"] == "locked"
+    assert manager.selected_environment == 'warehouse'
+    assert statuses[-1]['state'] == 'locked'
 
 
 def test_allows_change_after_simulation_stops() -> None:
@@ -184,8 +190,8 @@ def test_allows_change_after_simulation_stops() -> None:
     )
 
     manager.environment_request_callback(
-        environment_message("hospital")
+        environment_message('hospital')
     )
 
-    assert manager.selected_environment == "hospital"
-    assert statuses[-1]["state"] == "selected"
+    assert manager.selected_environment == 'hospital'
+    assert statuses[-1]['state'] == 'selected'

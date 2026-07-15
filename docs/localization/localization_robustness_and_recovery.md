@@ -1,4 +1,4 @@
-# Day 109 Localization Robustness and Recovery
+# Localization Robustness and Recovery
 
 ## Objective
 

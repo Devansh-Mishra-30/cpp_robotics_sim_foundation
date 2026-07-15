@@ -1,0 +1,62 @@
+# Git metadata
+.git
+.gitignore
+.gitattributes
+
+# ROS 2 generated workspaces
+ros2_ws/build
+ros2_ws/install
+ros2_ws/log
+
+# Root-level generated build artifacts
+build
+install
+log
+
+# Python generated files
+__pycache__
+*.py[cod]
+.pytest_cache
+.mypy_cache
+.coverage
+htmlcov
+
+# CMake generated files
+CMakeCache.txt
+CMakeFiles
+cmake_install.cmake
+CTestTestfile.cmake
+Makefile
+
+# IDE and editor files
+.vscode
+.idea
+.vs
+*.user
+*.suo
+*.vcxproj
+*.vcxproj.filters
+*.sln
+*.slnx
+
+# Local data and generated outputs
+*.bag
+*.db3
+*.mcap
+*.csv
+*.log
+*.tmp
+
+# OS metadata
+.DS_Store
+Thumbs.db
+
+# Documentation/source files not required for container build
+docs
+
+# Keep files required by the image
+!scripts
+!ros2_ws/src
+!README.md
+!LICENSE
+!Dockerfile

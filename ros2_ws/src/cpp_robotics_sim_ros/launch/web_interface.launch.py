@@ -1,12 +1,17 @@
+# Copyright 2026 Devansh Mishra
+#
+# Use of this source code is governed by an MIT-style
+# license that can be found in the LICENSE file or at
+# https://opensource.org/licenses/MIT.
 
 import atexit
 import fcntl
 import os
+from pathlib import Path
 import shutil
 import signal
 import subprocess
 import time
-from pathlib import Path
 from typing import Iterable
 
 from ament_index_python.packages import (
@@ -29,23 +34,23 @@ from launch_ros.actions import Node
 
 _LOCK_FILE_HANDLE = None
 
-PROJECT_PACKAGE = "cpp_robotics_sim_ros"
+PROJECT_PACKAGE = 'cpp_robotics_sim_ros'
 
 PROCESS_PATTERNS = (
-    "web_interface.launch.py",
-    "simulation_manager_node.py",
-    "mode_manager_node.py",
-    "mapping_manager_node.py",
-    "localization_manager_node.py",
-    "navigation_goal_manager_node.py",
-    "cmd_vel_twist_bridge.py",
-    "rosbridge_websocket",
-    "python3 -m http.server 8080",
-    "ros2_control.launch.py",
-    "slam_mapping.launch.py",
-    "amcl_localization.launch.py",
-    "nav2_navigation.launch.py",
-    "gz sim",
+    'web_interface.launch.py',
+    'simulation_manager_node.py',
+    'mode_manager_node.py',
+    'mapping_manager_node.py',
+    'localization_manager_node.py',
+    'navigation_goal_manager_node.py',
+    'cmd_vel_twist_bridge.py',
+    'rosbridge_websocket',
+    'python3 -m http.server 8080',
+    'ros2_control.launch.py',
+    'slam_mapping.launch.py',
+    'amcl_localization.launch.py',
+    'nav2_navigation.launch.py',
+    'gz sim',
 )
 
 
@@ -60,7 +65,7 @@ def get_ancestor_pids() -> set[int]:
 
         try:
             parent_text = Path(
-                f"/proc/{current_pid}/stat"
+                f'/proc/{current_pid}/stat'
             ).read_text()
         except OSError:
             break
@@ -88,8 +93,8 @@ def find_matching_pids(
     """Find process IDs whose full command contains pattern."""
     result = subprocess.run(
         [
-            "pgrep",
-            "-f",
+            'pgrep',
+            '-f',
             pattern,
         ],
         capture_output=True,
@@ -99,7 +104,7 @@ def find_matching_pids(
 
     if result.returncode not in (0, 1):
         raise RuntimeError(
-            f"Unable to inspect processes for: {pattern}"
+            f'Unable to inspect processes for: {pattern}'
         )
 
     pids: list[int] = []
@@ -129,7 +134,7 @@ def terminate_processes(
             continue
         except PermissionError as error:
             raise RuntimeError(
-                f"Permission denied while stopping PID {pid}"
+                f'Permission denied while stopping PID {pid}'
             ) from error
 
 
@@ -153,7 +158,7 @@ def remaining_pids(
 
 def cleanup_stale_project_processes() -> None:
     """
-    Remove stale processes from earlier dashboard/simulation runs.
+    Remove stale processes from earlier dashboard and simulation runs.
 
     The current launch process and its ancestors are protected so this
     launch does not terminate itself.
@@ -172,8 +177,8 @@ def cleanup_stale_project_processes() -> None:
     ordered_targets = sorted(targets)
 
     print(
-        "[web_interface] Removing stale project processes: "
-        + ", ".join(str(pid) for pid in ordered_targets),
+        '[web_interface] Removing stale project processes: '
+        + ', '.join(str(pid) for pid in ordered_targets),
         flush=True,
     )
 
@@ -196,8 +201,8 @@ def cleanup_stale_project_processes() -> None:
 
     if alive:
         print(
-            "[web_interface] Force-stopping remaining PIDs: "
-            + ", ".join(str(pid) for pid in alive),
+            '[web_interface] Force-stopping remaining PIDs: '
+            + ', '.join(str(pid) for pid in alive),
             flush=True,
         )
 
@@ -212,14 +217,14 @@ def cleanup_stale_project_processes() -> None:
 
     if final_alive:
         raise RuntimeError(
-            "Unable to remove stale project processes: "
-            + ", ".join(str(pid) for pid in final_alive)
+            'Unable to remove stale project processes: '
+            + ', '.join(str(pid) for pid in final_alive)
         )
 
 
 def acquire_single_instance_lock() -> None:
     """
-    Prevent two copies of web_interface.launch.py from running.
+    Prevent multiple web-interface launch instances.
 
     The open lock-file handle must remain alive for the entire launch.
     """
@@ -227,9 +232,9 @@ def acquire_single_instance_lock() -> None:
 
     lock_path = (
         Path.home()
-        / ".ros"
-        / "cpp_robotics_sim"
-        / "web_interface.lock"
+        / '.ros'
+        / 'cpp_robotics_sim'
+        / 'web_interface.lock'
     )
 
     lock_path.parent.mkdir(
@@ -238,8 +243,8 @@ def acquire_single_instance_lock() -> None:
     )
 
     lock_file = lock_path.open(
-        "w",
-        encoding="utf-8",
+        'w',
+        encoding='utf-8',
     )
 
     try:
@@ -251,8 +256,8 @@ def acquire_single_instance_lock() -> None:
         lock_file.close()
 
         raise RuntimeError(
-            "Another robotics dashboard instance is already "
-            "running. Stop it before launching another copy."
+            'Another robotics dashboard instance is already '
+            'running. Stop it before launching another copy.'
         ) from error
 
     lock_file.write(str(os.getpid()))
@@ -289,19 +294,19 @@ def validate_workspace(
     resolved_text = str(resolved_share)
 
     expected_fragment = (
-        "/ros2_ws/install/"
-        f"{PROJECT_PACKAGE}/share/{PROJECT_PACKAGE}"
+        '/ros2_ws/install/'
+        f'{PROJECT_PACKAGE}/share/{PROJECT_PACKAGE}'
     )
 
     if expected_fragment not in resolved_text:
         raise RuntimeError(
-            "Incorrect ROS overlay selected.\n"
-            "Expected the package under:\n"
-            "  .../ros2_ws/install/"
-            f"{PROJECT_PACKAGE}\n"
-            "Resolved package share:\n"
-            f"  {resolved_share}\n"
-            "Source only ros2_ws/install/setup.bash."
+            'Incorrect ROS overlay selected.\n'
+            'Expected the package under:\n'
+            '  .../ros2_ws/install/'
+            f'{PROJECT_PACKAGE}\n'
+            'Resolved package share:\n'
+            f'  {resolved_share}\n'
+            'Source only ros2_ws/install/setup.bash.'
         )
 
 
@@ -309,44 +314,40 @@ def create_browser_action(
     dashboard_port,
     open_browser,
 ):
-    """
-    Open the dashboard in the Windows default browser when running
-    under WSL. If Windows launch tools are unavailable, do nothing.
-    """
     dashboard_url = PythonExpression(
         [
             "'http://localhost:' + str(",
             dashboard_port,
-            ")",
+            ')',
         ]
     )
 
-    if shutil.which("powershell.exe"):
+    if shutil.which('powershell.exe'):
         command = [
-            "powershell.exe",
-            "-NoProfile",
-            "-Command",
-            "Start-Process",
+            'powershell.exe',
+            '-NoProfile',
+            '-Command',
+            'Start-Process',
             dashboard_url,
         ]
-    elif shutil.which("cmd.exe"):
+    elif shutil.which('cmd.exe'):
         command = [
-            "cmd.exe",
-            "/C",
-            "start",
-            "",
+            'cmd.exe',
+            '/C',
+            'start',
+            '',
             dashboard_url,
         ]
-    elif shutil.which("xdg-open"):
+    elif shutil.which('xdg-open'):
         command = [
-            "xdg-open",
+            'xdg-open',
             dashboard_url,
         ]
     else:
         return LogInfo(
             msg=(
-                "Automatic browser opening is unavailable. "
-                "Open http://localhost:8080 manually."
+                'Automatic browser opening is unavailable. '
+                'Open http://localhost:8080 manually.'
             )
         )
 
@@ -355,7 +356,7 @@ def create_browser_action(
         actions=[
             ExecuteProcess(
                 cmd=command,
-                output="screen",
+                output='screen',
                 condition=IfCondition(open_browser),
             )
         ],
@@ -371,13 +372,13 @@ def generate_launch_description():
     )
 
     websocket_port = LaunchConfiguration(
-        "websocket_port"
+        'websocket_port'
     )
     dashboard_port = LaunchConfiguration(
-        "dashboard_port"
+        'dashboard_port'
     )
     open_browser = LaunchConfiguration(
-        "open_browser"
+        'open_browser'
     )
 
     package_share = Path(
@@ -390,38 +391,38 @@ def generate_launch_description():
 
     dashboard_directory = (
         package_share
-        / "web"
-        / "dashboard"
+        / 'web'
+        / 'dashboard'
     )
 
     simulation_manager_config = (
         package_share
-        / "config"
-        / "simulation_manager.yaml"
+        / 'config'
+        / 'simulation_manager.yaml'
     )
 
     environment_registry_config = (
         package_share
-        / "config"
-        / "environment_registry.yaml"
+        / 'config'
+        / 'environment_registry.yaml'
     )
 
     mode_manager_config = (
         package_share
-        / "config"
-        / "mode_manager.yaml"
+        / 'config'
+        / 'mode_manager.yaml'
     )
 
     mapping_manager_config = (
         package_share
-        / "config"
-        / "mapping_manager.yaml"
+        / 'config'
+        / 'mapping_manager.yaml'
     )
 
     localization_manager_config = (
         package_share
-        / "config"
-        / "localization_manager.yaml"
+        / 'config'
+        / 'localization_manager.yaml'
     )
 
     required_paths = (
@@ -441,114 +442,113 @@ def generate_launch_description():
 
     if missing_paths:
         raise RuntimeError(
-            "Required installed dashboard files are missing:\n"
-            + "\n".join(
-                f"  {path}"
+            'Required installed dashboard files are missing:\n'
+            + '\n'.join(
+                f'  {path}'
                 for path in missing_paths
             )
-            + "\nRebuild cpp_robotics_sim_ros."
+            + '\nRebuild cpp_robotics_sim_ros.'
         )
 
     simulation_manager = Node(
         package=PROJECT_PACKAGE,
-        executable="simulation_manager_node.py",
-        name="simulation_manager",
-        output="screen",
+        executable='simulation_manager_node.py',
+        name='simulation_manager',
+        output='screen',
         parameters=[
             str(simulation_manager_config),
             str(environment_registry_config),
             {
-                "use_sim_time": False,
+                'use_sim_time': False,
             },
         ],
     )
 
     mode_manager = Node(
         package=PROJECT_PACKAGE,
-        executable="mode_manager_node.py",
-        name="mode_manager",
-        output="screen",
+        executable='mode_manager_node.py',
+        name='mode_manager',
+        output='screen',
         parameters=[
             str(mode_manager_config),
             {
-                "use_sim_time": False,
+                'use_sim_time': False,
             },
         ],
     )
 
     mapping_manager = Node(
         package=PROJECT_PACKAGE,
-        executable="mapping_manager_node.py",
-        name="mapping_manager",
-        output="screen",
+        executable='mapping_manager_node.py',
+        name='mapping_manager',
+        output='screen',
         parameters=[
             str(mapping_manager_config),
             {
-                "use_sim_time": False,
+                'use_sim_time': False,
             },
         ],
     )
 
     localization_manager = Node(
         package=PROJECT_PACKAGE,
-        executable="localization_manager_node.py",
-        name="localization_manager",
-        output="screen",
+        executable='localization_manager_node.py',
+        name='localization_manager',
+        output='screen',
         parameters=[
             str(localization_manager_config),
             {
-                "use_sim_time": False,
+                'use_sim_time': False,
             },
         ],
     )
 
-
     navigation_goal_manager = Node(
         package=PROJECT_PACKAGE,
-        executable="navigation_goal_manager_node.py",
-        name="navigation_goal_manager",
-        output="screen",
+        executable='navigation_goal_manager_node.py',
+        name='navigation_goal_manager',
+        output='screen',
         parameters=[
             {
-                "use_sim_time": True,
-                "action_name": "/navigate_to_pose",
-                "goal_frame": "map",
-                "server_wait_timeout": 2.0,
+                'use_sim_time': True,
+                'action_name': '/navigate_to_pose',
+                'goal_frame': 'map',
+                'server_wait_timeout': 2.0,
             },
         ],
     )
 
     rosbridge_websocket = Node(
-        package="rosbridge_server",
-        executable="rosbridge_websocket",
-        name="rosbridge_websocket",
-        output="screen",
+        package='rosbridge_server',
+        executable='rosbridge_websocket',
+        name='rosbridge_websocket',
+        output='screen',
         parameters=[
             {
-                "port": websocket_port,
-                "address": "0.0.0.0",
-                "retry_startup_delay": 5.0,
-                "fragment_timeout": 600,
-                "delay_between_messages": 0.0,
-                "max_message_size": 10_000_000,
-                "unregister_timeout": 10.0,
-                "use_compression": False,
+                'port': websocket_port,
+                'address': '0.0.0.0',
+                'retry_startup_delay': 5.0,
+                'fragment_timeout': 600,
+                'delay_between_messages': 0.0,
+                'max_message_size': 10_000_000,
+                'unregister_timeout': 10.0,
+                'use_compression': False,
             },
         ],
     )
 
     dashboard_server = ExecuteProcess(
         cmd=[
-            "python3",
-            "-m",
-            "http.server",
+            'python3',
+            '-m',
+            'http.server',
             dashboard_port,
-            "--bind",
-            "0.0.0.0",
-            "--directory",
+            '--bind',
+            '0.0.0.0',
+            '--directory',
             str(dashboard_directory),
         ],
-        output="screen",
+        output='screen',
     )
 
     browser_action = create_browser_action(
@@ -559,41 +559,41 @@ def generate_launch_description():
     return LaunchDescription(
         [
             DeclareLaunchArgument(
-                "websocket_port",
-                default_value="9090",
+                'websocket_port',
+                default_value='9090',
                 description=(
-                    "Rosbridge WebSocket port"
+                    'Rosbridge WebSocket port'
                 ),
             ),
             DeclareLaunchArgument(
-                "dashboard_port",
-                default_value="8080",
+                'dashboard_port',
+                default_value='8080',
                 description=(
-                    "Dashboard HTTP port"
+                    'Dashboard HTTP port'
                 ),
             ),
             DeclareLaunchArgument(
-                "open_browser",
-                default_value="true",
+                'open_browser',
+                default_value='true',
                 description=(
-                    "Automatically open the dashboard "
-                    "in the default browser"
+                    'Automatically open the dashboard '
+                    'in the default browser'
                 ),
             ),
             LogInfo(
                 msg=(
-                    "Dashboard safety preflight passed."
+                    'Dashboard safety preflight passed.'
                 )
             ),
             LogInfo(
                 msg=[
-                    "Package share: ",
+                    'Package share: ',
                     str(package_share),
                 ]
             ),
             LogInfo(
                 msg=[
-                    "Dashboard URL: http://localhost:",
+                    'Dashboard URL: http://localhost:',
                     dashboard_port,
                 ]
             ),

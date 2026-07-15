@@ -1,10 +1,16 @@
 #!/usr/bin/env python3
+# Copyright 2026 Devansh Mishra
+#
+# Use of this source code is governed by an MIT-style
+# license that can be found in the LICENSE file or at
+# https://opensource.org/licenses/MIT.
+
 
 import json
+from pathlib import Path
 import re
 import subprocess
 import threading
-from pathlib import Path
 from typing import Optional
 
 import rclpy
@@ -20,44 +26,44 @@ from std_msgs.msg import String
 
 class MappingManagerNode(Node):
     MAP_NAME_PATTERN = re.compile(
-        r"^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$"
+        r'^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$'
     )
 
     def __init__(self) -> None:
-        super().__init__("mapping_manager")
+        super().__init__('mapping_manager')
 
         self.declare_parameter(
-            "map_directory",
+            'map_directory',
             str(
                 Path.home()
-                / ".ros"
-                / "cpp_robotics_sim"
-                / "maps"
+                / '.ros'
+                / 'cpp_robotics_sim'
+                / 'maps'
             ),
         )
-        self.declare_parameter("save_timeout", 20.0)
-        self.declare_parameter("free_threshold", 0.25)
-        self.declare_parameter("occupied_threshold", 0.65)
+        self.declare_parameter('save_timeout', 20.0)
+        self.declare_parameter('free_threshold', 0.25)
+        self.declare_parameter('occupied_threshold', 0.65)
 
         self.map_directory = Path(
             str(
                 self.get_parameter(
-                    "map_directory"
+                    'map_directory'
                 ).value
             )
         ).expanduser()
 
         self.save_timeout = float(
-            self.get_parameter("save_timeout").value
+            self.get_parameter('save_timeout').value
         )
         self.free_threshold = float(
             self.get_parameter(
-                "free_threshold"
+                'free_threshold'
             ).value
         )
         self.occupied_threshold = float(
             self.get_parameter(
-                "occupied_threshold"
+                'occupied_threshold'
             ).value
         )
 
@@ -77,26 +83,26 @@ class MappingManagerNode(Node):
 
         self.status_publisher = self.create_publisher(
             String,
-            "/mapping/save_status",
+            '/mapping/save_status',
             transient_qos,
         )
 
         self.maps_publisher = self.create_publisher(
             String,
-            "/mapping/saved_maps",
+            '/mapping/saved_maps',
             transient_qos,
         )
 
         self.save_subscription = self.create_subscription(
             String,
-            "/mapping/save_request",
+            '/mapping/save_request',
             self.save_request_callback,
             10,
         )
 
         self.mode_subscription = self.create_subscription(
             String,
-            "/mode/status",
+            '/mode/status',
             self.mode_status_callback,
             transient_qos,
         )
@@ -104,7 +110,7 @@ class MappingManagerNode(Node):
         self.simulation_subscription = (
             self.create_subscription(
                 String,
-                "/simulation/status",
+                '/simulation/status',
                 self.simulation_status_callback,
                 transient_qos,
             )
@@ -113,43 +119,43 @@ class MappingManagerNode(Node):
         self.environment_subscription = (
             self.create_subscription(
                 String,
-                "/simulation/environment_status",
+                '/simulation/environment_status',
                 self.environment_status_callback,
                 transient_qos,
             )
         )
 
-        self.mode_state = "stopped"
-        self.simulation_state = "stopped"
-        self.selected_environment = ""
+        self.mode_state = 'stopped'
+        self.simulation_state = 'stopped'
+        self.selected_environment = ''
         self.save_in_progress = False
         self.save_lock = threading.Lock()
 
         self.publish_status(
-            status="ready",
-            message="Mapping manager ready",
+            status='ready',
+            message='Mapping manager ready',
         )
 
         self.publish_saved_maps()
 
         self.get_logger().info(
-            f"Mapping manager ready: {self.map_directory}"
+            f'Mapping manager ready: {self.map_directory}'
         )
 
     def validate_parameters(self) -> None:
         if self.save_timeout <= 0.0:
             raise ValueError(
-                "save_timeout must be greater than zero"
+                'save_timeout must be greater than zero'
             )
 
         if not 0.0 <= self.free_threshold <= 1.0:
             raise ValueError(
-                "free_threshold must be within [0, 1]"
+                'free_threshold must be within [0, 1]'
             )
 
         if not 0.0 <= self.occupied_threshold <= 1.0:
             raise ValueError(
-                "occupied_threshold must be within [0, 1]"
+                'occupied_threshold must be within [0, 1]'
             )
 
         if (
@@ -157,8 +163,8 @@ class MappingManagerNode(Node):
             >= self.occupied_threshold
         ):
             raise ValueError(
-                "free_threshold must be less than "
-                "occupied_threshold"
+                'free_threshold must be less than '
+                'occupied_threshold'
             )
 
     def mode_status_callback(
@@ -181,14 +187,14 @@ class MappingManagerNode(Node):
             payload = json.loads(message.data)
         except json.JSONDecodeError:
             self.get_logger().warning(
-                "Ignoring malformed environment status"
+                'Ignoring malformed environment status'
             )
             return
 
         environment = str(
             payload.get(
-                "selected_environment",
-                "",
+                'selected_environment',
+                '',
             )
         ).strip().lower()
 
@@ -212,10 +218,10 @@ class MappingManagerNode(Node):
         with self.save_lock:
             if self.save_in_progress:
                 self.publish_status(
-                    status="error",
+                    status='error',
                     message=(
-                        "A map save operation is already "
-                        "in progress"
+                        'A map save operation is already '
+                        'in progress'
                     ),
                 )
                 return
@@ -226,7 +232,7 @@ class MappingManagerNode(Node):
 
             if validation_error:
                 self.publish_status(
-                    status="error",
+                    status='error',
                     message=validation_error,
                 )
                 return
@@ -244,32 +250,32 @@ class MappingManagerNode(Node):
         self,
         map_name: str,
     ) -> Optional[str]:
-        if self.simulation_state != "running":
+        if self.simulation_state != 'running':
             return (
-                "Simulation must be running before "
-                "saving a map"
+                'Simulation must be running before '
+                'saving a map'
             )
 
-        if self.mode_state != "mapping":
+        if self.mode_state != 'mapping':
             return (
-                "Mapping mode must be active before "
-                "saving a map"
+                'Mapping mode must be active before '
+                'saving a map'
             )
 
         if not self.selected_environment:
             return (
-                "No simulation environment is selected"
+                'No simulation environment is selected'
             )
 
         if not map_name:
-            return "Map name must not be empty"
+            return 'Map name must not be empty'
 
         if not self.MAP_NAME_PATTERN.fullmatch(
             map_name
         ):
             return (
-                "Map name may contain letters, numbers, "
-                "underscores, and hyphens only"
+                'Map name may contain letters, numbers, '
+                'underscores, and hyphens only'
             )
 
         return None
@@ -293,25 +299,25 @@ class MappingManagerNode(Node):
         )
 
         self.publish_status(
-            status="saving",
+            status='saving',
             message=(
                 f"Saving map '{map_name}' for "
-                f"{self.selected_environment}..."
+                f'{self.selected_environment}...'
             ),
             map_name=map_name,
             environment=self.selected_environment,
         )
 
         command = [
-            "ros2",
-            "run",
-            "nav2_map_server",
-            "map_saver_cli",
-            "-f",
+            'ros2',
+            'run',
+            'nav2_map_server',
+            'map_saver_cli',
+            '-f',
             str(output_prefix),
-            "--free",
+            '--free',
             str(self.free_threshold),
-            "--occ",
+            '--occ',
             str(self.occupied_threshold),
         ]
 
@@ -325,10 +331,10 @@ class MappingManagerNode(Node):
             )
 
             yaml_path = output_prefix.with_suffix(
-                ".yaml"
+                '.yaml'
             )
             pgm_path = output_prefix.with_suffix(
-                ".pgm"
+                '.pgm'
             )
 
             if (
@@ -339,13 +345,13 @@ class MappingManagerNode(Node):
                 details = (
                     result.stderr.strip()
                     or result.stdout.strip()
-                    or "Expected map files were not created"
+                    or 'Expected map files were not created'
                 )
 
                 self.publish_status(
-                    status="error",
+                    status='error',
                     message=(
-                        f"Failed to save map "
+                        f'Failed to save map '
                         f"'{map_name}': {details}"
                     ),
                     map_name=map_name,
@@ -356,10 +362,10 @@ class MappingManagerNode(Node):
                 return
 
             self.publish_status(
-                status="success",
+                status='success',
                 message=(
                     f"Map '{map_name}' saved successfully "
-                    f"for {self.selected_environment}"
+                    f'for {self.selected_environment}'
                 ),
                 map_name=map_name,
                 environment=self.selected_environment,
@@ -371,7 +377,7 @@ class MappingManagerNode(Node):
 
         except subprocess.TimeoutExpired:
             self.publish_status(
-                status="error",
+                status='error',
                 message=(
                     f"Saving map '{map_name}' timed out"
                 ),
@@ -381,9 +387,9 @@ class MappingManagerNode(Node):
 
         except OSError as error:
             self.publish_status(
-                status="error",
+                status='error',
                 message=(
-                    f"Unable to run map saver: {error}"
+                    f'Unable to run map saver: {error}'
                 ),
                 map_name=map_name,
                 environment=self.selected_environment,
@@ -397,18 +403,18 @@ class MappingManagerNode(Node):
         self,
         status: str,
         message: str,
-        map_name: str = "",
-        environment: str = "",
-        yaml_path: str = "",
-        image_path: str = "",
+        map_name: str = '',
+        environment: str = '',
+        yaml_path: str = '',
+        image_path: str = '',
     ) -> None:
         payload = {
-            "status": status,
-            "message": message,
-            "map_name": map_name,
-            "environment": environment,
-            "yaml_path": yaml_path,
-            "image_path": image_path,
+            'status': status,
+            'message': message,
+            'map_name': map_name,
+            'environment': environment,
+            'yaml_path': yaml_path,
+            'image_path': image_path,
         }
 
         ros_message = String()
@@ -423,10 +429,10 @@ class MappingManagerNode(Node):
         maps = []
 
         for yaml_path in sorted(
-            self.map_directory.rglob("*.yaml")
+            self.map_directory.rglob('*.yaml')
         ):
             image_path = yaml_path.with_suffix(
-                ".pgm"
+                '.pgm'
             )
 
             relative_path = yaml_path.relative_to(
@@ -437,7 +443,7 @@ class MappingManagerNode(Node):
                 environment = relative_path.parts[0]
                 legacy = False
             else:
-                environment = "legacy"
+                environment = 'legacy'
                 legacy = True
 
             if (
@@ -450,16 +456,16 @@ class MappingManagerNode(Node):
 
             maps.append(
                 {
-                    "name": yaml_path.stem,
-                    "environment": environment,
-                    "legacy": legacy,
-                    "yaml_path": str(
+                    'name': yaml_path.stem,
+                    'environment': environment,
+                    'legacy': legacy,
+                    'yaml_path': str(
                         yaml_path.resolve()
                     ),
-                    "image_path": str(
+                    'image_path': str(
                         image_path.resolve()
                     ),
-                    "complete": image_path.exists(),
+                    'complete': image_path.exists(),
                 }
             )
 
@@ -490,5 +496,5 @@ def main(args=None) -> None:
             rclpy.shutdown()
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

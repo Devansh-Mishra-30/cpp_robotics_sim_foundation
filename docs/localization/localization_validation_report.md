@@ -1,4 +1,4 @@
-# Day 110 Localization Validation Report
+# Localization Validation Report
 
 ## 1. Executive summary
 
@@ -154,7 +154,7 @@ odometry error increased during longer motion
 heading and position differences became visible after turns
 AMCL and odometry solved different estimation problems
 
-The comparison plots and metrics were generated during Day 104.
+The comparison plots and metrics were generated during the localization comparison experiment.
 
 6. Simulated IMU integration
 
@@ -184,7 +184,7 @@ The sensor also responded correctly during commanded robot rotation.
 The robot_localization EKF was configured to fuse wheel-odometry and
 IMU measurements.
 
-The Day 106 configuration fused:
+The baseline EKF configuration fused:
 
 wheel forward velocity
 wheel yaw rate
@@ -261,7 +261,7 @@ significantly suppressing valid motion.
 
 9. Fusion comparison
 
-The Day 108 fusion analysis compared:
+The localization fusion analysis compared:
 
 raw wheel odometry
 artificially noisy odometry
@@ -276,7 +276,7 @@ yaw
 linear velocity
 angular velocity
 
-The final Day 108 EKF configuration fused:
+The final fusion-analysis EKF configuration fused:
 
 noisy X position
 noisy Y position
@@ -430,7 +430,7 @@ fused measurements contain complementary information
 sensor errors are not strongly correlated
 the test metric matches the filter objective
 
-The Day 108 experiment showed that smoothing and continuity can improve
+The fusion experiment showed that smoothing and continuity can improve
 without producing lower AMCL-relative RMSE.
 
 Simulation has important limitations

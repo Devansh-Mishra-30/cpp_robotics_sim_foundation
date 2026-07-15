@@ -1,8 +1,8 @@
-# Day 101 — SLAM Toolbox Integration
+# SLAM Toolbox Integration
 
 ## Goal
 
-Integrate SLAM Toolbox with the existing ROS 2 Jazzy differential-drive Gazebo simulation without breaking the Day 100 Nav2 stack.
+Integrate SLAM Toolbox with the existing ROS 2 Jazzy differential-drive Gazebo simulation without breaking the existing Nav2 stack.
 
 ## What SLAM Toolbox does
 
@@ -194,7 +194,7 @@ This proves SLAM Toolbox corrected the wheel-odometry frame relative to the map.
 Bag path:
 
 ```text
-bags/day101_slam_mapping
+bags/slam_mapping
 ```
 
 Recorded topics:
@@ -227,7 +227,7 @@ Messages: 8497
 
 `robot_state_publisher` reports that KDL does not support inertia on the root link.
 
-This warning existed before Day 101 and does not prevent mapping.
+This warning predates the SLAM integration and does not prevent mapping.
 
 ### Static transform argument warning
 
@@ -253,9 +253,9 @@ The lifecycle manager therefore uses:
 
 Automatic configuration and activation remain enabled.
 
-## Day 101 result
+## Result
 
-Day 101 acceptance criteria satisfied:
+Acceptance criteria satisfied:
 
 * SLAM Toolbox launches with simulated lidar.
 * `/map` exists.

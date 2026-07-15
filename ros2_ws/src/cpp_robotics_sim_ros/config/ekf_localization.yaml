@@ -54,7 +54,7 @@ ekf_filter_node:
     imu0_differential: false
     imu0_relative: false
 
-    # Day 107 covariance tuning.
+    # Tuned process and initial-state covariance.
     #
     # State order:
     # x, y, z,

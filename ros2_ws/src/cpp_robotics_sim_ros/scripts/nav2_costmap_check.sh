@@ -2,7 +2,7 @@
 set -e
 
 echo "======================================"
-echo " Day 93 Nav2 Costmap Check"
+echo " Nav2 Costmap Check"
 echo "======================================"
 
 PASS=true
@@ -30,7 +30,7 @@ check_topic() {
 check_topic_msg() {
   TOPIC="$1"
   echo "Checking message output from $TOPIC ..."
-  if timeout 6 ros2 topic echo --once "$TOPIC" >/tmp/day93_topic_check.txt 2>/dev/null; then
+  if timeout 6 ros2 topic echo --once "$TOPIC" >/tmp/nav2_costmap_topic_check.txt 2>/dev/null; then
     echo "PASS: $TOPIC publishes messages"
   else
     echo "FAIL: $TOPIC did not publish within timeout"
@@ -103,25 +103,25 @@ fi
 
 echo ""
 echo "[6] Checking odom -> base_link TF..."
-timeout 6 ros2 run tf2_ros tf2_echo odom base_link >/tmp/day93_tf_check.txt 2>/tmp/day93_tf_error.txt || true
+timeout 6 ros2 run tf2_ros tf2_echo odom base_link >/tmp/nav2_costmap_tf_check.txt 2>/tmp/nav2_costmap_tf_error.txt || true
 
-if grep -qi "translation\|rotation\|at time" /tmp/day93_tf_check.txt; then
+if grep -qi "translation\|rotation\|at time" /tmp/nav2_costmap_tf_check.txt; then
   echo "PASS: TF exists -> odom to base_link"
 else
   echo "FAIL: TF missing -> odom to base_link"
   echo "tf2_echo output:"
-  cat /tmp/day93_tf_check.txt
+  cat /tmp/nav2_costmap_tf_check.txt
   echo "tf2_echo errors:"
-  cat /tmp/day93_tf_error.txt
+  cat /tmp/nav2_costmap_tf_error.txt
   PASS=false
 fi
 
 echo ""
 echo "======================================"
 if [ "$PASS" = true ]; then
-  echo "DAY 93 COSTMAP CHECK: PASS"
+  echo "NAV2 COSTMAP CHECK: PASS"
   exit 0
 else
-  echo "DAY 93 COSTMAP CHECK: FAIL"
+  echo "NAV2 COSTMAP CHECK: FAIL"
   exit 1
 fi

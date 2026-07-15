@@ -322,7 +322,7 @@ collision_monitor:
 
 
 # Jazzy launches extra nodes such as collision_monitor, route_server, and docking_server.
-# For Day 91, we only lifecycle-manage the core navigation stack.
+# Only the core navigation stack is lifecycle-managed here.
 # collision_monitor is intentionally NOT in node_names.
 # docking_server is intentionally NOT in node_names.
 # route_server is intentionally NOT in node_names.

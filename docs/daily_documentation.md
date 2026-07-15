@@ -456,7 +456,7 @@ Create a repeatable launch regression workflow.
 Added:
 
 ```text
-scripts/day68_launch_regression.sh
+scripts/launch_regression.sh
 ```
 
 Result:
@@ -870,8 +870,8 @@ Add automated C++ unit tests for deterministic logic.
 Added:
 
 ```text
-day86_testable_core.hpp
-test_day86_core.cpp
+core_math.hpp
+test_core_math.cpp
 ```
 
 Validated:
@@ -931,7 +931,7 @@ Create a deterministic C++ pose-update timing benchmark.
 Added:
 
 ```text
-day88_performance_benchmark.cpp
+performance_benchmark.cpp
 data/day88_performance_results.csv
 docs/performance_report.md
 ```

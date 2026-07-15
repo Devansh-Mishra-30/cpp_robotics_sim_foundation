@@ -1,10 +1,16 @@
 #!/usr/bin/env python3
+# Copyright 2026 Devansh Mishra
+#
+# Use of this source code is governed by an MIT-style
+# license that can be found in the LICENSE file or at
+# https://opensource.org/licenses/MIT.
+
 
 from dataclasses import dataclass
 from typing import Optional
 
-import rclpy
 from geometry_msgs.msg import TwistStamped
+import rclpy
 from rclpy.node import Node
 from std_msgs.msg import Bool, String
 
@@ -38,96 +44,96 @@ class CommandMuxNode(Node):
     """
 
     def __init__(self) -> None:
-        super().__init__("command_mux")
+        super().__init__('command_mux')
 
-        self.declare_parameter("publish_rate", 20.0)
+        self.declare_parameter('publish_rate', 20.0)
 
-        self.declare_parameter("max_linear_velocity", 0.30)
-        self.declare_parameter("max_angular_velocity", 1.00)
+        self.declare_parameter('max_linear_velocity', 0.30)
+        self.declare_parameter('max_angular_velocity', 1.00)
 
         self.declare_parameter(
-            "keyboard_topic",
-            "/cmd_vel/keyboard",
+            'keyboard_topic',
+            '/cmd_vel/keyboard',
         )
-        self.declare_parameter("keyboard_priority", 90)
-        self.declare_parameter("keyboard_timeout", 0.50)
+        self.declare_parameter('keyboard_priority', 90)
+        self.declare_parameter('keyboard_timeout', 0.50)
 
         self.declare_parameter(
-            "gamepad_topic",
-            "/cmd_vel/gamepad",
+            'gamepad_topic',
+            '/cmd_vel/gamepad',
         )
-        self.declare_parameter("gamepad_priority", 100)
-        self.declare_parameter("gamepad_timeout", 0.50)
+        self.declare_parameter('gamepad_priority', 100)
+        self.declare_parameter('gamepad_timeout', 0.50)
 
         self.declare_parameter(
-            "gui_topic",
-            "/cmd_vel/gui",
+            'gui_topic',
+            '/cmd_vel/gui',
         )
-        self.declare_parameter("gui_priority", 80)
-        self.declare_parameter("gui_timeout", 0.75)
+        self.declare_parameter('gui_priority', 80)
+        self.declare_parameter('gui_timeout', 0.75)
 
         self.declare_parameter(
-            "navigation_topic",
-            "/cmd_vel/navigation",
+            'navigation_topic',
+            '/cmd_vel/navigation',
         )
-        self.declare_parameter("navigation_priority", 50)
-        self.declare_parameter("navigation_timeout", 0.50)
+        self.declare_parameter('navigation_priority', 50)
+        self.declare_parameter('navigation_timeout', 0.50)
 
         self.declare_parameter(
-            "output_topic",
-            "/diff_drive_controller/cmd_vel",
-        )
-
-        self.declare_parameter(
-            "active_source_topic",
-            "/control/active_source",
+            'output_topic',
+            '/diff_drive_controller/cmd_vel',
         )
 
         self.declare_parameter(
-            "emergency_stop_topic",
-            "/control/emergency_stop",
+            'active_source_topic',
+            '/control/active_source',
+        )
+
+        self.declare_parameter(
+            'emergency_stop_topic',
+            '/control/emergency_stop',
         )
 
         self.publish_rate = self.get_double_parameter(
-            "publish_rate"
+            'publish_rate'
         )
 
         self.max_linear_velocity = self.get_double_parameter(
-            "max_linear_velocity"
+            'max_linear_velocity'
         )
 
         self.max_angular_velocity = self.get_double_parameter(
-            "max_angular_velocity"
+            'max_angular_velocity'
         )
 
         if self.publish_rate <= 0.0:
-            raise ValueError("publish_rate must be greater than zero")
+            raise ValueError('publish_rate must be greater than zero')
 
         if self.max_linear_velocity <= 0.0:
             raise ValueError(
-                "max_linear_velocity must be greater than zero"
+                'max_linear_velocity must be greater than zero'
             )
 
         if self.max_angular_velocity <= 0.0:
             raise ValueError(
-                "max_angular_velocity must be greater than zero"
+                'max_angular_velocity must be greater than zero'
             )
 
         self.sources = [
-            self.create_source("keyboard"),
-            self.create_source("gamepad"),
-            self.create_source("gui"),
-            self.create_source("navigation"),
+            self.create_source('keyboard'),
+            self.create_source('gamepad'),
+            self.create_source('gui'),
+            self.create_source('navigation'),
         ]
 
-        output_topic = self.get_string_parameter("output_topic")
+        output_topic = self.get_string_parameter('output_topic')
 
         active_source_topic = self.get_string_parameter(
-            "active_source_topic"
+            'active_source_topic'
         )
 
         emergency_stop_topic = self.get_string_parameter(
-            "emergency_stop_topic"
+            'emergency_stop_topic'
         )
 
         self.command_publisher = self.create_publisher(
@@ -178,41 +184,41 @@ class CommandMuxNode(Node):
             self.publish_command,
         )
 
-        self.get_logger().info("Command multiplexer started")
+        self.get_logger().info('Command multiplexer started')
         self.get_logger().info(
-            f"Output topic: {output_topic}"
+            f'Output topic: {output_topic}'
         )
         self.get_logger().info(
-            "Velocity limits: "
-            f"linear={self.max_linear_velocity:.3f} m/s, "
-            f"angular={self.max_angular_velocity:.3f} rad/s"
+            'Velocity limits: '
+            f'linear={self.max_linear_velocity:.3f} m/s, '
+            f'angular={self.max_angular_velocity:.3f} rad/s'
         )
 
         for source in self.sources:
             self.get_logger().info(
                 f"Source '{source.name}': "
-                f"topic={source.topic}, "
-                f"priority={source.priority}, "
-                f"timeout={source.timeout:.3f} s"
+                f'topic={source.topic}, '
+                f'priority={source.priority}, '
+                f'timeout={source.timeout:.3f} s'
             )
 
     def create_source(self, name: str) -> CommandSource:
-        topic = self.get_string_parameter(f"{name}_topic")
+        topic = self.get_string_parameter(f'{name}_topic')
         priority = self.get_integer_parameter(
-            f"{name}_priority"
+            f'{name}_priority'
         )
         timeout = self.get_double_parameter(
-            f"{name}_timeout"
+            f'{name}_timeout'
         )
 
         if not topic:
             raise ValueError(
-                f"{name}_topic must not be empty"
+                f'{name}_topic must not be empty'
             )
 
         if timeout <= 0.0:
             raise ValueError(
-                f"{name}_timeout must be greater than zero"
+                f'{name}_timeout must be greater than zero'
             )
 
         return CommandSource(
@@ -239,29 +245,29 @@ class CommandMuxNode(Node):
         if self.emergency_stop_active != previous_state:
             if self.emergency_stop_active:
                 self.get_logger().warn(
-                    "Emergency stop activated"
+                    'Emergency stop activated'
                 )
 
                 self.publish_zero_command()
                 self.publish_active_source(
-                    "emergency_stop"
+                    'emergency_stop'
                 )
             else:
                 self.get_logger().info(
-                    "Emergency stop released"
+                    'Emergency stop released'
                 )
 
     def publish_command(self) -> None:
         if self.emergency_stop_active:
             self.publish_zero_command()
-            self.publish_active_source("emergency_stop")
+            self.publish_active_source('emergency_stop')
             return
 
         selected_source = self.select_active_source()
 
         if selected_source is None:
             self.publish_zero_command()
-            self.publish_active_source("none")
+            self.publish_active_source('none')
             return
 
         output = self.sanitize_command(
@@ -309,7 +315,7 @@ class CommandMuxNode(Node):
         output.header.stamp = (
             self.get_clock().now().to_msg()
         )
-        output.header.frame_id = "base_link"
+        output.header.frame_id = 'base_link'
 
         if input_command is None:
             return output
@@ -340,7 +346,7 @@ class CommandMuxNode(Node):
         message.header.stamp = (
             self.get_clock().now().to_msg()
         )
-        message.header.frame_id = "base_link"
+        message.header.frame_id = 'base_link'
 
         self.command_publisher.publish(message)
 
@@ -359,12 +365,12 @@ class CommandMuxNode(Node):
         previous_source = (
             self.last_reported_source
             if self.last_reported_source is not None
-            else "uninitialized"
+            else 'uninitialized'
         )
 
         self.get_logger().info(
-            f"Control source changed: "
-            f"{previous_source} -> {source_name}"
+            f'Control source changed: '
+            f'{previous_source} -> {source_name}'
         )
 
         self.last_reported_source = source_name
@@ -416,5 +422,5 @@ def main(args=None) -> None:
             rclpy.shutdown()
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

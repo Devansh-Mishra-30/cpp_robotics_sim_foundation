@@ -1,14 +1,19 @@
 #!/usr/bin/env python3
+# Copyright 2026 Devansh Mishra
+#
+# Use of this source code is governed by an MIT-style
+# license that can be found in the LICENSE file or at
+# https://opensource.org/licenses/MIT.
+
 
 import copy
 import math
 import random
 
+from geometry_msgs.msg import Quaternion
+from nav_msgs.msg import Odometry
 import rclpy
 from rclpy.node import Node
-
-from nav_msgs.msg import Odometry
-from geometry_msgs.msg import Quaternion
 
 
 def yaw_from_quaternion(q):
@@ -82,7 +87,7 @@ class NoisyOdomNode(Node):
             10
         )
 
-        self.get_logger().info('Day 83 noisy odometry node started')
+        self.get_logger().info('Noisy odometry node started')
         self.get_logger().info(f'Subscribing: {self.input_topic}')
         self.get_logger().info(f'Publishing:  {self.output_topic}')
         self.get_logger().info(

@@ -51,20 +51,10 @@ jobs:
           rosdep install --from-paths ros2_ws/src --ignore-src -r -y --rosdistro jazzy
 
       - name: Build workspace
-        run: |
-          source /opt/ros/jazzy/setup.bash
-          cd ros2_ws
-          colcon build --cmake-args -DBUILD_TESTING=ON
+        run: ./scripts/build.sh
 
-      - name: Run tests
-        run: |
-          source /opt/ros/jazzy/setup.bash
-          cd ros2_ws
-          colcon test \
-            --packages-select cpp_robotics_sim_ros \
-            --event-handlers console_direct+ \
-            --return-code-on-test-failure
-          colcon test-result --verbose
+      - name: Run unit and integration tests
+        run: ./scripts/test.sh
 
       - name: Upload test logs
         if: always()

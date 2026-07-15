@@ -1,6 +1,9 @@
 "use strict";
 
-const ROSBRIDGE_URL = "ws://localhost:9090";
+const ROSBRIDGE_HOST =
+  window.location.hostname || "localhost";
+const ROSBRIDGE_URL =
+  `ws://${ROSBRIDGE_HOST}:9090`;
 const COMMAND_PUBLISH_INTERVAL_MS = 100;
 const RECONNECT_DELAY_MS = 2000;
 const STOP_BURST_COUNT = 3;

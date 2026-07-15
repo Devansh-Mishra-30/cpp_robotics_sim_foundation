@@ -1,22 +1,26 @@
 #!/usr/bin/env python3
+# Copyright 2026 Devansh Mishra
+#
+# Use of this source code is governed by an MIT-style
+# license that can be found in the LICENSE file or at
+# https://opensource.org/licenses/MIT.
 
+
+from geometry_msgs.msg import Twist, TwistStamped
 import rclpy
 from rclpy.node import Node
-
-from geometry_msgs.msg import Twist
-from geometry_msgs.msg import TwistStamped
 
 
 class CmdVelTwistBridge(Node):
     def __init__(self):
-        super().__init__("cmd_vel_twist_bridge")
+        super().__init__('cmd_vel_twist_bridge')
 
-        self.input_topic = self.declare_parameter("input_topic", "/cmd_vel").value
+        self.input_topic = self.declare_parameter('input_topic', '/cmd_vel').value
         self.output_topic = self.declare_parameter(
-            "output_topic",
-            "/diff_drive_controller/cmd_vel",
+            'output_topic',
+            '/diff_drive_controller/cmd_vel',
         ).value
-        self.frame_id = self.declare_parameter("frame_id", "base_link").value
+        self.frame_id = self.declare_parameter('frame_id', 'base_link').value
 
         self.publisher = self.create_publisher(TwistStamped, self.output_topic, 10)
 
@@ -28,7 +32,7 @@ class CmdVelTwistBridge(Node):
         )
 
         self.get_logger().info(
-            f"Bridging {self.input_topic} Twist -> {self.output_topic} TwistStamped"
+            f'Bridging {self.input_topic} Twist -> {self.output_topic} TwistStamped'
         )
 
     def cmd_callback(self, msg: Twist):
@@ -47,5 +51,5 @@ def main(args=None):
     rclpy.shutdown()
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

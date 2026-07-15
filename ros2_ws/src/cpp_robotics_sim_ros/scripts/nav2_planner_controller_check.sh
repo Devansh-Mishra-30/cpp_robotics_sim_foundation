@@ -2,7 +2,7 @@
 set -e
 
 echo "========================================"
-echo "DAY 94 PLANNER/CONTROLLER CHECK"
+echo "NAV2 PLANNER/CONTROLLER CHECK"
 echo "========================================"
 
 fail()
@@ -121,5 +121,5 @@ pass_step "FollowPath params are conservative and readable"
 
 echo ""
 echo "========================================"
-echo "DAY 94 PLANNER/CONTROLLER CHECK: PASS"
+echo "NAV2 PLANNER/CONTROLLER CHECK: PASS"
 echo "========================================"

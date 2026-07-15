@@ -1,4 +1,4 @@
-image: day102_diffbot_map.pgm
+image: default_diffbot_map.pgm
 mode: trinary
 resolution: 0.050
 origin: [-0.500, -0.496, 0]

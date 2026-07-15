@@ -6,7 +6,7 @@ A robotics simulation engineering project built around C++, ROS 2 Jazzy, Gazebo 
 
 The project started as a standalone C++ robotics simulator and has grown into a ROS 2 / Gazebo mobile robot simulation stack with robot modeling, controller integration, lidar simulation, odometry, TF, RViz visualization, trajectory validation, GoogleTest, GitHub Actions CI, performance benchmarking, and Nav2 navigation evidence.
 
-Current checkpoint: **complete through Day 100 — Nav2 working integration and documentation consolidation.**
+Current release status: **Nav2 integration, validation tooling, documentation, and browser-based control workflow are operational.**
 
 ---
 
@@ -97,7 +97,7 @@ cpp_robotics_sim_foundation/
 │       │   └── ros2_control.yaml
 │       ├── include/
 │       │   └── cpp_robotics_sim_ros/
-│       │       └── day86_testable_core.hpp
+│       │       └── core_math.hpp
 │       ├── launch/
 │       │   ├── sim.launch.py
 │       │   ├── description.launch.py
@@ -120,9 +120,9 @@ cpp_robotics_sim_foundation/
 │       │   └── nav2_planner_controller_check.sh
 │       ├── src/
 │       │   ├── sim_node.cpp
-│       │   └── day88_performance_benchmark.cpp
+│       │   └── performance_benchmark.cpp
 │       ├── test/
-│       │   └── test_day86_core.cpp
+│       │   └── test_core_math.cpp
 │       ├── urdf/
 │       │   └── diffbot.urdf
 │       ├── worlds/
@@ -133,7 +133,7 @@ cpp_robotics_sim_foundation/
 │       └── package.xml
 │
 ├── scripts/
-│   ├── day68_launch_regression.sh
+│   ├── launch_regression.sh
 │   └── hard_reset.sh
 │
 ├── data/
@@ -268,7 +268,7 @@ cpp_robotics_sim_ros sim_node
 cpp_robotics_sim_ros noisy_odom_node.py
 cpp_robotics_sim_ros trajectory_validation_recorder.py
 cpp_robotics_sim_ros plot_trajectory_validation.py
-cpp_robotics_sim_ros day88_performance_benchmark
+cpp_robotics_sim_ros performance_benchmark
 cpp_robotics_sim_ros cmd_vel_twist_bridge.py
 cpp_robotics_sim_ros nav2_lifecycle_check.sh
 cpp_robotics_sim_ros nav2_costmap_check.sh
@@ -461,9 +461,9 @@ ros2 run cpp_robotics_sim_ros nav2_planner_controller_check.sh
 Expected:
 
 ```txt
-DAY 92 LIFECYCLE CHECK: PASS
-DAY 93 COSTMAP CHECK: PASS
-DAY 94 PLANNER/CONTROLLER CHECK: PASS
+LIFECYCLE CHECK: PASS
+COSTMAP CHECK: PASS
+PLANNER/CONTROLLER CHECK: PASS
 ```
 
 Send a single navigation goal:
@@ -649,7 +649,7 @@ colcon test-result --verbose
 ### Original simulator regression
 
 ```bash
-./scripts/day68_launch_regression.sh
+./scripts/launch_regression.sh
 ```
 
 ### Nav2 regression
@@ -691,7 +691,7 @@ cd cpp_robotics_sim_foundation
 source /opt/ros/jazzy/setup.bash
 source install/setup.bash
 
-ros2 run cpp_robotics_sim_ros day88_performance_benchmark \
+ros2 run cpp_robotics_sim_ros performance_benchmark \
   --output data/day88_performance_results.csv \
   --report docs/performance_report.md
 ```
@@ -793,7 +793,7 @@ map -> odom -> base_link
 
 ## Known Limitations
 
-Current Day 100 limitations:
+Current limitations:
 
 - Nav2 currently runs in `odom` frame only.
 - No persistent map is active yet.
@@ -807,7 +807,7 @@ Current Day 100 limitations:
 
 ---
 
-## Roadmap
+## Planned Enhancements
 
 Next planned phase:
 
@@ -886,6 +886,6 @@ replayable
 documented
 ```
 
-The current Day 100 system proves the robot can be modeled, controlled in Gazebo, sensed through lidar, validated with odometry and TF, tested with GoogleTest, checked through CI, benchmarked at the C++ update layer, and driven through a working Nav2 integration with lifecycle, costmap, planner, controller, goal-navigation, recovery, waypoint, and rosbag evidence.
+The current system demonstrates robot modeling, Gazebo control, lidar sensing, odometry and TF validation, GoogleTest coverage, continuous integration, C++ performance benchmarking, and Nav2 integration with lifecycle, costmap, planner, controller, goal-navigation, recovery, waypoint, and rosbag evidence.
 
 The next phase will move from odom-frame navigation toward map-based SLAM/localization and stronger autonomy validation.

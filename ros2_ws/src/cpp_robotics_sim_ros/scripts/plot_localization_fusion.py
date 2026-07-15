@@ -1,4 +1,10 @@
 #!/usr/bin/env python3
+# Copyright 2026 Devansh Mishra
+#
+# Use of this source code is governed by an MIT-style
+# license that can be found in the LICENSE file or at
+# https://opensource.org/licenses/MIT.
+
 
 import argparse
 import csv
@@ -11,11 +17,11 @@ import matplotlib.pyplot as plt
 def load_csv(path: Path) -> dict[str, list[float]]:
     columns: dict[str, list[float]] = {}
 
-    with path.open(newline="", encoding="utf-8") as csv_file:
+    with path.open(newline='', encoding='utf-8') as csv_file:
         reader = csv.DictReader(csv_file)
 
         if reader.fieldnames is None:
-            raise ValueError("CSV file has no header.")
+            raise ValueError('CSV file has no header.')
 
         for field in reader.fieldnames:
             columns[field] = []
@@ -24,8 +30,8 @@ def load_csv(path: Path) -> dict[str, list[float]]:
             for field in reader.fieldnames:
                 columns[field].append(float(row[field]))
 
-    if not columns or not columns["time_sec"]:
-        raise ValueError("CSV contains no recorded data rows.")
+    if not columns or not columns['time_sec']:
+        raise ValueError('CSV contains no recorded data rows.')
 
     return columns
 
@@ -59,46 +65,46 @@ def calculate_metrics(
     data: dict[str, list[float]],
 ) -> dict[str, float]:
     return {
-        "samples": float(len(data["time_sec"])),
+        'samples': float(len(data['time_sec'])),
 
-        "raw_position_rmse": rmse(
-            data["raw_position_error"]
+        'raw_position_rmse': rmse(
+            data['raw_position_error']
         ),
-        "noisy_position_rmse": rmse(
-            data["noisy_position_error"]
+        'noisy_position_rmse': rmse(
+            data['noisy_position_error']
         ),
-        "ekf_position_rmse": rmse(
-            data["ekf_position_error"]
-        ),
-
-        "raw_position_max": max(
-            data["raw_position_error"]
-        ),
-        "noisy_position_max": max(
-            data["noisy_position_error"]
-        ),
-        "ekf_position_max": max(
-            data["ekf_position_error"]
+        'ekf_position_rmse': rmse(
+            data['ekf_position_error']
         ),
 
-        "raw_yaw_rmse": rmse(
-            data["raw_yaw_error"]
+        'raw_position_max': max(
+            data['raw_position_error']
         ),
-        "noisy_yaw_rmse": rmse(
-            data["noisy_yaw_error"]
+        'noisy_position_max': max(
+            data['noisy_position_error']
         ),
-        "ekf_yaw_rmse": rmse(
-            data["ekf_yaw_error"]
+        'ekf_position_max': max(
+            data['ekf_position_error']
         ),
 
-        "raw_yaw_mae": mean_absolute(
-            data["raw_yaw_error"]
+        'raw_yaw_rmse': rmse(
+            data['raw_yaw_error']
         ),
-        "noisy_yaw_mae": mean_absolute(
-            data["noisy_yaw_error"]
+        'noisy_yaw_rmse': rmse(
+            data['noisy_yaw_error']
         ),
-        "ekf_yaw_mae": mean_absolute(
-            data["ekf_yaw_error"]
+        'ekf_yaw_rmse': rmse(
+            data['ekf_yaw_error']
+        ),
+
+        'raw_yaw_mae': mean_absolute(
+            data['raw_yaw_error']
+        ),
+        'noisy_yaw_mae': mean_absolute(
+            data['noisy_yaw_error']
+        ),
+        'ekf_yaw_mae': mean_absolute(
+            data['ekf_yaw_error']
         ),
     }
 
@@ -110,48 +116,48 @@ def save_trajectory_plot(
     plt.figure(figsize=(9, 8))
 
     plt.plot(
-        data["amcl_x"],
-        data["amcl_y"],
+        data['amcl_x'],
+        data['amcl_y'],
         linewidth=2.5,
-        label="AMCL",
+        label='AMCL',
     )
 
     plt.plot(
-        data["raw_x"],
-        data["raw_y"],
+        data['raw_x'],
+        data['raw_y'],
         linewidth=1.8,
-        label="Raw wheel odometry",
+        label='Raw wheel odometry',
     )
 
     plt.plot(
-        data["noisy_x"],
-        data["noisy_y"],
+        data['noisy_x'],
+        data['noisy_y'],
         linewidth=1.0,
         alpha=0.65,
-        label="Noisy odometry",
+        label='Noisy odometry',
     )
 
     plt.plot(
-        data["ekf_x"],
-        data["ekf_y"],
+        data['ekf_x'],
+        data['ekf_y'],
         linewidth=2.0,
-        label="EKF filtered odometry",
+        label='EKF filtered odometry',
     )
 
     plt.scatter(
-        data["amcl_x"][0],
-        data["amcl_y"][0],
-        marker="o",
+        data['amcl_x'][0],
+        data['amcl_y'][0],
+        marker='o',
         s=80,
-        label="Start",
+        label='Start',
     )
 
-    plt.xlabel("X position [m]")
-    plt.ylabel("Y position [m]")
+    plt.xlabel('X position [m]')
+    plt.ylabel('Y position [m]')
     plt.title(
-        "Day 108: Raw, Noisy, AMCL and EKF Trajectories"
+        'Localization fusion: Raw, Noisy, AMCL and EKF Trajectories'
     )
-    plt.axis("equal")
+    plt.axis('equal')
     plt.grid(True)
     plt.legend()
     plt.tight_layout()
@@ -163,31 +169,31 @@ def save_position_error_plot(
     data: dict[str, list[float]],
     output_path: Path,
 ) -> None:
-    time_sec = relative_time(data["time_sec"])
+    time_sec = relative_time(data['time_sec'])
 
     plt.figure(figsize=(10, 6))
 
     plt.plot(
         time_sec,
-        data["raw_position_error"],
-        label="Raw wheel odometry",
+        data['raw_position_error'],
+        label='Raw wheel odometry',
     )
 
     plt.plot(
         time_sec,
-        data["noisy_position_error"],
-        label="Noisy odometry",
+        data['noisy_position_error'],
+        label='Noisy odometry',
     )
 
     plt.plot(
         time_sec,
-        data["ekf_position_error"],
-        label="EKF filtered odometry",
+        data['ekf_position_error'],
+        label='EKF filtered odometry',
     )
 
-    plt.xlabel("Elapsed recording time [s]")
-    plt.ylabel("Position error relative to AMCL [m]")
-    plt.title("Day 108: Position Error Relative to AMCL")
+    plt.xlabel('Elapsed recording time [s]')
+    plt.ylabel('Position error relative to AMCL [m]')
+    plt.title('Localization fusion: Position Error Relative to AMCL')
     plt.grid(True)
     plt.legend()
     plt.tight_layout()
@@ -199,21 +205,21 @@ def save_yaw_error_plot(
     data: dict[str, list[float]],
     output_path: Path,
 ) -> None:
-    time_sec = relative_time(data["time_sec"])
+    time_sec = relative_time(data['time_sec'])
 
     raw_degrees = [
         math.degrees(value)
-        for value in data["raw_yaw_error"]
+        for value in data['raw_yaw_error']
     ]
 
     noisy_degrees = [
         math.degrees(value)
-        for value in data["noisy_yaw_error"]
+        for value in data['noisy_yaw_error']
     ]
 
     ekf_degrees = [
         math.degrees(value)
-        for value in data["ekf_yaw_error"]
+        for value in data['ekf_yaw_error']
     ]
 
     plt.figure(figsize=(10, 6))
@@ -221,24 +227,24 @@ def save_yaw_error_plot(
     plt.plot(
         time_sec,
         raw_degrees,
-        label="Raw wheel odometry",
+        label='Raw wheel odometry',
     )
 
     plt.plot(
         time_sec,
         noisy_degrees,
-        label="Noisy odometry",
+        label='Noisy odometry',
     )
 
     plt.plot(
         time_sec,
         ekf_degrees,
-        label="EKF filtered odometry",
+        label='EKF filtered odometry',
     )
 
-    plt.xlabel("Elapsed recording time [s]")
-    plt.ylabel("Yaw error relative to AMCL [degrees]")
-    plt.title("Day 108: Heading Error Relative to AMCL")
+    plt.xlabel('Elapsed recording time [s]')
+    plt.ylabel('Yaw error relative to AMCL [degrees]')
+    plt.title('Localization fusion: Heading Error Relative to AMCL')
     plt.grid(True)
     plt.legend()
     plt.tight_layout()
@@ -253,26 +259,45 @@ def write_report(
     noisy_position_improvement = (
         100.0
         * (
-            metrics["noisy_position_rmse"]
-            - metrics["ekf_position_rmse"]
+            metrics['noisy_position_rmse']
+            - metrics['ekf_position_rmse']
         )
-        / metrics["noisy_position_rmse"]
-        if metrics["noisy_position_rmse"] > 0.0
+        / metrics['noisy_position_rmse']
+        if metrics['noisy_position_rmse'] > 0.0
         else math.nan
     )
 
     noisy_yaw_improvement = (
         100.0
         * (
-            metrics["noisy_yaw_rmse"]
-            - metrics["ekf_yaw_rmse"]
+            metrics['noisy_yaw_rmse']
+            - metrics['ekf_yaw_rmse']
         )
-        / metrics["noisy_yaw_rmse"]
-        if metrics["noisy_yaw_rmse"] > 0.0
+        / metrics['noisy_yaw_rmse']
+        if metrics['noisy_yaw_rmse'] > 0.0
         else math.nan
     )
 
-    report = f"""# Day 108 Fusion Analysis
+    raw_yaw_row = (
+        '| Raw wheel odometry | '
+        f'{metrics["raw_yaw_rmse"]:.6f} | '
+        f'{math.degrees(metrics["raw_yaw_rmse"]):.3f} | '
+        f'{metrics["raw_yaw_mae"]:.6f} |'
+    )
+    noisy_yaw_row = (
+        '| Noisy odometry | '
+        f'{metrics["noisy_yaw_rmse"]:.6f} | '
+        f'{math.degrees(metrics["noisy_yaw_rmse"]):.3f} | '
+        f'{metrics["noisy_yaw_mae"]:.6f} |'
+    )
+    ekf_yaw_row = (
+        '| EKF filtered odometry | '
+        f'{metrics["ekf_yaw_rmse"]:.6f} | '
+        f'{math.degrees(metrics["ekf_yaw_rmse"]):.3f} | '
+        f'{metrics["ekf_yaw_mae"]:.6f} |'
+    )
+
+    report = f"""# Localization fusion Fusion Analysis
 
 ## Experiment
 
@@ -308,9 +333,9 @@ EKF position-RMSE improvement relative to noisy odometry:
 
 | Estimate | RMSE [rad] | RMSE [deg] | Mean absolute error [rad] |
 |---|---:|---:|---:|
-| Raw wheel odometry | {metrics["raw_yaw_rmse"]:.6f} | {math.degrees(metrics["raw_yaw_rmse"]):.3f} | {metrics["raw_yaw_mae"]:.6f} |
-| Noisy odometry | {metrics["noisy_yaw_rmse"]:.6f} | {math.degrees(metrics["noisy_yaw_rmse"]):.3f} | {metrics["noisy_yaw_mae"]:.6f} |
-| EKF filtered odometry | {metrics["ekf_yaw_rmse"]:.6f} | {math.degrees(metrics["ekf_yaw_rmse"]):.3f} | {metrics["ekf_yaw_mae"]:.6f} |
+{raw_yaw_row}
+{noisy_yaw_row}
+{ekf_yaw_row}
 
 EKF yaw-RMSE improvement relative to noisy odometry:
 {noisy_yaw_improvement:.2f}%
@@ -333,24 +358,24 @@ AMCL provides scan-corrected map-frame localization, while wheel
 odometry and the EKF remain locally continuous dead-reckoning estimates.
 """
 
-    output_path.write_text(report, encoding="utf-8")
+    output_path.write_text(report, encoding='utf-8')
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Generate Day 108 fusion-analysis plots."
+        description='Generate Localization fusion fusion-analysis plots.'
     )
 
     parser.add_argument(
-        "--input",
+        '--input',
         required=True,
-        help="Input Day 108 CSV path.",
+        help='Input Localization fusion CSV path.',
     )
 
     parser.add_argument(
-        "--output-dir",
+        '--output-dir',
         required=True,
-        help="Directory for plots and metrics report.",
+        help='Directory for plots and metrics report.',
     )
 
     args = parser.parse_args()
@@ -360,7 +385,7 @@ def main() -> None:
 
     if not input_path.is_file():
         raise FileNotFoundError(
-            f"Input CSV does not exist: {input_path}"
+            f'Input CSV does not exist: {input_path}'
         )
 
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -369,19 +394,19 @@ def main() -> None:
     metrics = calculate_metrics(data)
 
     trajectory_path = (
-        output_dir / "fusion_comparison.png"
+        output_dir / 'fusion_comparison.png'
     )
 
     position_error_path = (
-        output_dir / "fusion_position_error.png"
+        output_dir / 'fusion_position_error.png'
     )
 
     yaw_error_path = (
-        output_dir / "fusion_yaw_error.png"
+        output_dir / 'fusion_yaw_error.png'
     )
 
     report_path = (
-        output_dir / "day108_fusion_metrics.md"
+        output_dir / 'localization_fusion_metrics.md'
     )
 
     save_trajectory_plot(data, trajectory_path)
@@ -392,40 +417,40 @@ def main() -> None:
     print(f"Samples: {int(metrics['samples'])}")
 
     print(
-        "Raw position RMSE: "
+        'Raw position RMSE: '
         f"{metrics['raw_position_rmse']:.6f} m"
     )
 
     print(
-        "Noisy position RMSE: "
+        'Noisy position RMSE: '
         f"{metrics['noisy_position_rmse']:.6f} m"
     )
 
     print(
-        "EKF position RMSE: "
+        'EKF position RMSE: '
         f"{metrics['ekf_position_rmse']:.6f} m"
     )
 
     print(
-        "Raw yaw RMSE: "
+        'Raw yaw RMSE: '
         f"{metrics['raw_yaw_rmse']:.6f} rad"
     )
 
     print(
-        "Noisy yaw RMSE: "
+        'Noisy yaw RMSE: '
         f"{metrics['noisy_yaw_rmse']:.6f} rad"
     )
 
     print(
-        "EKF yaw RMSE: "
+        'EKF yaw RMSE: '
         f"{metrics['ekf_yaw_rmse']:.6f} rad"
     )
 
-    print(f"Saved: {trajectory_path}")
-    print(f"Saved: {position_error_path}")
-    print(f"Saved: {yaw_error_path}")
-    print(f"Saved: {report_path}")
+    print(f'Saved: {trajectory_path}')
+    print(f'Saved: {position_error_path}')
+    print(f'Saved: {yaw_error_path}')
+    print(f'Saved: {report_path}')
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

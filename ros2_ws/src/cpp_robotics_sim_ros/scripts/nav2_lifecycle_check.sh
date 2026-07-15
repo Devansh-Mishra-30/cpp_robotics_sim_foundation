@@ -2,7 +2,7 @@
 set -e
 
 echo "======================================"
-echo " Day 92 Nav2 Lifecycle Check"
+echo " Nav2 Lifecycle Check"
 echo "======================================"
 
 NODES=(
@@ -67,9 +67,9 @@ fi
 echo ""
 echo "======================================"
 if [ "$PASS" = true ]; then
-  echo "DAY 92 LIFECYCLE CHECK: PASS"
+  echo "NAV2 LIFECYCLE CHECK: PASS"
   exit 0
 else
-  echo "DAY 92 LIFECYCLE CHECK: FAIL"
+  echo "NAV2 LIFECYCLE CHECK: FAIL"
   exit 1
 fi

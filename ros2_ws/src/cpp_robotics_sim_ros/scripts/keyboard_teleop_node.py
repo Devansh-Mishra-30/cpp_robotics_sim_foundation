@@ -1,4 +1,9 @@
 #!/usr/bin/env python3
+# Copyright 2026 Devansh Mishra
+#
+# Use of this source code is governed by an MIT-style
+# license that can be found in the LICENSE file or at
+# https://opensource.org/licenses/MIT.
 
 import os
 import select
@@ -9,8 +14,8 @@ import time
 import tty
 from typing import Dict, Optional
 
-import rclpy
 from geometry_msgs.msg import TwistStamped
+import rclpy
 from rclpy.node import Node
 
 
@@ -31,35 +36,35 @@ class KeyboardTeleopNode(Node):
     """
 
     def __init__(self) -> None:
-        super().__init__("keyboard_teleop")
+        super().__init__('keyboard_teleop')
 
         self.declare_parameter(
-            "output_topic",
-            "/cmd_vel/keyboard",
+            'output_topic',
+            '/cmd_vel/keyboard',
         )
-        self.declare_parameter("linear_speed", 0.15)
-        self.declare_parameter("angular_speed", 0.60)
-        self.declare_parameter("publish_rate", 20.0)
-        self.declare_parameter("deadman_timeout", 0.30)
-        self.declare_parameter("frame_id", "base_link")
+        self.declare_parameter('linear_speed', 0.15)
+        self.declare_parameter('angular_speed', 0.60)
+        self.declare_parameter('publish_rate', 20.0)
+        self.declare_parameter('deadman_timeout', 0.30)
+        self.declare_parameter('frame_id', 'base_link')
 
         self.output_topic = str(
-            self.get_parameter("output_topic").value
+            self.get_parameter('output_topic').value
         )
         self.linear_speed = float(
-            self.get_parameter("linear_speed").value
+            self.get_parameter('linear_speed').value
         )
         self.angular_speed = float(
-            self.get_parameter("angular_speed").value
+            self.get_parameter('angular_speed').value
         )
         self.publish_rate = float(
-            self.get_parameter("publish_rate").value
+            self.get_parameter('publish_rate').value
         )
         self.deadman_timeout = float(
-            self.get_parameter("deadman_timeout").value
+            self.get_parameter('deadman_timeout').value
         )
         self.frame_id = str(
-            self.get_parameter("frame_id").value
+            self.get_parameter('frame_id').value
         )
 
         self.validate_parameters()
@@ -73,10 +78,10 @@ class KeyboardTeleopNode(Node):
         self.state_lock = threading.Lock()
 
         self.key_times: Dict[str, Optional[float]] = {
-            "forward": None,
-            "reverse": None,
-            "left": None,
-            "right": None,
+            'forward': None,
+            'reverse': None,
+            'left': None,
+            'right': None,
         }
 
         self.running = True
@@ -96,48 +101,48 @@ class KeyboardTeleopNode(Node):
         self.print_instructions()
 
         self.get_logger().info(
-            f"Publishing keyboard commands to: {self.output_topic}"
+            f'Publishing keyboard commands to: {self.output_topic}'
         )
         self.get_logger().info(
-            "Keyboard speeds: "
-            f"linear={self.linear_speed:.3f} m/s, "
-            f"angular={self.angular_speed:.3f} rad/s"
+            'Keyboard speeds: '
+            f'linear={self.linear_speed:.3f} m/s, '
+            f'angular={self.angular_speed:.3f} rad/s'
         )
         self.get_logger().info(
-            f"Deadman timeout: {self.deadman_timeout:.3f} s"
+            f'Deadman timeout: {self.deadman_timeout:.3f} s'
         )
 
     def validate_parameters(self) -> None:
         if not self.output_topic:
-            raise ValueError("output_topic must not be empty")
+            raise ValueError('output_topic must not be empty')
 
         if self.linear_speed <= 0.0:
             raise ValueError(
-                "linear_speed must be greater than zero"
+                'linear_speed must be greater than zero'
             )
 
         if self.angular_speed <= 0.0:
             raise ValueError(
-                "angular_speed must be greater than zero"
+                'angular_speed must be greater than zero'
             )
 
         if self.publish_rate <= 0.0:
             raise ValueError(
-                "publish_rate must be greater than zero"
+                'publish_rate must be greater than zero'
             )
 
         if self.deadman_timeout <= 0.0:
             raise ValueError(
-                "deadman_timeout must be greater than zero"
+                'deadman_timeout must be greater than zero'
             )
 
         if not self.frame_id:
-            raise ValueError("frame_id must not be empty")
+            raise ValueError('frame_id must not be empty')
 
     def configure_terminal(self) -> None:
         if not sys.stdin.isatty():
             raise RuntimeError(
-                "Keyboard teleop requires an interactive terminal."
+                'Keyboard teleop requires an interactive terminal.'
             )
 
         self.stdin_fd = sys.stdin.fileno()
@@ -162,7 +167,7 @@ class KeyboardTeleopNode(Node):
     def start_input_thread(self) -> None:
         self.input_thread = threading.Thread(
             target=self.keyboard_input_loop,
-            name="keyboard_input",
+            name='keyboard_input',
             daemon=True,
         )
         self.input_thread.start()
@@ -182,7 +187,7 @@ class KeyboardTeleopNode(Node):
 
                 key = os.read(sys.stdin.fileno(), 1)
 
-                if key == b"\x1b":
+                if key == b'\x1b':
                     key += self.read_escape_sequence()
 
                 self.handle_key(key)
@@ -190,13 +195,13 @@ class KeyboardTeleopNode(Node):
             except OSError:
                 if self.running:
                     self.get_logger().exception(
-                        "Keyboard input failed"
+                        'Keyboard input failed'
                     )
                 break
 
     @staticmethod
     def read_escape_sequence() -> bytes:
-        sequence = b""
+        sequence = b''
 
         for _ in range(2):
             ready, _, _ = select.select(
@@ -217,29 +222,29 @@ class KeyboardTeleopNode(Node):
         normalized_key = key.lower()
         now = time.monotonic()
 
-        if normalized_key in (b"w", b"\x1b[A"):
-            self.record_key("forward", now)
+        if normalized_key in (b'w', b'\x1b[A'):
+            self.record_key('forward', now)
             return
 
-        if normalized_key in (b"s", b"\x1b[B"):
-            self.record_key("reverse", now)
+        if normalized_key in (b's', b'\x1b[B'):
+            self.record_key('reverse', now)
             return
 
-        if normalized_key in (b"a", b"\x1b[D"):
-            self.record_key("left", now)
+        if normalized_key in (b'a', b'\x1b[D'):
+            self.record_key('left', now)
             return
 
-        if normalized_key in (b"d", b"\x1b[C"):
-            self.record_key("right", now)
+        if normalized_key in (b'd', b'\x1b[C'):
+            self.record_key('right', now)
             return
 
-        if key == b" ":
+        if key == b' ':
             self.clear_motion_keys()
             self.publish_zero_command()
-            self.get_logger().info("Keyboard stop requested")
+            self.get_logger().info('Keyboard stop requested')
             return
 
-        if normalized_key == b"q":
+        if normalized_key == b'q':
             self.clear_motion_keys()
             self.publish_zero_command()
             self.quit_requested = True
@@ -280,10 +285,10 @@ class KeyboardTeleopNode(Node):
         now = time.monotonic()
 
         with self.state_lock:
-            forward = self.is_key_active("forward", now)
-            reverse = self.is_key_active("reverse", now)
-            left = self.is_key_active("left", now)
-            right = self.is_key_active("right", now)
+            forward = self.is_key_active('forward', now)
+            reverse = self.is_key_active('reverse', now)
+            left = self.is_key_active('left', now)
+            right = self.is_key_active('right', now)
 
         linear_x = 0.0
         angular_z = 0.0
@@ -403,5 +408,5 @@ def main(args=None) -> None:
             rclpy.shutdown()
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

@@ -777,7 +777,7 @@ ros2 param get /controller_server FollowPath.vtheta_samples
 | Script | Purpose |
 |---|---|
 | `scripts/hard_reset.sh` | Kill stale ROS/Gazebo/RViz processes before clean launch |
-| `scripts/day68_launch_regression.sh` | Original simulator launch regression |
+| `scripts/launch_regression.sh` | Original simulator launch regression |
 | `cmd_vel_twist_bridge.py` | Convert Nav2 `/cmd_vel` Twist to controller TwistStamped |
 | `noisy_odom_node.py` | Generate noisy odometry stream |
 | `trajectory_validation_recorder.py` | Record command/actual/noisy data into CSV |
@@ -1102,8 +1102,8 @@ That is acceptable when the bag still records commands, odometry, TF, scan, cost
 Source files:
 
 ```txt
-ros2_ws/src/cpp_robotics_sim_ros/include/cpp_robotics_sim_ros/day86_testable_core.hpp
-ros2_ws/src/cpp_robotics_sim_ros/test/test_day86_core.cpp
+ros2_ws/src/cpp_robotics_sim_ros/include/cpp_robotics_sim_ros/core_math.hpp
+ros2_ws/src/cpp_robotics_sim_ros/test/test_core_math.cpp
 ```
 
 Validated functions:
@@ -1166,13 +1166,13 @@ full scenario scoring
 Executable:
 
 ```txt
-cpp_robotics_sim_ros day88_performance_benchmark
+cpp_robotics_sim_ros performance_benchmark
 ```
 
 Command:
 
 ```bash
-ros2 run cpp_robotics_sim_ros day88_performance_benchmark \
+ros2 run cpp_robotics_sim_ros performance_benchmark \
   --output data/day88_performance_results.csv \
   --report docs/performance_report.md
 ```
@@ -1195,7 +1195,7 @@ Does not include Gazebo, Nav2, sensors, RViz, rosbag, or ROS middleware overhead
 
 ## 15. Standard Interface Validation Checklist
 
-After launching the Day 100 Nav2 stack, run:
+After launching the Nav2 stack, run:
 
 ```bash
 ros2 run cpp_robotics_sim_ros nav2_lifecycle_check.sh

@@ -1,15 +1,19 @@
 #!/usr/bin/env python3
+# Copyright 2026 Devansh Mishra
+#
+# Use of this source code is governed by an MIT-style
+# license that can be found in the LICENSE file or at
+# https://opensource.org/licenses/MIT.
+
 
 import csv
 import math
 from pathlib import Path
 
-import rclpy
-from rclpy.node import Node
-
 from geometry_msgs.msg import TwistStamped
 from nav_msgs.msg import Odometry
-
+import rclpy
+from rclpy.node import Node
 
 CSV_COLUMNS = [
     'time_sec',
@@ -72,7 +76,7 @@ class TrajectoryValidationRecorder(Node):
         self.declare_parameter('cmd_topic', '/diff_drive_controller/cmd_vel')
         self.declare_parameter('actual_odom_topic', '/diff_drive_controller/odom')
         self.declare_parameter('noisy_odom_topic', '/odom_noisy')
-        self.declare_parameter('output_csv', 'data/day84_trajectory_validation.csv')
+        self.declare_parameter('output_csv', 'data/trajectory_validation.csv')
         self.declare_parameter('sample_rate_hz', 20.0)
 
         self.cmd_topic = self.get_parameter('cmd_topic').value
@@ -121,7 +125,7 @@ class TrajectoryValidationRecorder(Node):
         timer_period = 1.0 / self.sample_rate_hz
         self.timer = self.create_timer(timer_period, self.write_sample)
 
-        self.get_logger().info('Day 84 trajectory validation recorder started')
+        self.get_logger().info('Trajectory validation recorder started')
         self.get_logger().info(f'Command topic:     {self.cmd_topic}')
         self.get_logger().info(f'Actual odom topic: {self.actual_odom_topic}')
         self.get_logger().info(f'Noisy odom topic:  {self.noisy_odom_topic}')

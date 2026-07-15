@@ -1,13 +1,18 @@
 #!/usr/bin/env python3
+# Copyright 2026 Devansh Mishra
+#
+# Use of this source code is governed by an MIT-style
+# license that can be found in the LICENSE file or at
+# https://opensource.org/licenses/MIT.
 
 import csv
 import math
 from pathlib import Path
 from typing import Optional
 
-import rclpy
 from geometry_msgs.msg import PoseWithCovarianceStamped
 from nav_msgs.msg import Odometry
+import rclpy
 from rclpy.node import Node
 
 
@@ -24,25 +29,18 @@ def wrap_to_pi(angle: float) -> float:
 
 
 class LocalizationComparisonRecorder(Node):
-    """
-    Compare AMCL localization against wheel odometry.
-
-    The initial transform between the odometry and map trajectories is captured
-    once and then frozen. This is intentional: using AMCL's continuously
-    updated map->odom transform would hide the odometry drift that Day 104 is
-    intended to measure.
-    """
+    """Record AMCL and odometry data for comparison."""
 
     def __init__(self) -> None:
-        super().__init__("day104_localization_comparison")
+        super().__init__('localization_comparison_recorder')
 
         self.declare_parameter(
-            "output_csv",
-            "data/day104_amcl_vs_odom.csv",
+            'output_csv',
+            'data/localization_comparison.csv',
         )
 
         output_csv = (
-            self.get_parameter("output_csv")
+            self.get_parameter('output_csv')
             .get_parameter_value()
             .string_value
         )
@@ -60,53 +58,53 @@ class LocalizationComparisonRecorder(Node):
         self.start_time = self.get_clock().now()
 
         self.csv_file = self.output_path.open(
-            "w",
-            newline="",
-            encoding="utf-8",
+            'w',
+            newline='',
+            encoding='utf-8',
         )
 
         self.writer = csv.writer(self.csv_file)
 
         self.writer.writerow(
             [
-                "time_sec",
-                "amcl_x",
-                "amcl_y",
-                "amcl_yaw_rad",
-                "odom_raw_x",
-                "odom_raw_y",
-                "odom_raw_yaw_rad",
-                "odom_aligned_x",
-                "odom_aligned_y",
-                "odom_aligned_yaw_rad",
-                "position_error_m",
-                "yaw_error_rad",
-                "amcl_covariance_x",
-                "amcl_covariance_y",
-                "amcl_covariance_yaw",
+                'time_sec',
+                'amcl_x',
+                'amcl_y',
+                'amcl_yaw_rad',
+                'odom_raw_x',
+                'odom_raw_y',
+                'odom_raw_yaw_rad',
+                'odom_aligned_x',
+                'odom_aligned_y',
+                'odom_aligned_yaw_rad',
+                'position_error_m',
+                'yaw_error_rad',
+                'amcl_covariance_x',
+                'amcl_covariance_y',
+                'amcl_covariance_yaw',
             ]
         )
 
         self.odom_subscription = self.create_subscription(
             Odometry,
-            "/diff_drive_controller/odom",
+            '/diff_drive_controller/odom',
             self.odom_callback,
             20,
         )
 
         self.amcl_subscription = self.create_subscription(
             PoseWithCovarianceStamped,
-            "/amcl_pose",
+            '/amcl_pose',
             self.amcl_callback,
             20,
         )
 
         self.get_logger().info(
-            f"Day 104 recorder writing to: {self.output_path}"
+            f'Localization comparison recorder writing to: {self.output_path}'
         )
 
         self.get_logger().info(
-            "Waiting for odometry and AMCL pose messages..."
+            'Waiting for odometry and AMCL pose messages...'
         )
 
     def odom_callback(self, msg: Odometry) -> None:
@@ -118,7 +116,7 @@ class LocalizationComparisonRecorder(Node):
     ) -> None:
         if self.latest_odom is None:
             self.get_logger().warn(
-                "Received AMCL pose before odometry; waiting for odometry."
+                'Received AMCL pose before odometry; waiting for odometry.'
             )
             return
 
@@ -198,9 +196,9 @@ class LocalizationComparisonRecorder(Node):
         self.csv_file.flush()
 
         self.get_logger().info(
-            "AMCL=(%.3f, %.3f, %.3f) | "
-            "aligned odom=(%.3f, %.3f, %.3f) | "
-            "position error=%.3f m | yaw error=%.3f rad"
+            'AMCL=(%.3f, %.3f, %.3f) | '
+            'aligned odom=(%.3f, %.3f, %.3f) | '
+            'position error=%.3f m | yaw error=%.3f rad'
             % (
                 amcl_x,
                 amcl_y,
@@ -222,13 +220,7 @@ class LocalizationComparisonRecorder(Node):
         odom_y: float,
         odom_yaw: float,
     ) -> None:
-        """
-        Compute and freeze the initial 2D transform:
-
-            T_map_odom_initial =
-                T_map_base_from_amcl * inverse(T_odom_base_from_odom)
-        """
-
+        """Compute and freeze the initial map-to-odometry transform."""
         self.initial_map_to_odom_yaw = wrap_to_pi(
             amcl_yaw - odom_yaw
         )
@@ -250,8 +242,8 @@ class LocalizationComparisonRecorder(Node):
         self.initialized = True
 
         self.get_logger().info(
-            "Captured fixed initial map-to-odom alignment: "
-            "x=%.3f, y=%.3f, yaw=%.3f rad"
+            'Captured fixed initial map-to-odom alignment: '
+            'x=%.3f, y=%.3f, yaw=%.3f rad'
             % (
                 self.initial_map_to_odom_x,
                 self.initial_map_to_odom_y,
@@ -293,8 +285,8 @@ class LocalizationComparisonRecorder(Node):
 
         if rclpy.ok():
             self.get_logger().info(
-                f"Day 104 CSV saved: {self.output_path}"
-        )
+                f'Localization comparison CSV saved: {self.output_path}'
+            )
 
         return super().destroy_node()
 
@@ -315,5 +307,5 @@ def main(args=None) -> None:
             rclpy.shutdown()
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

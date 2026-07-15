@@ -75,7 +75,7 @@ start_launch() {
     fi
 }
 
-echo "========== Day 68 Launch Regression =========="
+echo "========== Launch Regression =========="
 
 cd "$ROS_WS"
 
@@ -124,7 +124,7 @@ require_grep "name: sim_node" "$DIAG_FILE" "/diagnostics missing sim_node status
 require_grep "timeout_active" "$DIAG_FILE" "/diagnostics missing timeout_active key"
 
 echo "[5/8] Checking command response..."
-ros2 topic pub --once /cmd_vel geometry_msgs/msg/Twist "{linear: {x: 0.3}, angular: {z: 0.2}}" >/tmp/day68_cmd_pub.log 2>&1 || true
+ros2 topic pub --once /cmd_vel geometry_msgs/msg/Twist "{linear: {x: 0.3}, angular: {z: 0.2}}" >/tmp/launch_regression_cmd_pub.log 2>&1 || true
 sleep 1
 
 POSE_AFTER_CMD_FILE="$(mktemp)"
@@ -165,4 +165,4 @@ require_grep "x:" "$OVERRIDE_POSE_FILE" "Overridden /robot_pose missing x"
 require_grep "y:" "$OVERRIDE_POSE_FILE" "Overridden /robot_pose missing y"
 require_grep "theta:" "$OVERRIDE_POSE_FILE" "Overridden /robot_pose missing theta"
 
-echo "========== PASS: Day 68 launch regression succeeded =========="
+echo "========== PASS: launch regression succeeded =========="

@@ -1,13 +1,19 @@
 #!/usr/bin/env python3
+# Copyright 2026 Devansh Mishra
+#
+# Use of this source code is governed by an MIT-style
+# license that can be found in the LICENSE file or at
+# https://opensource.org/licenses/MIT.
+
 
 import csv
 import math
 from pathlib import Path
 from typing import Optional
 
-import rclpy
 from geometry_msgs.msg import PoseWithCovarianceStamped
 from nav_msgs.msg import Odometry
+import rclpy
 from rclpy.node import Node
 
 
@@ -38,15 +44,15 @@ def pose_from_odom(msg: Odometry) -> tuple[float, float, float]:
 
 class Day108FusionRecorder(Node):
     def __init__(self) -> None:
-        super().__init__("day108_fusion_analysis")
+        super().__init__('localization_fusion_recorder')
 
         self.declare_parameter(
-            "output_csv",
-            "plots/day108/fusion_comparison.csv",
+            'output_csv',
+            'plots/localization_fusion/fusion_comparison.csv',
         )
 
         output_csv = (
-            self.get_parameter("output_csv")
+            self.get_parameter('output_csv')
             .get_parameter_value()
             .string_value
         )
@@ -66,67 +72,67 @@ class Day108FusionRecorder(Node):
         self.start_time = self.get_clock().now()
 
         self.csv_file = self.output_path.open(
-            "w",
-            newline="",
-            encoding="utf-8",
+            'w',
+            newline='',
+            encoding='utf-8',
         )
 
         self.writer = csv.writer(self.csv_file)
 
         self.writer.writerow(
             [
-                "time_sec",
-                "amcl_x",
-                "amcl_y",
-                "amcl_yaw",
-                "raw_x",
-                "raw_y",
-                "raw_yaw",
-                "noisy_x",
-                "noisy_y",
-                "noisy_yaw",
-                "ekf_x",
-                "ekf_y",
-                "ekf_yaw",
-                "raw_position_error",
-                "noisy_position_error",
-                "ekf_position_error",
-                "raw_yaw_error",
-                "noisy_yaw_error",
-                "ekf_yaw_error",
+                'time_sec',
+                'amcl_x',
+                'amcl_y',
+                'amcl_yaw',
+                'raw_x',
+                'raw_y',
+                'raw_yaw',
+                'noisy_x',
+                'noisy_y',
+                'noisy_yaw',
+                'ekf_x',
+                'ekf_y',
+                'ekf_yaw',
+                'raw_position_error',
+                'noisy_position_error',
+                'ekf_position_error',
+                'raw_yaw_error',
+                'noisy_yaw_error',
+                'ekf_yaw_error',
             ]
         )
 
         self.create_subscription(
             Odometry,
-            "/diff_drive_controller/odom",
+            '/diff_drive_controller/odom',
             self.raw_callback,
             30,
         )
 
         self.create_subscription(
             Odometry,
-            "/odom_noisy",
+            '/odom_noisy',
             self.noisy_callback,
             30,
         )
 
         self.create_subscription(
             Odometry,
-            "/odometry/filtered",
+            '/odometry/filtered',
             self.ekf_callback,
             30,
         )
 
         self.create_subscription(
             PoseWithCovarianceStamped,
-            "/amcl_pose",
+            '/amcl_pose',
             self.amcl_callback,
             30,
         )
 
         self.get_logger().info(
-            f"Day 108 recorder writing to: {self.output_path}"
+            f'Localization fusion recorder writing to: {self.output_path}'
         )
 
     def raw_callback(self, msg: Odometry) -> None:
@@ -160,7 +166,7 @@ class Day108FusionRecorder(Node):
         self.initialized = True
 
         self.get_logger().info(
-            "Captured fixed initial map-to-odom alignment"
+            'Captured fixed initial map-to-odom alignment'
         )
 
     def align(
@@ -317,5 +323,5 @@ def main(args=None) -> None:
             rclpy.shutdown()
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

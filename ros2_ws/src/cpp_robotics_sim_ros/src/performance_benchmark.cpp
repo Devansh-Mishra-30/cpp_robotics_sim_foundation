@@ -1,5 +1,12 @@
+// Copyright 2026 Devansh Mishra
+//
+// Use of this source code is governed by an MIT-style
+// license that can be found in the LICENSE file or at
+// https://opensource.org/licenses/MIT.
+
 #include <chrono>
 #include <cmath>
+#include <cstdint>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
@@ -7,7 +14,7 @@
 #include <string>
 #include <vector>
 
-#include "cpp_robotics_sim_ros/day86_testable_core.hpp"
+#include "cpp_robotics_sim_ros/core_math.hpp"
 
 namespace
 {
@@ -32,7 +39,7 @@ struct BenchmarkResult
   int steps{0};
   int virtual_robot_count{0};
   int trials{0};
-  long long total_updates{0};
+  std::int64_t total_updates{0};
 
   double mean_total_wall_ms{0.0};
   double mean_avg_step_us{0.0};
@@ -86,7 +93,7 @@ BenchmarkConfig parseArguments(int argc, char ** argv)
       config.trials = parseInt(require_next_value(arg), arg);
     } else if (arg == "--help") {
       std::cout
-        << "Day 88 Performance Benchmark\n\n"
+        << "Performance Benchmark\n\n"
         << "Options:\n"
         << "  --output <path>          Output CSV path\n"
         << "  --report <path>          Output Markdown report path\n"
@@ -143,7 +150,8 @@ BenchmarkResult runBenchmarkForDt(
   result.virtual_robot_count = config.virtual_robot_count;
   result.trials = config.trials;
   result.total_updates =
-    static_cast<long long>(steps) * static_cast<long long>(config.virtual_robot_count);
+    static_cast<std::int64_t>(steps) *
+    static_cast<std::int64_t>(config.virtual_robot_count);
 
   double sum_total_wall_ms = 0.0;
   double sum_avg_step_us = 0.0;
@@ -265,7 +273,7 @@ void writeMarkdownReport(
     throw std::runtime_error("Failed to open Markdown report file: " + output_path);
   }
 
-  file << "# Day 88 - Performance Benchmark Report\n\n";
+  file << "# Performance Benchmark Report\n\n";
 
   file << "## Purpose\n\n";
   file
@@ -341,7 +349,7 @@ void writeMarkdownReport(
 
 void printSummary(const std::vector<BenchmarkResult> & results)
 {
-  std::cout << "\nDay 88 Performance Benchmark Results\n";
+  std::cout << "\nPerformance Benchmark Results\n";
   std::cout << "------------------------------------\n";
   std::cout
     << std::setw(10) << "dt"
@@ -391,7 +399,7 @@ int main(int argc, char ** argv)
 
     return 0;
   } catch (const std::exception & error) {
-    std::cerr << "Day 88 benchmark failed: " << error.what() << "\n";
+    std::cerr << "Performance benchmark failed: " << error.what() << "\n";
     return 1;
   }
 }

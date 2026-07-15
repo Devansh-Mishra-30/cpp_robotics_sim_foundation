@@ -1,7 +1,13 @@
+// Copyright 2026 Devansh Mishra
+//
+// Use of this source code is governed by an MIT-style
+// license that can be found in the LICENSE file or at
+// https://opensource.org/licenses/MIT.
+
 #pragma once
 
 /*
-  Day 86 - Testable Core Math and Pose Utilities
+  Testable Core Math and Pose Utilities
 
   Why this file exists:
   ---------------------
@@ -24,7 +30,7 @@
 
   That makes them ideal for GoogleTest.
 
-  Day 86 tests:
+  Core math tests:
     1. clamp()
     2. wrapToPi()
     3. integratePose()
@@ -39,12 +45,12 @@ namespace cpp_robotics_sim_ros
 {
 
     // Simple 2D robot pose used for testing planar mobile robot kinematics.
-    struct Pose2D
-    {
-        double x{ 0.0 };
-        double y{ 0.0 };
-        double theta{ 0.0 };
-    };
+struct Pose2D
+{
+  double x{0.0};
+  double y{0.0};
+  double theta{0.0};
+};
 
     /*
       clamp(value, min_value, max_value)
@@ -70,22 +76,22 @@ namespace cpp_robotics_sim_ros
       If min_value > max_value, this function throws an exception.
       That catches configuration mistakes early.
     */
-    inline double clamp(double value, double min_value, double max_value)
-    {
-        if (min_value > max_value) {
-            throw std::invalid_argument("clamp() received min_value greater than max_value");
-        }
+inline double clamp(double value, double min_value, double max_value)
+{
+  if (min_value > max_value) {
+    throw std::invalid_argument("clamp() received min_value greater than max_value");
+  }
 
-        if (value < min_value) {
-            return min_value;
-        }
+  if (value < min_value) {
+    return min_value;
+  }
 
-        if (value > max_value) {
-            return max_value;
-        }
+  if (value > max_value) {
+    return max_value;
+  }
 
-        return value;
-    }
+  return value;
+}
 
     /*
       wrapToPi(angle)
@@ -118,19 +124,19 @@ namespace cpp_robotics_sim_ros
 
       But physically, 0 and 2pi represent the same orientation.
     */
-    inline double wrapToPi(double angle)
-    {
-        constexpr double PI = 3.14159265358979323846;
-        constexpr double TWO_PI = 2.0 * PI;
+inline double wrapToPi(double angle)
+{
+  constexpr double PI = 3.14159265358979323846;
+  constexpr double TWO_PI = 2.0 * PI;
 
-        angle = std::fmod(angle + PI, TWO_PI);
+  angle = std::fmod(angle + PI, TWO_PI);
 
-        if (angle < 0.0) {
-            angle += TWO_PI;
-        }
+  if (angle < 0.0) {
+    angle += TWO_PI;
+  }
 
-        return angle - PI;
-    }
+  return angle - PI;
+}
 
     /*
       integratePose(pose, linear_velocity, angular_velocity, dt)
@@ -161,23 +167,23 @@ namespace cpp_robotics_sim_ros
       This is a kinematic update, not a full physics simulation.
       Gazebo handles physics separately.
     */
-    inline Pose2D integratePose(
-        const Pose2D& pose,
-        double linear_velocity,
-        double angular_velocity,
-        double dt)
-    {
-        if (dt < 0.0) {
-            throw std::invalid_argument("integratePose() received negative dt");
-        }
+inline Pose2D integratePose(
+  const Pose2D & pose,
+  double linear_velocity,
+  double angular_velocity,
+  double dt)
+{
+  if (dt < 0.0) {
+    throw std::invalid_argument("integratePose() received negative dt");
+  }
 
-        Pose2D next_pose;
+  Pose2D next_pose;
 
-        next_pose.x = pose.x + linear_velocity * std::cos(pose.theta) * dt;
-        next_pose.y = pose.y + linear_velocity * std::sin(pose.theta) * dt;
-        next_pose.theta = wrapToPi(pose.theta + angular_velocity * dt);
+  next_pose.x = pose.x + linear_velocity * std::cos(pose.theta) * dt;
+  next_pose.y = pose.y + linear_velocity * std::sin(pose.theta) * dt;
+  next_pose.theta = wrapToPi(pose.theta + angular_velocity * dt);
 
-        return next_pose;
-    }
+  return next_pose;
+}
 
 }  // namespace cpp_robotics_sim_ros

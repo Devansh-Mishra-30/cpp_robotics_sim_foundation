@@ -1,13 +1,19 @@
 #!/usr/bin/env python3
+# Copyright 2026 Devansh Mishra
+#
+# Use of this source code is governed by an MIT-style
+# license that can be found in the LICENSE file or at
+# https://opensource.org/licenses/MIT.
+
 
 import json
 import math
-import re
 from pathlib import Path
+import re
 from typing import Optional
 
-import rclpy
 from geometry_msgs.msg import PoseWithCovarianceStamped
+import rclpy
 from rclpy.node import Node
 from rclpy.qos import (
     DurabilityPolicy,
@@ -33,46 +39,46 @@ class LocalizationManagerNode(Node):
     """
 
     MAP_NAME_PATTERN = re.compile(
-        r"^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$"
+        r'^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$'
     )
 
     def __init__(self) -> None:
-        super().__init__("localization_manager")
+        super().__init__('localization_manager')
 
         self.declare_parameter(
-            "map_directory",
+            'map_directory',
             str(
                 Path.home()
-                / ".ros"
-                / "cpp_robotics_sim"
-                / "maps"
+                / '.ros'
+                / 'cpp_robotics_sim'
+                / 'maps'
             ),
         )
         self.declare_parameter(
-            "position_covariance",
+            'position_covariance',
             0.25,
         )
         self.declare_parameter(
-            "yaw_covariance",
+            'yaw_covariance',
             0.06853891945200942,
         )
 
         self.map_directory = Path(
             str(
                 self.get_parameter(
-                    "map_directory"
+                    'map_directory'
                 ).value
             )
         ).expanduser()
 
         self.position_covariance = float(
             self.get_parameter(
-                "position_covariance"
+                'position_covariance'
             ).value
         )
         self.yaw_covariance = float(
             self.get_parameter(
-                "yaw_covariance"
+                'yaw_covariance'
             ).value
         )
 
@@ -88,21 +94,21 @@ class LocalizationManagerNode(Node):
         self.selected_map_publisher = (
             self.create_publisher(
                 String,
-                "/localization/selected_map",
+                '/localization/selected_map',
                 transient_qos,
             )
         )
 
         self.status_publisher = self.create_publisher(
             String,
-            "/localization/status",
+            '/localization/status',
             transient_qos,
         )
 
         self.initial_pose_publisher = (
             self.create_publisher(
                 PoseWithCovarianceStamped,
-                "/initialpose",
+                '/initialpose',
                 10,
             )
         )
@@ -110,7 +116,7 @@ class LocalizationManagerNode(Node):
         self.select_map_subscription = (
             self.create_subscription(
                 String,
-                "/localization/select_map_request",
+                '/localization/select_map_request',
                 self.select_map_callback,
                 10,
             )
@@ -119,7 +125,7 @@ class LocalizationManagerNode(Node):
         self.initial_pose_subscription = (
             self.create_subscription(
                 String,
-                "/localization/initial_pose_request",
+                '/localization/initial_pose_request',
                 self.initial_pose_callback,
                 10,
             )
@@ -127,7 +133,7 @@ class LocalizationManagerNode(Node):
 
         self.mode_subscription = self.create_subscription(
             String,
-            "/mode/status",
+            '/mode/status',
             self.mode_status_callback,
             transient_qos,
         )
@@ -135,7 +141,7 @@ class LocalizationManagerNode(Node):
         self.simulation_subscription = (
             self.create_subscription(
                 String,
-                "/simulation/status",
+                '/simulation/status',
                 self.simulation_status_callback,
                 transient_qos,
             )
@@ -144,39 +150,39 @@ class LocalizationManagerNode(Node):
         self.environment_subscription = (
             self.create_subscription(
                 String,
-                "/simulation/environment_status",
+                '/simulation/environment_status',
                 self.environment_status_callback,
                 transient_qos,
             )
         )
 
-        self.selected_map_name = ""
-        self.selected_map_path = ""
-        self.selected_map_environment = ""
-        self.selected_environment = ""
-        self.mode_state = "stopped"
-        self.simulation_state = "stopped"
+        self.selected_map_name = ''
+        self.selected_map_path = ''
+        self.selected_map_environment = ''
+        self.selected_environment = ''
+        self.mode_state = 'stopped'
+        self.simulation_state = 'stopped'
 
         self.publish_status(
-            status="ready",
-            message="Localization manager ready",
+            status='ready',
+            message='Localization manager ready',
         )
 
         self.publish_selected_map()
 
         self.get_logger().info(
-            "Localization manager ready"
+            'Localization manager ready'
         )
 
     def validate_parameters(self) -> None:
         if self.position_covariance <= 0.0:
             raise ValueError(
-                "position_covariance must be positive"
+                'position_covariance must be positive'
             )
 
         if self.yaw_covariance <= 0.0:
             raise ValueError(
-                "yaw_covariance must be positive"
+                'yaw_covariance must be positive'
             )
 
     def mode_status_callback(
@@ -199,14 +205,14 @@ class LocalizationManagerNode(Node):
             payload = json.loads(message.data)
         except json.JSONDecodeError:
             self.get_logger().warning(
-                "Ignoring malformed environment status"
+                'Ignoring malformed environment status'
             )
             return
 
         environment = str(
             payload.get(
-                "selected_environment",
-                "",
+                'selected_environment',
+                '',
             )
         ).strip().lower()
 
@@ -224,19 +230,19 @@ class LocalizationManagerNode(Node):
         if (
             environment_changed
             and self.selected_map_environment
-            not in ("", "legacy", environment)
+            not in ('', 'legacy', environment)
         ):
-            self.selected_map_name = ""
-            self.selected_map_path = ""
-            self.selected_map_environment = ""
+            self.selected_map_name = ''
+            self.selected_map_path = ''
+            self.selected_map_environment = ''
 
             self.publish_selected_map()
 
             self.publish_status(
-                status="ready",
+                status='ready',
                 message=(
-                    "Selected map cleared because the "
-                    "simulation environment changed"
+                    'Selected map cleared because the '
+                    'simulation environment changed'
                 ),
             )
 
@@ -255,8 +261,8 @@ class LocalizationManagerNode(Node):
             candidate_path.relative_to(resolved_root)
         except ValueError as error:
             raise ValueError(
-                "Resolved map path escapes the configured "
-                "map directory"
+                'Resolved map path escapes the configured '
+                'map directory'
             ) from error
 
         return candidate_path
@@ -267,16 +273,16 @@ class LocalizationManagerNode(Node):
     ) -> tuple[str, str]:
         raw_request = raw_request.strip()
 
-        if raw_request.startswith("{"):
+        if raw_request.startswith('{'):
             payload = json.loads(raw_request)
 
             map_name = str(
-                payload.get("name", "")
+                payload.get('name', '')
             ).strip()
 
             environment = str(
                 payload.get(
-                    "environment",
+                    'environment',
                     self.selected_environment,
                 )
             ).strip().lower()
@@ -299,8 +305,8 @@ class LocalizationManagerNode(Node):
             ValueError,
         ):
             self.publish_status(
-                status="error",
-                message="Invalid map-selection request",
+                status='error',
+                message='Invalid map-selection request',
             )
             return
 
@@ -308,10 +314,10 @@ class LocalizationManagerNode(Node):
             map_name
         ):
             self.publish_status(
-                status="error",
+                status='error',
                 message=(
-                    "Invalid map name. Use letters, "
-                    "numbers, underscores, or hyphens."
+                    'Invalid map name. Use letters, '
+                    'numbers, underscores, or hyphens.'
                 ),
             )
             return
@@ -321,24 +327,24 @@ class LocalizationManagerNode(Node):
                 self.resolve_path_within_root(
                     self.map_directory,
                     environment,
-                    f"{map_name}.yaml",
+                    f'{map_name}.yaml',
                 )
             )
 
             legacy_yaml_path = (
                 self.resolve_path_within_root(
                     self.map_directory,
-                    f"{map_name}.yaml",
+                    f'{map_name}.yaml',
                 )
             )
 
         except ValueError:
             self.publish_status(
-                status="error",
+                status='error',
                 message=(
-                    "Invalid map path. The requested map "
-                    "must remain inside the configured "
-                    "map directory."
+                    'Invalid map path. The requested map '
+                    'must remain inside the configured '
+                    'map directory.'
                 ),
                 map_name=map_name,
             )
@@ -349,19 +355,19 @@ class LocalizationManagerNode(Node):
             map_environment = environment
         elif legacy_yaml_path.is_file():
             yaml_path = legacy_yaml_path
-            map_environment = "legacy"
+            map_environment = 'legacy'
         else:
             yaml_path = environment_yaml_path
             map_environment = environment
 
-        image_path = yaml_path.with_suffix(".pgm")
+        image_path = yaml_path.with_suffix('.pgm')
 
         if not yaml_path.is_file():
             self.publish_status(
-                status="error",
+                status='error',
                 message=(
-                    f"Map YAML does not exist: "
-                    f"{yaml_path}"
+                    f'Map YAML does not exist: '
+                    f'{yaml_path}'
                 ),
                 map_name=map_name,
             )
@@ -369,10 +375,10 @@ class LocalizationManagerNode(Node):
 
         if not image_path.is_file():
             self.publish_status(
-                status="error",
+                status='error',
                 message=(
-                    f"Map image does not exist: "
-                    f"{image_path}"
+                    f'Map image does not exist: '
+                    f'{image_path}'
                 ),
                 map_name=map_name,
             )
@@ -389,10 +395,10 @@ class LocalizationManagerNode(Node):
         self.publish_selected_map()
 
         self.publish_status(
-            status="success",
+            status='success',
             message=(
                 f"Map '{map_name}' selected for "
-                f"{self.selected_map_environment}"
+                f'{self.selected_map_environment}'
             ),
             map_name=map_name,
             environment=(
@@ -402,42 +408,42 @@ class LocalizationManagerNode(Node):
         )
 
         self.get_logger().info(
-            f"Selected map: {self.selected_map_path}"
+            f'Selected map: {self.selected_map_path}'
         )
 
     def initial_pose_callback(
         self,
         message: String,
     ) -> None:
-        if self.simulation_state != "running":
+        if self.simulation_state != 'running':
             self.publish_status(
-                status="error",
+                status='error',
                 message=(
-                    "Simulation must be running before "
-                    "setting the initial pose"
+                    'Simulation must be running before '
+                    'setting the initial pose'
                 ),
             )
             return
 
         if self.mode_state not in (
-            "localization",
-            "navigation",
+            'localization',
+            'navigation',
         ):
             self.publish_status(
-                status="error",
+                status='error',
                 message=(
-                    "Localization or Navigation mode "
-                    "must be active"
+                    'Localization or Navigation mode '
+                    'must be active'
                 ),
             )
             return
 
         if not self.selected_map_path:
             self.publish_status(
-                status="error",
+                status='error',
                 message=(
-                    "Select a saved map before setting "
-                    "the initial pose"
+                    'Select a saved map before setting '
+                    'the initial pose'
                 ),
             )
             return
@@ -445,9 +451,9 @@ class LocalizationManagerNode(Node):
         try:
             payload = json.loads(message.data)
 
-            x = float(payload["x"])
-            y = float(payload["y"])
-            yaw = float(payload["yaw"])
+            x = float(payload['x'])
+            y = float(payload['y'])
+            yaw = float(payload['yaw'])
 
         except (
             json.JSONDecodeError,
@@ -456,10 +462,10 @@ class LocalizationManagerNode(Node):
             ValueError,
         ):
             self.publish_status(
-                status="error",
+                status='error',
                 message=(
-                    "Initial pose must contain numeric "
-                    "x, y, and yaw values"
+                    'Initial pose must contain numeric '
+                    'x, y, and yaw values'
                 ),
             )
             return
@@ -469,9 +475,9 @@ class LocalizationManagerNode(Node):
             for value in (x, y, yaw)
         ):
             self.publish_status(
-                status="error",
+                status='error',
                 message=(
-                    "Initial pose values must be finite"
+                    'Initial pose values must be finite'
                 ),
             )
             return
@@ -481,7 +487,7 @@ class LocalizationManagerNode(Node):
         pose_message.header.stamp = (
             self.get_clock().now().to_msg()
         )
-        pose_message.header.frame_id = "map"
+        pose_message.header.frame_id = 'map'
 
         pose_message.pose.pose.position.x = x
         pose_message.pose.pose.position.y = y
@@ -508,29 +514,29 @@ class LocalizationManagerNode(Node):
         )
 
         self.publish_status(
-            status="success",
+            status='success',
             message=(
-                "Initial pose published: "
-                f"x={x:.2f}, y={y:.2f}, "
-                f"yaw={yaw:.2f} rad"
+                'Initial pose published: '
+                f'x={x:.2f}, y={y:.2f}, '
+                f'yaw={yaw:.2f} rad'
             ),
             map_name=self.selected_map_name,
             yaml_path=self.selected_map_path,
         )
 
         self.get_logger().info(
-            "Published AMCL initial pose: "
-            f"x={x:.3f}, y={y:.3f}, "
-            f"yaw={yaw:.3f}"
+            'Published AMCL initial pose: '
+            f'x={x:.3f}, y={y:.3f}, '
+            f'yaw={yaw:.3f}'
         )
 
     def publish_selected_map(self) -> None:
         payload = {
-            "name": self.selected_map_name,
-            "environment": (
+            'name': self.selected_map_name,
+            'environment': (
                 self.selected_map_environment
             ),
-            "yaml_path": self.selected_map_path,
+            'yaml_path': self.selected_map_path,
         }
 
         message = String()
@@ -547,16 +553,16 @@ class LocalizationManagerNode(Node):
         self,
         status: str,
         message: str,
-        map_name: str = "",
-        environment: str = "",
-        yaml_path: str = "",
+        map_name: str = '',
+        environment: str = '',
+        yaml_path: str = '',
     ) -> None:
         payload = {
-            "status": status,
-            "message": message,
-            "map_name": map_name,
-            "environment": environment,
-            "yaml_path": yaml_path,
+            'status': status,
+            'message': message,
+            'map_name': map_name,
+            'environment': environment,
+            'yaml_path': yaml_path,
         }
 
         ros_message = String()
@@ -590,5 +596,5 @@ def main(args=None) -> None:
             rclpy.shutdown()
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

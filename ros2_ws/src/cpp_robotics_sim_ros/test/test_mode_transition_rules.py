@@ -1,20 +1,26 @@
 #!/usr/bin/env python3
+# Copyright 2026 Devansh Mishra
+#
+# Use of this source code is governed by an MIT-style
+# license that can be found in the LICENSE file or at
+# https://opensource.org/licenses/MIT.
+
 
 import importlib.util
-import threading
 from pathlib import Path
+import threading
 from types import ModuleType
 
 
 def load_mode_manager_module() -> ModuleType:
     script_path = (
         Path(__file__).resolve().parents[1]
-        / "scripts"
-        / "mode_manager_node.py"
+        / 'scripts'
+        / 'mode_manager_node.py'
     )
 
     specification = importlib.util.spec_from_file_location(
-        "mode_manager_node",
+        'mode_manager_node',
         script_path,
     )
 
@@ -23,7 +29,7 @@ def load_mode_manager_module() -> ModuleType:
         or specification.loader is None
     ):
         raise RuntimeError(
-            "Unable to load mode manager module"
+            'Unable to load mode manager module'
         )
 
     module = importlib.util.module_from_spec(
@@ -38,26 +44,26 @@ ModeManagerNode = MODULE.ModeManagerNode
 OperatingMode = MODULE.OperatingMode
 
 
-class TestLogger:
+class FakeLogger:
     def __init__(self) -> None:
         self.messages = []
 
     def warning(self, message: str) -> None:
-        self.messages.append(("warning", message))
+        self.messages.append(('warning', message))
 
     def info(self, message: str) -> None:
-        self.messages.append(("info", message))
+        self.messages.append(('info', message))
 
     def error(self, message: str) -> None:
-        self.messages.append(("error", message))
+        self.messages.append(('error', message))
 
 
 def make_manager(
     *,
-    simulation_state: str = "running",
+    simulation_state: str = 'running',
     mode=OperatingMode.STOPPED,
-    selected_map_path: str = "",
-    stop_result=(True, "Operating mode stopped"),
+    selected_map_path: str = '',
+    stop_result=(True, 'Operating mode stopped'),
 ):
     manager = object.__new__(ModeManagerNode)
 
@@ -67,13 +73,13 @@ def make_manager(
     manager.requested_mode = mode
 
     manager.selected_map_name = (
-        "test_map"
+        'test_map'
         if selected_map_path
-        else ""
+        else ''
     )
     manager.selected_map_path = selected_map_path
 
-    manager.last_error = ""
+    manager.last_error = ''
     manager.process = None
     manager.process_group_id = None
 
@@ -81,18 +87,18 @@ def make_manager(
     manager.startup_grace_period = 0.0
 
     manager.launch_package = (
-        "cpp_robotics_sim_ros"
+        'cpp_robotics_sim_ros'
     )
     manager.launch_files = {
         OperatingMode.MAPPING:
-            "slam_mapping.launch.py",
+            'slam_mapping.launch.py',
         OperatingMode.LOCALIZATION:
-            "amcl_localization.launch.py",
+            'amcl_localization.launch.py',
         OperatingMode.NAVIGATION:
-            "nav2_navigation.launch.py",
+            'nav2_navigation.launch.py',
     }
 
-    logger = TestLogger()
+    logger = FakeLogger()
     published_modes = []
     stop_calls = []
 
@@ -121,7 +127,7 @@ def make_manager(
 def test_rejects_mode_when_simulation_is_stopped() -> None:
     manager, _, published_modes, stop_calls = (
         make_manager(
-            simulation_state="stopped"
+            simulation_state='stopped'
         )
     )
 
@@ -130,7 +136,7 @@ def test_rejects_mode_when_simulation_is_stopped() -> None:
     )
 
     assert success is False
-    assert "Simulation must be running" in message
+    assert 'Simulation must be running' in message
     assert published_modes == []
     assert stop_calls == []
 
@@ -145,8 +151,8 @@ def test_localization_requires_selected_map() -> None:
     )
 
     assert success is False
-    assert "Select a saved map" in message
-    assert "Localization" in message
+    assert 'Select a saved map' in message
+    assert 'Localization' in message
     assert published_modes == []
     assert stop_calls == []
 
@@ -161,8 +167,8 @@ def test_navigation_requires_selected_map() -> None:
     )
 
     assert success is False
-    assert "Select a saved map" in message
-    assert "Navigation" in message
+    assert 'Select a saved map' in message
+    assert 'Navigation' in message
     assert published_modes == []
     assert stop_calls == []
 
@@ -179,7 +185,7 @@ def test_rejects_already_active_mode() -> None:
     )
 
     assert success is False
-    assert "already active" in message
+    assert 'already active' in message
     assert published_modes == []
     assert stop_calls == []
 
@@ -196,7 +202,7 @@ def test_manual_mode_stops_previous_mode_first() -> None:
     )
 
     assert success is True
-    assert message == "Manual mode activated"
+    assert message == 'Manual mode activated'
     assert len(stop_calls) == 1
     assert published_modes == [
         OperatingMode.MANUAL
@@ -212,7 +218,7 @@ def test_failed_stop_prevents_mode_change() -> None:
             mode=OperatingMode.MAPPING,
             stop_result=(
                 False,
-                "process did not stop",
+                'process did not stop',
             ),
         )
     )
@@ -222,7 +228,7 @@ def test_failed_stop_prevents_mode_change() -> None:
     )
 
     assert success is False
-    assert "Unable to stop previous mode" in message
-    assert "process did not stop" in message
+    assert 'Unable to stop previous mode' in message
+    assert 'process did not stop' in message
     assert len(stop_calls) == 1
     assert published_modes == []

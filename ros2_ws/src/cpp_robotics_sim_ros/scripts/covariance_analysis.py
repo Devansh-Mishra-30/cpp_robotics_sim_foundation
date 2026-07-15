@@ -1,21 +1,27 @@
 #!/usr/bin/env python3
+# Copyright 2026 Devansh Mishra
+#
+# Use of this source code is governed by an MIT-style
+# license that can be found in the LICENSE file or at
+# https://opensource.org/licenses/MIT.
+
 
 import argparse
 import math
+from pathlib import Path
 import statistics
 import time
-from pathlib import Path
 from typing import List
 
-import rclpy
 from nav_msgs.msg import Odometry
+import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Imu
 
 
 class CovarianceAnalysisNode(Node):
     def __init__(self, duration: float, output_path: Path) -> None:
-        super().__init__("day107_covariance_analysis")
+        super().__init__('covariance_analysis')
 
         self.duration = duration
         self.output_path = output_path
@@ -37,21 +43,21 @@ class CovarianceAnalysisNode(Node):
 
         self.create_subscription(
             Odometry,
-            "/diff_drive_controller/odom",
+            '/diff_drive_controller/odom',
             self.raw_odom_callback,
             50,
         )
 
         self.create_subscription(
             Imu,
-            "/imu/data",
+            '/imu/data',
             self.imu_callback,
             100,
         )
 
         self.create_subscription(
             Odometry,
-            "/odometry/filtered",
+            '/odometry/filtered',
             self.filtered_odom_callback,
             50,
         )
@@ -59,7 +65,7 @@ class CovarianceAnalysisNode(Node):
         self.timer = self.create_timer(0.2, self.timer_callback)
 
         self.get_logger().info(
-            f"Recording covariance data for {self.duration:.1f} seconds"
+            f'Recording covariance data for {self.duration:.1f} seconds'
         )
 
     def raw_odom_callback(self, msg: Odometry) -> None:
@@ -126,13 +132,13 @@ class CovarianceAnalysisNode(Node):
         unit: str,
     ) -> str:
         return (
-            f"### {name}\n\n"
-            f"- Samples: {len(values)}\n"
-            f"- Mean: {self.safe_mean(values):.8f} {unit}\n"
-            f"- Standard deviation: "
-            f"{self.safe_stddev(values):.8f} {unit}\n"
-            f"- Minimum: {self.safe_min(values):.8f} {unit}\n"
-            f"- Maximum: {self.safe_max(values):.8f} {unit}\n"
+            f'### {name}\n\n'
+            f'- Samples: {len(values)}\n'
+            f'- Mean: {self.safe_mean(values):.8f} {unit}\n'
+            f'- Standard deviation: '
+            f'{self.safe_stddev(values):.8f} {unit}\n'
+            f'- Minimum: {self.safe_min(values):.8f} {unit}\n'
+            f'- Maximum: {self.safe_max(values):.8f} {unit}\n'
         )
 
     def write_report(self) -> None:
@@ -141,7 +147,7 @@ class CovarianceAnalysisNode(Node):
             exist_ok=True,
         )
 
-        report = """# Day 107 Covariance Analysis
+        report = """# Covariance analysis Covariance Analysis
 
 ## Purpose
 
@@ -154,41 +160,41 @@ values published by each source.
 """
 
         report += self.format_statistics(
-            "Raw wheel odometry linear velocity",
+            'Raw wheel odometry linear velocity',
             self.raw_linear_x,
-            "m/s",
+            'm/s',
         )
 
-        report += "\n"
+        report += '\n'
 
         report += self.format_statistics(
-            "Raw wheel odometry yaw rate",
+            'Raw wheel odometry yaw rate',
             self.raw_yaw_rate,
-            "rad/s",
+            'rad/s',
         )
 
-        report += "\n"
+        report += '\n'
 
         report += self.format_statistics(
-            "Raw IMU yaw rate",
+            'Raw IMU yaw rate',
             self.imu_yaw_rate,
-            "rad/s",
+            'rad/s',
         )
 
-        report += "\n"
+        report += '\n'
 
         report += self.format_statistics(
-            "Filtered linear velocity",
+            'Filtered linear velocity',
             self.filtered_linear_x,
-            "m/s",
+            'm/s',
         )
 
-        report += "\n"
+        report += '\n'
 
         report += self.format_statistics(
-            "Filtered yaw rate",
+            'Filtered yaw rate',
             self.filtered_yaw_rate,
-            "rad/s",
+            'rad/s',
         )
 
         report += f"""
@@ -230,30 +236,30 @@ inside the Kalman filter.
 
         self.output_path.write_text(
             report,
-            encoding="utf-8",
+            encoding='utf-8',
         )
 
         self.get_logger().info(
-            f"Day 107 report saved to: {self.output_path}"
+            f'Covariance analysis report saved to: {self.output_path}'
         )
 
 
 def main(args=None) -> None:
     parser = argparse.ArgumentParser(
-        description="Analyze Day 107 EKF covariance behavior."
+        description='Analyze Covariance analysis EKF covariance behavior.'
     )
 
     parser.add_argument(
-        "--duration",
+        '--duration',
         type=float,
         default=20.0,
-        help="Recording duration in seconds.",
+        help='Recording duration in seconds.',
     )
 
     parser.add_argument(
-        "--output",
+        '--output',
         required=True,
-        help="Output Markdown report path.",
+        help='Output Markdown report path.',
     )
 
     parsed_args, ros_args = parser.parse_known_args(args=args)
@@ -276,5 +282,5 @@ def main(args=None) -> None:
             rclpy.shutdown()
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

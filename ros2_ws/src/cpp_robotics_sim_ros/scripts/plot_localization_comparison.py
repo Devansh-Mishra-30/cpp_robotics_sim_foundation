@@ -1,4 +1,10 @@
 #!/usr/bin/env python3
+# Copyright 2026 Devansh Mishra
+#
+# Use of this source code is governed by an MIT-style
+# license that can be found in the LICENSE file or at
+# https://opensource.org/licenses/MIT.
+
 
 import argparse
 import csv
@@ -11,11 +17,11 @@ import matplotlib.pyplot as plt
 def load_csv(path: Path) -> dict[str, list[float]]:
     columns: dict[str, list[float]] = {}
 
-    with path.open(newline="", encoding="utf-8") as csv_file:
+    with path.open(newline='', encoding='utf-8') as csv_file:
         reader = csv.DictReader(csv_file)
 
         if reader.fieldnames is None:
-            raise ValueError("CSV has no header.")
+            raise ValueError('CSV has no header.')
 
         for field in reader.fieldnames:
             columns[field] = []
@@ -24,17 +30,17 @@ def load_csv(path: Path) -> dict[str, list[float]]:
             for field in reader.fieldnames:
                 columns[field].append(float(row[field]))
 
-    if not columns["time_sec"]:
-        raise ValueError("CSV contains no data rows.")
+    if not columns['time_sec']:
+        raise ValueError('CSV contains no data rows.')
 
     return columns
 
 
 def calculate_metrics(data: dict[str, list[float]]) -> dict[str, float]:
-    position_errors = data["position_error_m"]
+    position_errors = data['position_error_m']
     absolute_yaw_errors = [
         abs(error)
-        for error in data["yaw_error_rad"]
+        for error in data['yaw_error_rad']
     ]
 
     position_rmse = math.sqrt(
@@ -48,18 +54,18 @@ def calculate_metrics(data: dict[str, list[float]]) -> dict[str, float]:
     )
 
     return {
-        "samples": float(len(position_errors)),
-        "mean_position_error": (
+        'samples': float(len(position_errors)),
+        'mean_position_error': (
             sum(position_errors) / len(position_errors)
         ),
-        "max_position_error": max(position_errors),
-        "position_rmse": position_rmse,
-        "mean_absolute_yaw_error": (
+        'max_position_error': max(position_errors),
+        'position_rmse': position_rmse,
+        'mean_absolute_yaw_error': (
             sum(absolute_yaw_errors)
             / len(absolute_yaw_errors)
         ),
-        "max_absolute_yaw_error": max(absolute_yaw_errors),
-        "yaw_rmse": yaw_rmse,
+        'max_absolute_yaw_error': max(absolute_yaw_errors),
+        'yaw_rmse': yaw_rmse,
     }
 
 
@@ -70,23 +76,23 @@ def save_trajectory_plot(
     plt.figure(figsize=(8, 7))
 
     plt.plot(
-        data["amcl_x"],
-        data["amcl_y"],
-        marker="o",
-        label="AMCL",
+        data['amcl_x'],
+        data['amcl_y'],
+        marker='o',
+        label='AMCL',
     )
 
     plt.plot(
-        data["odom_aligned_x"],
-        data["odom_aligned_y"],
-        marker="x",
-        label="Aligned wheel odometry",
+        data['odom_aligned_x'],
+        data['odom_aligned_y'],
+        marker='x',
+        label='Aligned wheel odometry',
     )
 
-    plt.xlabel("X position [m]")
-    plt.ylabel("Y position [m]")
-    plt.title("Day 104: AMCL vs Wheel Odometry Trajectory")
-    plt.axis("equal")
+    plt.xlabel('X position [m]')
+    plt.ylabel('Y position [m]')
+    plt.title('Localization comparison: AMCL vs Wheel Odometry Trajectory')
+    plt.axis('equal')
     plt.grid(True)
     plt.legend()
     plt.tight_layout()
@@ -98,24 +104,24 @@ def save_position_error_plot(
     data: dict[str, list[float]],
     output_path: Path,
 ) -> None:
-    initial_time = data["time_sec"][0]
+    initial_time = data['time_sec'][0]
 
     relative_time = [
         time_value - initial_time
-        for time_value in data["time_sec"]
+        for time_value in data['time_sec']
     ]
 
     plt.figure(figsize=(9, 5))
 
     plt.plot(
         relative_time,
-        data["position_error_m"],
-        marker="o",
+        data['position_error_m'],
+        marker='o',
     )
 
-    plt.xlabel("Elapsed recording time [s]")
-    plt.ylabel("Position error [m]")
-    plt.title("Day 104: Position Error")
+    plt.xlabel('Elapsed recording time [s]')
+    plt.ylabel('Position error [m]')
+    plt.title('Localization comparison: Position Error')
     plt.grid(True)
     plt.tight_layout()
     plt.savefig(output_path, dpi=200)
@@ -126,16 +132,16 @@ def save_yaw_error_plot(
     data: dict[str, list[float]],
     output_path: Path,
 ) -> None:
-    initial_time = data["time_sec"][0]
+    initial_time = data['time_sec'][0]
 
     relative_time = [
         time_value - initial_time
-        for time_value in data["time_sec"]
+        for time_value in data['time_sec']
     ]
 
     yaw_error_degrees = [
         math.degrees(error)
-        for error in data["yaw_error_rad"]
+        for error in data['yaw_error_rad']
     ]
 
     plt.figure(figsize=(9, 5))
@@ -143,12 +149,12 @@ def save_yaw_error_plot(
     plt.plot(
         relative_time,
         yaw_error_degrees,
-        marker="o",
+        marker='o',
     )
 
-    plt.xlabel("Elapsed recording time [s]")
-    plt.ylabel("Yaw error [degrees]")
-    plt.title("Day 104: Heading Error")
+    plt.xlabel('Elapsed recording time [s]')
+    plt.ylabel('Yaw error [degrees]')
+    plt.title('Localization comparison: Heading Error')
     plt.grid(True)
     plt.tight_layout()
     plt.savefig(output_path, dpi=200)
@@ -159,7 +165,7 @@ def write_report(
     metrics: dict[str, float],
     output_path: Path,
 ) -> None:
-    report = f"""# Day 104 Localization Comparison Results
+    report = f"""# Localization comparison Localization Comparison Results
 
 ## Samples
 
@@ -191,26 +197,26 @@ demonstrates the difference between dead-reckoned wheel odometry and
 scan-corrected map-frame localization.
 """
 
-    output_path.write_text(report, encoding="utf-8")
+    output_path.write_text(report, encoding='utf-8')
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(
         description=(
-            "Plot Day 104 AMCL and wheel-odometry comparison data."
+            'Plot Localization comparison AMCL and wheel-odometry comparison data.'
         )
     )
 
     parser.add_argument(
-        "--input",
+        '--input',
         required=True,
-        help="Path to the Day 104 CSV file.",
+        help='Path to the Localization comparison CSV file.',
     )
 
     parser.add_argument(
-        "--output-dir",
+        '--output-dir',
         required=True,
-        help="Directory for plots and the summary report.",
+        help='Directory for plots and the summary report.',
     )
 
     args = parser.parse_args()
@@ -220,7 +226,7 @@ def main() -> None:
 
     if not input_path.is_file():
         raise FileNotFoundError(
-            f"Input CSV does not exist: {input_path}"
+            f'Input CSV does not exist: {input_path}'
         )
 
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -229,19 +235,19 @@ def main() -> None:
     metrics = calculate_metrics(data)
 
     trajectory_path = (
-        output_dir / "day104_amcl_vs_odom_trajectory.png"
+        output_dir / 'localization_trajectory.png'
     )
 
     position_error_path = (
-        output_dir / "day104_position_error.png"
+        output_dir / 'localization_position_error.png'
     )
 
     yaw_error_path = (
-        output_dir / "day104_yaw_error.png"
+        output_dir / 'localization_yaw_error.png'
     )
 
     report_path = (
-        output_dir / "day104_localization_comparison_report.md"
+        output_dir / 'localization_comparison_report.md'
     )
 
     save_trajectory_plot(data, trajectory_path)
@@ -251,20 +257,20 @@ def main() -> None:
 
     print(f"Samples: {int(metrics['samples'])}")
     print(
-        "Position RMSE: "
+        'Position RMSE: '
         f"{metrics['position_rmse']:.4f} m"
     )
     print(
-        "Yaw RMSE: "
+        'Yaw RMSE: '
         f"{metrics['yaw_rmse']:.4f} rad "
         f"({math.degrees(metrics['yaw_rmse']):.2f} degrees)"
     )
 
-    print(f"Saved: {trajectory_path}")
-    print(f"Saved: {position_error_path}")
-    print(f"Saved: {yaw_error_path}")
-    print(f"Saved: {report_path}")
+    print(f'Saved: {trajectory_path}')
+    print(f'Saved: {position_error_path}')
+    print(f'Saved: {yaw_error_path}')
+    print(f'Saved: {report_path}')
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()
