@@ -5,6 +5,9 @@
 # license that can be found in the LICENSE file or at
 # https://opensource.org/licenses/MIT.
 
+"""Provide safe terminal keyboard teleoperation for the robot."""
+
+import math
 import os
 import select
 import sys
@@ -15,27 +18,17 @@ import tty
 from typing import Dict, Optional
 
 from geometry_msgs.msg import TwistStamped
+
 import rclpy
+from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 
 
 class KeyboardTeleopNode(Node):
-    """
-    Terminal keyboard teleoperation with combined-key support.
-
-    Controls:
-      W / Up Arrow       Forward
-      S / Down Arrow     Reverse
-      A / Left Arrow     Rotate left
-      D / Right Arrow    Rotate right
-      Space              Stop immediately
-      Q                   Quit
-
-    Each motion key has an independent timeout. This allows combinations
-    such as W+A, W+D, S+A and S+D using normal keyboard repeat behavior.
-    """
+    """Publish deadman-protected keyboard velocity commands."""
 
     def __init__(self) -> None:
+        """Initialize parameters, terminal state, and ROS interfaces."""
         super().__init__('keyboard_teleop')
 
         self.declare_parameter(
@@ -86,6 +79,7 @@ class KeyboardTeleopNode(Node):
 
         self.running = True
         self.quit_requested = False
+        self.shutdown_complete = False
 
         self.stdin_fd: Optional[int] = None
         self.original_terminal_settings = None
@@ -96,9 +90,14 @@ class KeyboardTeleopNode(Node):
             self.publish_current_command,
         )
 
-        self.configure_terminal()
-        self.start_input_thread()
-        self.print_instructions()
+        try:
+            self.configure_terminal()
+            self.start_input_thread()
+            self.print_instructions()
+        except Exception:
+            self.running = False
+            self.restore_terminal()
+            raise
 
         self.get_logger().info(
             f'Publishing keyboard commands to: {self.output_topic}'
@@ -113,33 +112,43 @@ class KeyboardTeleopNode(Node):
         )
 
     def validate_parameters(self) -> None:
-        if not self.output_topic:
+        """Validate all keyboard teleoperation parameters."""
+        if not self.output_topic.strip():
             raise ValueError('output_topic must not be empty')
 
-        if self.linear_speed <= 0.0:
-            raise ValueError(
-                'linear_speed must be greater than zero'
-            )
-
-        if self.angular_speed <= 0.0:
-            raise ValueError(
-                'angular_speed must be greater than zero'
-            )
-
-        if self.publish_rate <= 0.0:
-            raise ValueError(
-                'publish_rate must be greater than zero'
-            )
-
-        if self.deadman_timeout <= 0.0:
-            raise ValueError(
-                'deadman_timeout must be greater than zero'
-            )
-
-        if not self.frame_id:
+        if not self.frame_id.strip():
             raise ValueError('frame_id must not be empty')
 
+        self.require_positive_finite(
+            'linear_speed',
+            self.linear_speed,
+        )
+        self.require_positive_finite(
+            'angular_speed',
+            self.angular_speed,
+        )
+        self.require_positive_finite(
+            'publish_rate',
+            self.publish_rate,
+        )
+        self.require_positive_finite(
+            'deadman_timeout',
+            self.deadman_timeout,
+        )
+
+    @staticmethod
+    def require_positive_finite(
+        name: str,
+        value: float,
+    ) -> None:
+        """Require a finite numeric value greater than zero."""
+        if not math.isfinite(value) or value <= 0.0:
+            raise ValueError(
+                f'{name} must be finite and greater than zero'
+            )
+
     def configure_terminal(self) -> None:
+        """Configure standard input for immediate key processing."""
         if not sys.stdin.isatty():
             raise RuntimeError(
                 'Keyboard teleop requires an interactive terminal.'
@@ -153,18 +162,28 @@ class KeyboardTeleopNode(Node):
         tty.setraw(self.stdin_fd)
 
     def restore_terminal(self) -> None:
+        """Restore the terminal settings saved during initialization."""
         if (
-            self.stdin_fd is not None
-            and self.original_terminal_settings is not None
+            self.stdin_fd is None
+            or self.original_terminal_settings is None
         ):
+            return
+
+        try:
             termios.tcsetattr(
                 self.stdin_fd,
                 termios.TCSADRAIN,
                 self.original_terminal_settings,
             )
+        except termios.error as error:
+            self.get_logger().error(
+                f'Unable to restore terminal settings: {error}'
+            )
+        finally:
             self.original_terminal_settings = None
 
     def start_input_thread(self) -> None:
+        """Start the keyboard-reader thread."""
         self.input_thread = threading.Thread(
             target=self.keyboard_input_loop,
             name='keyboard_input',
@@ -173,6 +192,7 @@ class KeyboardTeleopNode(Node):
         self.input_thread.start()
 
     def keyboard_input_loop(self) -> None:
+        """Read and process terminal key events."""
         while self.running and rclpy.ok():
             try:
                 ready, _, _ = select.select(
@@ -192,7 +212,7 @@ class KeyboardTeleopNode(Node):
 
                 self.handle_key(key)
 
-            except OSError:
+            except (OSError, ValueError):
                 if self.running:
                     self.get_logger().exception(
                         'Keyboard input failed'
@@ -201,6 +221,7 @@ class KeyboardTeleopNode(Node):
 
     @staticmethod
     def read_escape_sequence() -> bytes:
+        """Read the remaining bytes of an arrow-key sequence."""
         sequence = b''
 
         for _ in range(2):
@@ -219,6 +240,7 @@ class KeyboardTeleopNode(Node):
         return sequence
 
     def handle_key(self, key: bytes) -> None:
+        """Update motion state for one keyboard event."""
         normalized_key = key.lower()
         now = time.monotonic()
 
@@ -255,10 +277,12 @@ class KeyboardTeleopNode(Node):
         key_name: str,
         timestamp: float,
     ) -> None:
+        """Record the latest activation time for a motion key."""
         with self.state_lock:
             self.key_times[key_name] = timestamp
 
     def clear_motion_keys(self) -> None:
+        """Clear every active motion key."""
         with self.state_lock:
             for key_name in self.key_times:
                 self.key_times[key_name] = None
@@ -268,12 +292,15 @@ class KeyboardTeleopNode(Node):
         key_name: str,
         now: float,
     ) -> bool:
+        """Return whether a motion key remains inside its timeout."""
         timestamp = self.key_times[key_name]
 
         if timestamp is None:
             return False
 
-        if now - timestamp > self.deadman_timeout:
+        elapsed = now - timestamp
+
+        if elapsed < 0.0 or elapsed > self.deadman_timeout:
             self.key_times[key_name] = None
             return False
 
@@ -282,6 +309,7 @@ class KeyboardTeleopNode(Node):
     def calculate_command(
         self,
     ) -> tuple[float, float]:
+        """Calculate linear and angular velocity from active keys."""
         now = time.monotonic()
 
         with self.state_lock:
@@ -306,6 +334,7 @@ class KeyboardTeleopNode(Node):
         return linear_x, angular_z
 
     def publish_current_command(self) -> None:
+        """Publish the current deadman-protected command."""
         if self.quit_requested:
             self.clear_motion_keys()
             self.publish_zero_command()
@@ -325,6 +354,7 @@ class KeyboardTeleopNode(Node):
         )
 
     def publish_zero_command(self) -> None:
+        """Publish an immediate zero-velocity command."""
         self.publisher.publish(
             self.make_command(
                 linear_x=0.0,
@@ -337,20 +367,19 @@ class KeyboardTeleopNode(Node):
         linear_x: float,
         angular_z: float,
     ) -> TwistStamped:
+        """Create a stamped planar velocity command."""
         message = TwistStamped()
-
         message.header.stamp = (
             self.get_clock().now().to_msg()
         )
         message.header.frame_id = self.frame_id
-
         message.twist.linear.x = linear_x
         message.twist.angular.z = angular_z
-
         return message
 
     @staticmethod
     def print_instructions() -> None:
+        """Print keyboard controls to the active terminal."""
         instructions = """
 ==================================================
  Keyboard Teleoperation
@@ -374,9 +403,16 @@ class KeyboardTeleopNode(Node):
         sys.stdout.flush()
 
     def shutdown(self) -> None:
+        """Stop input processing and restore terminal state."""
+        if self.shutdown_complete:
+            return
+
+        self.shutdown_complete = True
         self.running = False
         self.clear_motion_keys()
-        self.publish_zero_command()
+
+        if rclpy.ok():
+            self.publish_zero_command()
 
         if (
             self.input_thread is not None
@@ -388,6 +424,7 @@ class KeyboardTeleopNode(Node):
 
 
 def main(args=None) -> None:
+    """Run the keyboard teleoperation node."""
     rclpy.init(args=args)
 
     node: Optional[KeyboardTeleopNode] = None
@@ -395,10 +432,8 @@ def main(args=None) -> None:
     try:
         node = KeyboardTeleopNode()
         rclpy.spin(node)
-
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, ExternalShutdownException):
         pass
-
     finally:
         if node is not None:
             node.shutdown()

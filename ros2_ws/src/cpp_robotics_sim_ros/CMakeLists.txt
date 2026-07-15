@@ -160,6 +160,12 @@ if(BUILD_TESTING)
   )
 
   ament_add_pytest_test(
+    test_command_mux_safety
+    test/test_command_mux_safety.py
+    TIMEOUT 30
+  )
+
+  ament_add_pytest_test(
     test_safe_map_path_resolution
     test/test_safe_map_path_resolution.py
     TIMEOUT 30
