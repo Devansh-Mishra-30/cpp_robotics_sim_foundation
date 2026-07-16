@@ -515,10 +515,9 @@ def test_publish_environment_status_reports_unlocked_selection(
         SimulationState.STARTING,
         SimulationState.RUNNING,
         SimulationState.STOPPING,
-        SimulationState.ERROR,
     ],
 )
-def test_publish_environment_status_locks_nonstopped_states(
+def test_publish_environment_status_locks_busy_states(
     state,
     monkeypatch,
 ) -> None:
@@ -542,6 +541,33 @@ def test_publish_environment_status_locks_nonstopped_states(
     )
 
     assert payload['selection_locked'] is True
+
+
+def test_publish_environment_status_unlocks_error_without_process(
+    monkeypatch,
+) -> None:
+    manager = make_environment_publisher_manager(
+        state=SimulationState.ERROR,
+        process_running=False,
+    )
+
+    monkeypatch.setattr(
+        MODULE.rclpy,
+        'ok',
+        lambda **kwargs: True,
+    )
+
+    manager.publish_environment_status(
+        state='error',
+        message='Simulation exited unexpectedly',
+    )
+
+    payload = published_environment_payload(
+        manager
+    )
+
+    assert payload['state'] == 'error'
+    assert payload['selection_locked'] is False
 
 
 def test_publish_environment_status_locks_running_process(
@@ -1329,11 +1355,22 @@ def make_monitor_manager(
     manager.last_error = ''
     manager.states = []
     manager.logs = []
+    manager.environment_statuses = []
 
     manager.set_state = lambda new_state: (
         manager.states.append(new_state),
         setattr(manager, 'state', new_state),
     )[-1]
+
+    manager.publish_environment_status = (
+        lambda *, state, message:
+        manager.environment_statuses.append(
+            {
+                'state': state,
+                'message': message,
+            }
+        )
+    )
 
     class Logger:
         def error(self, message: str) -> None:
@@ -1412,6 +1449,12 @@ def test_monitor_process_reports_unexpected_exit() -> None:
         'error',
         manager.last_error,
     )
+    assert manager.environment_statuses == [
+        {
+            'state': 'error',
+            'message': manager.last_error,
+        }
+    ]
 
 
 def make_cleanup_manager():

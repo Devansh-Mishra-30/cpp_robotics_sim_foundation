@@ -425,7 +425,11 @@ class SimulationManagerNode(Node):
             'world_file': world_filename,
             'selection_locked': (
                 self.state
-                != SimulationState.STOPPED
+                in (
+                    SimulationState.STARTING,
+                    SimulationState.RUNNING,
+                    SimulationState.STOPPING,
+                )
                 or self.process_is_running()
             ),
         }
@@ -728,6 +732,10 @@ class SimulationManagerNode(Node):
             )
 
             self.set_state(SimulationState.ERROR)
+            self.publish_environment_status(
+                state='error',
+                message=self.last_error,
+            )
             self.get_logger().error(self.last_error)
 
     def process_is_running(self) -> bool:
