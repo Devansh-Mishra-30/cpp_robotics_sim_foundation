@@ -73,6 +73,9 @@ main() {
   printf '\n=== Test results ===\n'
   colcon test-result --verbose
 
+  printf '\n=== Simulator launch regression ===\n'
+  "${REPO_ROOT}/scripts/launch_regression.sh"
+
   printf '\n=== Headless integration test ===\n'
   "${REPO_ROOT}/scripts/headless_smoke_test.sh"
 

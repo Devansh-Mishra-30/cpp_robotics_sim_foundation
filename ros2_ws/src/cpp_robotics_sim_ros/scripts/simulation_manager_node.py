@@ -7,6 +7,7 @@
 
 from enum import Enum
 import json
+import math
 import os
 import signal
 import subprocess
@@ -197,6 +198,7 @@ class SimulationManagerNode(Node):
         self.process_lock = threading.RLock()
         self.state = SimulationState.STOPPED
         self.last_error = ''
+        self.shutdown_prepared = False
 
         self.monitor_timer = self.create_timer(
             0.5,
@@ -220,12 +222,12 @@ class SimulationManagerNode(Node):
         )
 
     def validate_parameters(self) -> None:
-        if not self.launch_package:
+        if not self.launch_package.strip():
             raise ValueError(
                 'launch_package must not be empty'
             )
 
-        if not self.launch_file:
+        if not self.launch_file.strip():
             raise ValueError(
                 'launch_file must not be empty'
             )
@@ -233,6 +235,24 @@ class SimulationManagerNode(Node):
         if not self.environment_names:
             raise ValueError(
                 'environment_names must not be empty'
+            )
+
+        if any(
+            not environment.strip()
+            for environment in self.environment_names
+        ):
+            raise ValueError(
+                'environment_names must not contain '
+                'empty values'
+            )
+
+        if (
+            len(set(self.environment_names))
+            != len(self.environment_names)
+        ):
+            raise ValueError(
+                'environment_names must contain unique '
+                'values'
             )
 
         if (
@@ -262,25 +282,39 @@ class SimulationManagerNode(Node):
                 environment
             ]
 
-            if not world_file:
+            if not world_file.strip():
                 raise ValueError(
                     'World filename must not be empty for '
                     f'{environment}'
                 )
 
-        if self.startup_grace_period < 0.0:
+        if (
+            not math.isfinite(
+                self.startup_grace_period
+            )
+            or self.startup_grace_period < 0.0
+        ):
             raise ValueError(
-                'startup_grace_period must not be negative'
+                'startup_grace_period must be finite and '
+                'not negative'
             )
 
-        if self.shutdown_timeout <= 0.0:
+        if (
+            not math.isfinite(self.shutdown_timeout)
+            or self.shutdown_timeout <= 0.0
+        ):
             raise ValueError(
-                'shutdown_timeout must be greater than zero'
+                'shutdown_timeout must be finite and '
+                'greater than zero'
             )
 
-        if self.kill_timeout <= 0.0:
+        if (
+            not math.isfinite(self.kill_timeout)
+            or self.kill_timeout <= 0.0
+        ):
             raise ValueError(
-                'kill_timeout must be greater than zero'
+                'kill_timeout must be finite and '
+                'greater than zero'
             )
 
     def environment_request_callback(
@@ -391,7 +425,11 @@ class SimulationManagerNode(Node):
             'world_file': world_filename,
             'selection_locked': (
                 self.state
-                != SimulationState.STOPPED
+                in (
+                    SimulationState.STARTING,
+                    SimulationState.RUNNING,
+                    SimulationState.STOPPING,
+                )
                 or self.process_is_running()
             ),
         }
@@ -615,9 +653,23 @@ class SimulationManagerNode(Node):
                     except ProcessLookupError:
                         pass
 
-                    process.wait(
-                        timeout=self.kill_timeout
-                    )
+                    try:
+                        process.wait(
+                            timeout=self.kill_timeout
+                        )
+                    except subprocess.TimeoutExpired:
+                        self.last_error = (
+                            'Simulation process did not exit '
+                            'after SIGKILL'
+                        )
+                        self.set_state(
+                            SimulationState.ERROR
+                        )
+
+                        self.get_logger().error(
+                            self.last_error
+                        )
+                        return False, self.last_error
 
             except ProcessLookupError:
                 self.get_logger().warning(
@@ -680,6 +732,10 @@ class SimulationManagerNode(Node):
             )
 
             self.set_state(SimulationState.ERROR)
+            self.publish_environment_status(
+                state='error',
+                message=self.last_error,
+            )
             self.get_logger().error(self.last_error)
 
     def process_is_running(self) -> bool:
@@ -742,16 +798,23 @@ class SimulationManagerNode(Node):
         ]
 
         for pattern in process_patterns:
-            result = subprocess.run(
-                [
-                    'pgrep',
-                    '-f',
-                    pattern,
-                ],
-                capture_output=True,
-                text=True,
-                check=False,
-            )
+            try:
+                result = subprocess.run(
+                    [
+                        'pgrep',
+                        '-f',
+                        pattern,
+                    ],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+            except OSError as error:
+                self.get_logger().error(
+                    f'Unable to inspect remaining '
+                    f'processes for {pattern}: {error}'
+                )
+                continue
 
             process_ids = []
 
@@ -784,16 +847,23 @@ class SimulationManagerNode(Node):
         time.sleep(1.0)
 
         for pattern in process_patterns:
-            result = subprocess.run(
-                [
-                    'pgrep',
-                    '-f',
-                    pattern,
-                ],
-                capture_output=True,
-                text=True,
-                check=False,
-            )
+            try:
+                result = subprocess.run(
+                    [
+                        'pgrep',
+                        '-f',
+                        pattern,
+                    ],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+            except OSError as error:
+                self.get_logger().error(
+                    f'Unable to inspect remaining '
+                    f'processes for {pattern}: {error}'
+                )
+                continue
 
             for line in result.stdout.splitlines():
                 try:
@@ -819,6 +889,11 @@ class SimulationManagerNode(Node):
                     )
 
     def shutdown(self) -> None:
+        if self.shutdown_prepared:
+            return
+
+        self.shutdown_prepared = True
+
         if rclpy.ok(context=self.context):
             self.get_logger().info(
                 'Simulation manager shutting down'

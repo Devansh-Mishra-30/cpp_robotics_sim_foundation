@@ -176,27 +176,35 @@ class LocalizationManagerNode(Node):
         )
 
     def validate_parameters(self) -> None:
-        if self.position_covariance <= 0.0:
+        if (
+            not math.isfinite(self.position_covariance)
+            or self.position_covariance <= 0.0
+        ):
             raise ValueError(
-                'position_covariance must be positive'
+                'position_covariance must be finite and '
+                'positive'
             )
 
-        if self.yaw_covariance <= 0.0:
+        if (
+            not math.isfinite(self.yaw_covariance)
+            or self.yaw_covariance <= 0.0
+        ):
             raise ValueError(
-                'yaw_covariance must be positive'
+                'yaw_covariance must be finite and '
+                'positive'
             )
 
     def mode_status_callback(
         self,
         message: String,
     ) -> None:
-        self.mode_state = message.data
+        self.mode_state = message.data.strip()
 
     def simulation_status_callback(
         self,
         message: String,
     ) -> None:
-        self.simulation_state = message.data
+        self.simulation_state = message.data.strip()
 
     def environment_status_callback(
         self,
@@ -210,15 +218,27 @@ class LocalizationManagerNode(Node):
             )
             return
 
-        environment = str(
-            payload.get(
-                'selected_environment',
-                '',
+        if not isinstance(payload, dict):
+            self.get_logger().warning(
+                'Ignoring non-object environment status'
             )
-        ).strip().lower()
-
-        if not environment:
             return
+
+        raw_environment = payload.get(
+            'selected_environment',
+            '',
+        )
+
+        if (
+            not isinstance(raw_environment, str)
+            or not raw_environment.strip()
+        ):
+            self.get_logger().warning(
+                'Ignoring invalid environment status value'
+            )
+            return
+
+        environment = raw_environment.strip().lower()
 
         environment_changed = (
             self.selected_environment
@@ -274,19 +294,45 @@ class LocalizationManagerNode(Node):
     ) -> tuple[str, str]:
         raw_request = raw_request.strip()
 
-        if raw_request.startswith('{'):
+        if not raw_request:
+            raise ValueError(
+                'Map-selection request must not be empty'
+            )
+
+        if raw_request.startswith(('{', '[')):
             payload = json.loads(raw_request)
 
-            map_name = str(
-                payload.get('name', '')
-            ).strip()
-
-            environment = str(
-                payload.get(
-                    'environment',
-                    self.selected_environment,
+            if not isinstance(payload, dict):
+                raise ValueError(
+                    'Map-selection JSON must be a JSON object'
                 )
-            ).strip().lower()
+
+            raw_map_name = payload.get('name', '')
+
+            if not isinstance(raw_map_name, str):
+                raise ValueError(
+                    'Map name must be a string'
+                )
+
+            map_name = raw_map_name.strip()
+
+            if 'environment' in payload:
+                raw_environment = payload['environment']
+
+                if (
+                    not isinstance(raw_environment, str)
+                    or not raw_environment.strip()
+                ):
+                    raise ValueError(
+                        'Map environment must be a non-empty '
+                        'string'
+                    )
+
+                environment = (
+                    raw_environment.strip().lower()
+                )
+            else:
+                environment = self.selected_environment
 
             return map_name, environment
 
@@ -351,7 +397,10 @@ class LocalizationManagerNode(Node):
             )
             return
 
-        if environment_yaml_path.is_file():
+        if (
+            environment
+            and environment_yaml_path.is_file()
+        ):
             yaml_path = environment_yaml_path
             map_environment = environment
         elif legacy_yaml_path.is_file():
@@ -451,6 +500,20 @@ class LocalizationManagerNode(Node):
 
         try:
             payload = json.loads(message.data)
+
+            raw_values = (
+                payload['x'],
+                payload['y'],
+                payload['yaw'],
+            )
+
+            if any(
+                isinstance(value, bool)
+                for value in raw_values
+            ):
+                raise ValueError(
+                    'Initial pose values must not be booleans'
+                )
 
             x = float(payload['x'])
             y = float(payload['y'])

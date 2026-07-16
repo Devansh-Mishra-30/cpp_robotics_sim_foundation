@@ -96,10 +96,10 @@ class NavigationGoalManagerNode(Node):
 
         self.action_name = str(
             self.get_parameter('action_name').value
-        )
+        ).strip()
         self.goal_frame = str(
             self.get_parameter('goal_frame').value
-        )
+        ).strip()
         self.server_wait_timeout = float(
             self.get_parameter(
                 'server_wait_timeout'
@@ -195,6 +195,7 @@ class NavigationGoalManagerNode(Node):
         self.goal_request_in_progress = False
         self.active_goal_handle = None
         self.cancel_requested = False
+        self.shutdown_prepared = False
 
         self.request_sequence = 0
         self.current_request_id: Optional[int] = None
@@ -229,15 +230,18 @@ class NavigationGoalManagerNode(Node):
                 'action_name must be an absolute ROS name'
             )
 
-        if not self.goal_frame:
+        if not self.goal_frame.strip():
             raise ValueError(
                 'goal_frame must not be empty'
             )
 
-        if self.server_wait_timeout <= 0.0:
+        if (
+            not math.isfinite(self.server_wait_timeout)
+            or self.server_wait_timeout <= 0.0
+        ):
             raise ValueError(
-                'server_wait_timeout must be greater '
-                'than zero'
+                'server_wait_timeout must be finite and '
+                'greater than zero'
             )
 
         goal_bounds = (
@@ -715,15 +719,46 @@ class NavigationGoalManagerNode(Node):
             'NavigateToPose goal accepted'
         )
 
-        result_future = goal_handle.get_result_async()
+        try:
+            result_future = goal_handle.get_result_async()
 
-        result_future.add_done_callback(
-            lambda completed_future:
-            self.navigation_result_callback(
-                request_id,
-                completed_future,
+            result_future.add_done_callback(
+                lambda completed_future:
+                self.navigation_result_callback(
+                    request_id,
+                    completed_future,
+                )
             )
-        )
+
+        except Exception as error:
+            with self.state_lock:
+                if self.current_request_id == request_id:
+                    failed_goal = self.current_goal
+                    self.reset_goal_state_locked()
+                else:
+                    failed_goal = None
+
+            self.publish_status(
+                state='aborted',
+                message=(
+                    'Unable to monitor navigation result: '
+                    f'{error}'
+                ),
+                result='aborted',
+                goal=failed_goal,
+            )
+
+            self.publish_feedback(
+                state='idle',
+                message=(
+                    'Navigation result monitoring failed'
+                ),
+            )
+
+            self.get_logger().exception(
+                'Failed to monitor NavigateToPose result'
+            )
+            return
 
         if should_cancel:
             self.request_cancel(
@@ -849,6 +884,7 @@ class NavigationGoalManagerNode(Node):
                 return
 
             self.cancel_requested = True
+            request_id = self.current_request_id
             goal_handle = self.active_goal_handle
             goal = self.current_goal
 
@@ -876,10 +912,18 @@ class NavigationGoalManagerNode(Node):
             )
 
             cancel_future.add_done_callback(
-                self.cancel_response_callback
+                lambda completed_future:
+                self.cancel_response_callback(
+                    request_id,
+                    completed_future,
+                )
             )
 
         except Exception as error:
+            with self.state_lock:
+                if self.current_request_id == request_id:
+                    self.cancel_requested = False
+
             self.publish_status(
                 state='aborted',
                 message=(
@@ -896,11 +940,24 @@ class NavigationGoalManagerNode(Node):
 
     def cancel_response_callback(
         self,
+        request_id: Optional[int],
         future,
     ) -> None:
+        with self.state_lock:
+            if self.current_request_id != request_id:
+                return
+
+            goal = self.current_goal
+
         try:
             cancel_response = future.result()
         except Exception as error:
+            with self.state_lock:
+                if self.current_request_id != request_id:
+                    return
+
+                self.cancel_requested = False
+
             self.publish_status(
                 state='aborted',
                 message=(
@@ -908,7 +965,7 @@ class NavigationGoalManagerNode(Node):
                     f'failed: {error}'
                 ),
                 result='aborted',
-                goal=self.current_goal,
+                goal=goal,
             )
 
             self.get_logger().exception(
@@ -920,15 +977,25 @@ class NavigationGoalManagerNode(Node):
             cancel_response.goals_canceling
         )
 
+        with self.state_lock:
+            if self.current_request_id != request_id:
+                return
+
         if goals_canceling:
             self.publish_status(
                 state='canceling',
                 message=(
                     'Nav2 accepted the cancellation request'
                 ),
-                goal=self.current_goal,
+                goal=goal,
             )
         else:
+            with self.state_lock:
+                if self.current_request_id != request_id:
+                    return
+
+                self.cancel_requested = False
+
             self.publish_status(
                 state='rejected',
                 message=(
@@ -936,7 +1003,7 @@ class NavigationGoalManagerNode(Node):
                     'request'
                 ),
                 result='rejected',
-                goal=self.current_goal,
+                goal=goal,
             )
 
     def navigation_result_callback(
@@ -1156,6 +1223,10 @@ class NavigationGoalManagerNode(Node):
 
     def prepare_shutdown(self) -> None:
         with self.state_lock:
+            if self.shutdown_prepared:
+                return
+
+            self.shutdown_prepared = True
             goal_handle = self.active_goal_handle
 
         if goal_handle is None:

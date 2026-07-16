@@ -5,8 +5,11 @@
 # license that can be found in the LICENSE file or at
 # https://opensource.org/licenses/MIT.
 
+"""Manage mutually exclusive robot operating modes and launch processes."""
+
 from enum import Enum
 import json
+import math
 import os
 import signal
 import subprocess
@@ -23,11 +26,15 @@ from rclpy.qos import (
     QoSProfile,
     ReliabilityPolicy,
 )
+
 from std_msgs.msg import String
+
 from std_srvs.srv import Trigger
 
 
 class OperatingMode(str, Enum):
+    """Represent the externally visible robot operating modes."""
+
     STOPPED = 'stopped'
     MANUAL = 'manual'
     MAPPING = 'mapping'
@@ -42,6 +49,7 @@ class ModeManagerNode(Node):
     """Manage mutually exclusive robot operating modes."""
 
     def __init__(self) -> None:
+        """Initialize parameters, ROS interfaces, and process state."""
         super().__init__('mode_manager')
 
         self.declare_parameter(
@@ -184,6 +192,7 @@ class ModeManagerNode(Node):
         self.selected_map_name = ''
         self.selected_map_path = ''
         self.last_error = ''
+        self.shutdown_complete = False
 
         self.monitor_timer = self.create_timer(
             0.5,
@@ -197,36 +206,64 @@ class ModeManagerNode(Node):
         )
 
     def validate_parameters(self) -> None:
+        """Validate launch names and process timing parameters."""
+        self.launch_package = self.launch_package.strip()
+
         if not self.launch_package:
             raise ValueError(
                 'launch_package must not be empty'
             )
 
         for mode, launch_file in self.launch_files.items():
-            if not launch_file:
+            normalized_launch_file = launch_file.strip()
+
+            if not normalized_launch_file:
                 raise ValueError(
                     f'{mode.value} launch file must not be empty'
                 )
 
-        if self.startup_grace_period < 0.0:
+            self.launch_files[mode] = normalized_launch_file
+
+        self.require_nonnegative_finite(
+            'startup_grace_period',
+            self.startup_grace_period,
+        )
+        self.require_positive_finite(
+            'shutdown_timeout',
+            self.shutdown_timeout,
+        )
+        self.require_positive_finite(
+            'kill_timeout',
+            self.kill_timeout,
+        )
+
+    @staticmethod
+    def require_nonnegative_finite(
+        name: str,
+        value: float,
+    ) -> None:
+        """Require a finite numeric value that is not negative."""
+        if not math.isfinite(value) or value < 0.0:
             raise ValueError(
-                'startup_grace_period must not be negative'
+                f'{name} must be finite and nonnegative'
             )
 
-        if self.shutdown_timeout <= 0.0:
+    @staticmethod
+    def require_positive_finite(
+        name: str,
+        value: float,
+    ) -> None:
+        """Require a finite numeric value greater than zero."""
+        if not math.isfinite(value) or value <= 0.0:
             raise ValueError(
-                'shutdown_timeout must be greater than zero'
-            )
-
-        if self.kill_timeout <= 0.0:
-            raise ValueError(
-                'kill_timeout must be greater than zero'
+                f'{name} must be finite and greater than zero'
             )
 
     def simulation_status_callback(
         self,
         message: String,
     ) -> None:
+        """Stop the active mode when simulation stops running."""
         previous_state = self.simulation_state
         self.simulation_state = message.data
 
@@ -252,6 +289,7 @@ class ModeManagerNode(Node):
         self,
         message: String,
     ) -> None:
+        """Update the selected map from a validated JSON payload."""
         try:
             payload = json.loads(message.data)
         except json.JSONDecodeError:
@@ -260,18 +298,25 @@ class ModeManagerNode(Node):
             )
             return
 
+        if not isinstance(payload, dict):
+            self.get_logger().error(
+                'Selected-map payload must be a JSON object'
+            )
+            return
+
         self.selected_map_name = str(
             payload.get('name', '')
-        )
+        ).strip()
         self.selected_map_path = str(
             payload.get('yaml_path', '')
-        )
+        ).strip()
 
     def manual_callback(
         self,
         request: Trigger.Request,
         response: Trigger.Response,
     ) -> Trigger.Response:
+        """Handle a request to activate manual mode."""
         del request
         return self.fill_response(
             response,
@@ -283,6 +328,7 @@ class ModeManagerNode(Node):
         request: Trigger.Request,
         response: Trigger.Response,
     ) -> Trigger.Response:
+        """Handle a request to activate mapping mode."""
         del request
         return self.fill_response(
             response,
@@ -294,6 +340,7 @@ class ModeManagerNode(Node):
         request: Trigger.Request,
         response: Trigger.Response,
     ) -> Trigger.Response:
+        """Handle a request to activate localization mode."""
         del request
         return self.fill_response(
             response,
@@ -307,6 +354,7 @@ class ModeManagerNode(Node):
         request: Trigger.Request,
         response: Trigger.Response,
     ) -> Trigger.Response:
+        """Handle a request to activate navigation mode."""
         del request
         return self.fill_response(
             response,
@@ -320,6 +368,7 @@ class ModeManagerNode(Node):
         request: Trigger.Request,
         response: Trigger.Response,
     ) -> Trigger.Response:
+        """Handle a request to stop the active mode."""
         del request
         return self.fill_response(
             response,
@@ -332,6 +381,7 @@ class ModeManagerNode(Node):
         success: bool,
         message: str,
     ) -> Trigger.Response:
+        """Populate and return a Trigger service response."""
         response.success = success
         response.message = message
         return response
@@ -340,6 +390,7 @@ class ModeManagerNode(Node):
         self,
         requested_mode: OperatingMode,
     ) -> tuple[bool, str]:
+        """Stop the previous mode and activate the requested mode."""
         with self.process_lock:
             if self.simulation_state != 'running':
                 message = (
@@ -489,6 +540,7 @@ class ModeManagerNode(Node):
         self,
         process_group_id: int,
     ) -> bool:
+        """Return whether a managed operating-system process group exists."""
         try:
             os.killpg(process_group_id, 0)
         except ProcessLookupError:
@@ -501,11 +553,12 @@ class ModeManagerNode(Node):
     def terminate_process_group(
         self,
         process_group_id: int,
-    ) -> None:
+    ) -> bool:
+        """Terminate a process group and confirm that it disappeared."""
         if not self.process_group_exists(
             process_group_id
         ):
-            return
+            return True
 
         if rclpy.ok(context=self.context):
             self.get_logger().warning(
@@ -519,7 +572,14 @@ class ModeManagerNode(Node):
                 signal.SIGTERM,
             )
         except ProcessLookupError:
-            return
+            return True
+        except OSError as error:
+            if rclpy.ok(context=self.context):
+                self.get_logger().error(
+                    'Unable to send SIGTERM to mode '
+                    f'process group {process_group_id}: {error}'
+                )
+            return False
 
         deadline = (
             time.monotonic() + self.kill_timeout
@@ -529,7 +589,7 @@ class ModeManagerNode(Node):
             if not self.process_group_exists(
                 process_group_id
             ):
-                return
+                return True
 
             time.sleep(0.1)
 
@@ -545,7 +605,34 @@ class ModeManagerNode(Node):
                 signal.SIGKILL,
             )
         except ProcessLookupError:
-            pass
+            return True
+        except OSError as error:
+            if rclpy.ok(context=self.context):
+                self.get_logger().error(
+                    'Unable to send SIGKILL to mode '
+                    f'process group {process_group_id}: {error}'
+                )
+            return False
+
+        deadline = (
+            time.monotonic() + self.kill_timeout
+        )
+
+        while time.monotonic() < deadline:
+            if not self.process_group_exists(
+                process_group_id
+            ):
+                return True
+
+            time.sleep(0.1)
+
+        if rclpy.ok(context=self.context):
+            self.get_logger().error(
+                'Mode process group survived SIGKILL: '
+                f'{process_group_id}'
+            )
+
+        return False
 
     def cleanup_orphan_scan_frame_bridges(
         self,
@@ -612,6 +699,7 @@ class ModeManagerNode(Node):
     def stop_current_mode(
         self,
     ) -> tuple[bool, str]:
+        """Stop the active mode process group and clear runtime state."""
         with self.process_lock:
             if not self.process_is_running():
                 self.clear_finished_process()
@@ -626,11 +714,34 @@ class ModeManagerNode(Node):
             process = self.process
             process_pid = process.pid
 
-            process_group_id = (
-                self.process_group_id
-                if self.process_group_id is not None
-                else os.getpgid(process_pid)
-            )
+            try:
+                process_group_id = (
+                    self.process_group_id
+                    if self.process_group_id is not None
+                    else os.getpgid(process_pid)
+                )
+            except ProcessLookupError:
+                self.process = None
+                self.process_group_id = None
+                self.cleanup_orphan_scan_frame_bridges()
+                self.requested_mode = OperatingMode.STOPPED
+                self.publish_mode(OperatingMode.STOPPED)
+                return True, 'Operating mode stopped'
+            except OSError as error:
+                self.process = None
+                self.process_group_id = None
+                self.last_error = str(error)
+                self.publish_mode(OperatingMode.ERROR)
+
+                message = (
+                    'Failed to resolve operating-mode '
+                    f'process group: {error}'
+                )
+
+                if rclpy.ok(context=self.context):
+                    self.get_logger().error(message)
+
+                return False, message
 
             self.publish_mode(OperatingMode.STOPPING)
 
@@ -716,12 +827,32 @@ class ModeManagerNode(Node):
             finally:
                 self.process = None
 
-            self.terminate_process_group(
-                process_group_id
+            termination_confirmed = (
+                self.terminate_process_group(
+                    process_group_id
+                )
             )
             self.process_group_id = None
 
             self.cleanup_orphan_scan_frame_bridges()
+
+            if not termination_confirmed:
+                self.last_error = (
+                    'Unable to confirm termination of '
+                    'operating-mode process group '
+                    f'{process_group_id}'
+                )
+                self.requested_mode = (
+                    OperatingMode.ERROR
+                )
+                self.publish_mode(OperatingMode.ERROR)
+
+                if rclpy.ok(context=self.context):
+                    self.get_logger().error(
+                        self.last_error
+                    )
+
+                return False, self.last_error
 
             self.requested_mode = OperatingMode.STOPPED
             self.publish_mode(OperatingMode.STOPPED)
@@ -734,6 +865,7 @@ class ModeManagerNode(Node):
             return True, message
 
     def monitor_process(self) -> None:
+        """Detect and report an unexpected managed-process exit."""
         with self.process_lock:
             if self.process is None:
                 return
@@ -778,12 +910,14 @@ class ModeManagerNode(Node):
                 )
 
     def process_is_running(self) -> bool:
+        """Return whether the managed launch process is still running."""
         return (
             self.process is not None
             and self.process.poll() is None
         )
 
     def clear_finished_process(self) -> None:
+        """Clear and clean a managed process that has already exited."""
         if (
             self.process is not None
             and self.process.poll() is not None
@@ -800,6 +934,7 @@ class ModeManagerNode(Node):
         self,
         mode: OperatingMode,
     ) -> None:
+        """Publish the current operating mode when ROS is active."""
         self.mode = mode
 
         if not rclpy.ok(context=self.context):
@@ -815,6 +950,12 @@ class ModeManagerNode(Node):
                 raise
 
     def shutdown(self) -> None:
+        """Stop managed processes exactly once during node shutdown."""
+        if self.shutdown_complete:
+            return
+
+        self.shutdown_complete = True
+
         if rclpy.ok(context=self.context):
             self.get_logger().info(
                 'Operating-mode manager shutting down'
@@ -824,6 +965,7 @@ class ModeManagerNode(Node):
 
 
 def main(args=None) -> None:
+    """Run the operating-mode manager node."""
     rclpy.init(args=args)
 
     node: Optional[ModeManagerNode] = None
