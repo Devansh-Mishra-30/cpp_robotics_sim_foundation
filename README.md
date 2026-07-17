@@ -10,7 +10,7 @@ A browser-controlled ROS 2 autonomous mobile robot simulation platform for **man
 
 The project began as a C++ robotics-learning exercise and evolved into a managed simulation workflow that reduces repeated terminal setup, coordinates multiple ROS 2 subsystems, and provides one interface for operating and validating an autonomous mobile robot stack.
 
-> **Release status:** `v0.1.0` release candidate
+> **Release status:** `v0.1.0` stable release
 > **Primary environment:** Ubuntu 24.04, ROS 2 Jazzy, Gazebo Harmonic
 > **Validation baseline:** 357 automated tests, native and Docker validation, launch regression, dashboard integration, and launcher lifecycle tests
 
@@ -190,6 +190,7 @@ Gazebo Harmonic
 
 Detailed architecture:
 
+- [`docs/installation.md`](docs/installation.md)
 - [`docs/system_architecture.md`](docs/system_architecture.md)
 - [`docs/topic_interface_reference.md`](docs/topic_interface_reference.md)
 - [`docs/debugging_and_validation.md`](docs/debugging_and_validation.md)
@@ -205,9 +206,9 @@ cpp_robotics_sim_foundation/
 │       └── ros2_jazzy_ci.yml
 ├── docs/
 │   ├── debugging_and_validation.md
+│   ├── installation.md
 │   ├── system_architecture.md
-│   ├── topic_interface_reference.md
-│   └── localization/
+│   └── topic_interface_reference.md
 ├── ros2_ws/
 │   └── src/
 │       └── cpp_robotics_sim_ros/

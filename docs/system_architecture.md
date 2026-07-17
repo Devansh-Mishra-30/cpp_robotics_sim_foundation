@@ -1,1729 +1,1669 @@
-# System Architecture — C++ / ROS 2 Robotics Simulation Foundation
+# System Architecture
 
-## Document Purpose
+## C++ / ROS 2 Robotics Simulation Foundation
 
-This document is the consolidated system architecture reference for `cpp_robotics_sim_foundation`.
-
-It describes how the project is organized as a robotics simulation engineering stack:
-
-- standalone C++ simulation foundation
-- ROS 2 kinematic simulator
-- URDF/Xacro robot description
-- RViz visualization
-- Gazebo Sim world and robot spawn
-- `ros2_control` + `diff_drive_controller`
-- simulated lidar and ROS-Gazebo bridges
-- noisy odometry and trajectory validation tools
-- GoogleTest, CI, and performance benchmarking
-- Nav2 odom-frame navigation stack
-- lifecycle, costmap, planner, controller, recovery, waypoint, and rosbag validation
-
-The current release is a consolidation checkpoint focused on making the project understandable, reproducible, and easy to review.
+**Release:** `v0.1.0`
+**Release commit:** `28a080e72ee6e31baa25bcd2fdaa249706520361`
+**Primary platform:** Ubuntu 24.04, ROS 2 Jazzy, Gazebo Harmonic
+**Robot type:** Differential-drive autonomous mobile robot
+**Primary user interface:** Browser dashboard connected to ROS 2 through rosbridge
 
 ---
 
-## 1. Project Identity
+## 1. Document Purpose
 
-`cpp_robotics_sim_foundation` is a progressive robotics simulation project that starts from low-level C++ simulation and grows into a ROS 2 / Gazebo / Nav2 mobile robot simulation stack.
+This document defines the software architecture of
+`cpp_robotics_sim_foundation` at release `v0.1.0`.
 
-The project demonstrates:
+It explains:
 
-```txt
-C++ simulation fundamentals
-ROS 2 node architecture
-topics, parameters, launch files, QoS, diagnostics
-odometry and TF
-URDF/Xacro robot modeling
-RViz visualization
-Gazebo Sim physics simulation
-ros2_control and diff_drive_controller
-simulated LaserScan sensing
-ROS-Gazebo bridging
-noisy odometry generation
-trajectory validation and plotting
-GoogleTest unit testing
+- the responsibilities of the browser dashboard;
+- how the dashboard communicates with ROS 2;
+- how simulation and operating-mode processes are launched and supervised;
+- how manual, mapping, localization, and navigation modes are separated;
+- how velocity commands are prioritized and sent to the robot;
+- how environments and saved maps are managed;
+- how SLAM Toolbox, AMCL, and Nav2 are integrated;
+- which nodes own the principal TF transforms;
+- how process cleanup, safety behavior, testing, and release validation work;
+- the explicit limitations of the first public release.
+
+---
+
+## 2. System Overview
+
+`cpp_robotics_sim_foundation` is a browser-controlled ROS 2 mobile-robot
+simulation platform.
+
+Release `v0.1.0` supports:
+
+```text
+Warehouse and Hospital environment selection
+Managed simulation startup, stop, reset, and recovery
+Browser-based manual driving
+Browser-keyboard driving
+Optional terminal-keyboard command input
+Priority-based velocity-command arbitration
+Emergency-stop override
+SLAM Toolbox mapping
+Environment-aware map saving and map inventory
+Saved-map selection
+AMCL localization
+Map-frame Nav2 goal requests
+Goal feedback, completion, rejection, and cancellation
+Managed process-group shutdown
+Native validation
+Docker build-and-test validation
 GitHub Actions CI
-performance benchmarking
-Nav2 lifecycle/costmap/planner/controller validation
-goal navigation, recovery behavior, waypoint navigation, and rosbag evidence
 ```
 
-The project is intentionally built as an engineering artifact, not only a tutorial. Every major subsystem has runtime commands, validation checks, and documentation.
+The normal user workflow is operated from the browser dashboard. The
+dashboard does not implement robotics algorithms itself. It publishes
+requests and commands to ROS 2 and displays state reported by ROS 2 nodes.
 
 ---
 
-## 2. Documentation Architecture
+## 3. Architectural Principles
 
-The documentation is consolidated into four main files:
+### 3.1 Reproducible public workflow
 
-```txt
-docs/
-  system_architecture.md          # what the system is and how the layers connect
-  topic_interface_reference.md    # topics, actions, services, frames, params, files
-  debugging_and_validation.md     # build/debug/test/validation workflow and failure modes
-  daily_documentation.md          # chronological day-by-day progress record
+The supported repository workflow is:
+
+```text
+./scripts/setup.sh
+./scripts/build.sh
+./scripts/test.sh
+./scripts/run.sh
 ```
 
-Supporting utilities live outside `docs/`:
+### 3.2 Explicit lifecycle ownership
 
-```txt
-scripts/
-  hard_reset.sh                   # kills stale ROS/Gazebo/RViz/controller processes
-  launch_regression.sh      # original kinematic simulator launch regression
+Simulation processes, operating-mode processes, dashboard infrastructure,
+and stale-process cleanup have separate owners.
+
+### 3.3 Mutually exclusive operating modes
+
+The mode manager exposes:
+
+```text
+manual
+mapping
+localization
+navigation
 ```
 
-Documentation policy:
+Only one operating mode is active at a time.
 
-```txt
-Architecture content        -> system_architecture.md
-Topic/action/interface data -> topic_interface_reference.md
-Debug/test/validation data  -> debugging_and_validation.md
-Chronological day notes     -> daily_documentation.md
-Executable scripts          -> scripts/
-Obsolete duplicate docs     -> delete after useful content is merged
+### 3.4 Centralized velocity arbitration
+
+All supported velocity sources converge at one command multiplexer before
+reaching `diff_drive_controller`.
+
+### 3.5 Environment-aware map handling
+
+Saved maps are organized by environment and validated before use.
+
+### 3.6 Observable status
+
+The dashboard receives explicit status for simulation, environment,
+operating mode, maps, localization, navigation, active command source, and
+emergency-stop state.
+
+### 3.7 Layered validation
+
+The release is checked through syntax checks, unit tests, ROS 2 package
+tests, launch regression, dashboard integration, launcher lifecycle tests,
+Docker validation, and CI.
+
+---
+
+## 4. System Context
+
+```text
+User
+  |
+  v
+Browser Dashboard
+  |
+  | HTTP
+  | rosbridge WebSocket
+  v
+ROS 2 Management Nodes
+  |
+  | services, request topics, status topics
+  | managed launch processes
+  v
+ROS 2 Robotics Runtime
+  |
+  | robot description
+  | ros2_control
+  | mapping
+  | localization
+  | navigation
+  | command arbitration
+  v
+Gazebo Harmonic
+  |
+  v
+Differential-Drive Robot in Warehouse or Hospital
+```
+
+Primary dependencies include:
+
+```text
+Ubuntu 24.04
+ROS 2 Jazzy
+Gazebo Harmonic
+ros2_control
+gz_ros2_control
+ros_gz_bridge
+SLAM Toolbox
+Nav2
+AMCL
+rosbridge_server
+Python 3
+C++17
+colcon
+Docker
 ```
 
 ---
 
-## 3. Corrected Repository Structure
+## 5. High-Level Runtime Architecture
 
-Target public-facing structure:
+```text
++---------------------------------------------------------------+
+|                        Browser Dashboard                      |
+|                                                               |
+| Environment | Start/Stop | Modes | Drive | Maps | Nav Goals  |
++-------------------------------+-------------------------------+
+                                |
+                                | HTTP :8080
+                                | rosbridge WebSocket :9090
+                                v
++---------------------------------------------------------------+
+|                    Dashboard Infrastructure                   |
+|                                                               |
+| web_interface.launch.py                                       |
+| Python HTTP server                                            |
+| rosbridge_websocket                                           |
+| single-instance lock                                          |
+| stale-project-process cleanup                                 |
++-------------------------------+-------------------------------+
+                                |
+                                v
++---------------------------------------------------------------+
+|                       Management Layer                        |
+|                                                               |
+| simulation_manager                                            |
+| mode_manager                                                  |
+| mapping_manager                                               |
+| localization_manager                                          |
+| navigation_goal_manager                                       |
++----------+------------------+--------------------+-------------+
+           |                  |                    |
+           v                  v                    v
++----------------+  +-------------------+  +--------------------+
+| Core Simulation|  | Mapping / Maps    |  | Localization / Nav |
+|                |  |                   |  |                    |
+| Gazebo         |  | SLAM Toolbox      |  | map_server         |
+| robot model    |  | map_saver_cli     |  | AMCL               |
+| ros2_control   |  | map inventory     |  | Nav2 servers       |
+| LiDAR bridge   |  | safe map paths    |  | NavigateToPose     |
++-------+--------+  +---------+---------+  +----------+---------+
+        |                     |                       |
+        +---------------------+-----------------------+
+                              |
+                              v
++---------------------------------------------------------------+
+|                    Command and Robot Layer                    |
+|                                                               |
+| cmd_vel_twist_bridge                                          |
+| command_mux                                                   |
+| diff_drive_controller                                         |
+| joint_state_broadcaster                                       |
+| robot_state_publisher                                         |
+| ros_gz_bridge                                                 |
++-------------------------------+-------------------------------+
+                                |
+                                v
++---------------------------------------------------------------+
+|                        Gazebo Harmonic                         |
+|                                                               |
+| differential-drive robot                                      |
+| wheel joints                                                  |
+| LiDAR                                                         |
+| Warehouse or Hospital world                                   |
++---------------------------------------------------------------+
+```
 
-```txt
+---
+
+## 6. Repository Architecture
+
+The tagged `v0.1.0` repository contains:
+
+```text
 cpp_robotics_sim_foundation/
 ├── .github/
 │   └── workflows/
 │       └── ros2_jazzy_ci.yml
-│
-├── data/
-│   └── .gitkeep
-│
 ├── docs/
-│   ├── daily_documentation.md
-│   ├── debugging_and_validation.md
-│   ├── system_architecture.md
-│   └── topic_interface_reference.md
-│
-├── plots/
-│   ├── .gitkeep
-│   └── trajectory_validation.png
-│
-├── scripts/
-│   ├── launch_regression.sh
-│   └── hard_reset.sh
-│
 ├── ros2_ws/
-│   └── src/cpp_robotics_sim_ros/
-│       ├── config/
-│       │   ├── nav2_params.yaml
-│       │   ├── ros2_control.yaml
-│       │   └── sim_params.yaml
-│       ├── include/
-│       │   └── cpp_robotics_sim_ros/
-│       │       └── core_math.hpp
-│       ├── launch/
-│       │   ├── description.launch.py
-│       │   ├── gazebo_spawn.launch.py
-│       │   ├── nav2_navigation.launch.py
-│       │   ├── robot_model_viz.launch.py
-│       │   ├── ros2_control.launch.py
-│       │   └── sim.launch.py
-│       ├── rviz/
-│       │   ├── diffbot_robot_model.rviz
-│       │   └── sim_debug.rviz
-│       ├── scripts/
-│       │   ├── cmd_vel_twist_bridge.py
-│       │   ├── nav2_costmap_check.sh
-│       │   ├── nav2_lifecycle_check.sh
-│       │   ├── nav2_planner_controller_check.sh
-│       │   ├── noisy_odom_node.py
-│       │   ├── plot_trajectory_validation.py
-│       │   └── trajectory_validation_recorder.py
-│       ├── src/
-│       │   ├── performance_benchmark.cpp
-│       │   └── sim_node.cpp
-│       ├── test/
-│       │   └── test_core_math.cpp
-│       ├── urdf/
-│       │   └── diffbot.urdf
-│       ├── worlds/
-│       │   └── empty_diffbot_world.sdf
-│       ├── xacro/
-│       │   └── diffbot.xacro
-│       ├── CMakeLists.txt
-│       └── package.xml
-│
-├── standalone_cpp/
-│   ├── include/
-│   ├── src/
-│   └── CMakeLists.txt
-│
-├── README.md
-└── .gitignore
-```
-
-Generated and local-only artifacts should not be committed unless intentionally selected:
-
-```txt
-build/
-install/
-log/
-bags/
-*.mcap
-*.db3
-large CSV outputs
+│   └── src/
+│       └── cpp_robotics_sim_ros/
+│           ├── config/
+│           ├── include/
+│           ├── launch/
+│           ├── maps/
+│           ├── nav2/
+│           ├── rviz/
+│           ├── scripts/
+│           ├── src/
+│           ├── test/
+│           ├── urdf/
+│           ├── web/
+│           ├── worlds/
+│           ├── xacro/
+│           ├── CMakeLists.txt
+│           └── package.xml
+├── scripts/
+├── Dockerfile
+├── LICENSE
+└── README.md
 ```
 
 ---
 
-## 4. System Layer Overview
+## 7. Public Repository Scripts
 
-The project has five major layers.
+### `scripts/setup.sh`
 
-```txt
-Layer 1: Standalone C++ simulation foundation
-Layer 2: ROS 2 kinematic simulator
-Layer 3: Robot model + Gazebo + ros2_control
-Layer 4: Validation, testing, CI, benchmark, and evidence tooling
-Layer 5: Nav2 navigation stack
+Performs host and dependency setup checks for the supported Ubuntu and ROS 2
+environment.
+
+### `scripts/build.sh`
+
+Runs source syntax checks and builds the ROS 2 package with testing enabled.
+
+### `scripts/test.sh`
+
+Runs the complete native release test gate, including:
+
+```text
+source syntax checks
+colcon test
+colcon test-result
+launch regression
+headless dashboard integration
+public launcher lifecycle validation
 ```
 
-High-level view:
+### `scripts/run.sh`
 
-```txt
-standalone_cpp/
-  -> deterministic C++ simulation concepts
+Starts the public browser-controlled platform.
 
-ros2_ws/src/cpp_robotics_sim_ros/
-  -> ROS 2 nodes, robot model, Gazebo launch, controllers, sensors, Nav2, tests
+It resolves dashboard and rosbridge ports, sources the ROS 2 workspace, and
+launches `web_interface.launch.py`.
 
-scripts/
-  -> repo-level reset and regression utilities
+Default ports:
 
-docs/
-  -> architecture, interfaces, debugging/validation, daily timeline
+```text
+Dashboard HTTP: 8080
+rosbridge WebSocket: 9090
+```
+
+### `scripts/clean.sh`
+
+Removes generated workspace state and caches. It is not the primary runtime
+shutdown mechanism.
+
+Runtime processes should be stopped through the dashboard and launcher
+lifecycle paths.
+
+---
+
+## 8. Dashboard Infrastructure
+
+`web_interface.launch.py` launches:
+
+```text
+simulation_manager
+mode_manager
+mapping_manager
+localization_manager
+navigation_goal_manager
+rosbridge_websocket
+Python HTTP server
+```
+
+It also implements two important infrastructure protections.
+
+### 8.1 Single-instance lock
+
+A lock file under:
+
+```text
+~/.ros/cpp_robotics_sim/web_interface.lock
+```
+
+prevents multiple dashboard launch instances from running simultaneously.
+
+### 8.2 Stale-process cleanup
+
+Before launching, the web interface searches for stale project-specific
+processes from earlier runs and removes them.
+
+The cleanup protects the current launcher and its ancestor processes, sends
+`SIGTERM`, waits, and escalates to `SIGKILL` when required.
+
+This startup cleanup is separate from the simulation manager and mode
+manager process ownership described later.
+
+---
+
+## 9. Browser Communication
+
+### 9.1 Dashboard transport
+
+The dashboard is served through HTTP and communicates with ROS 2 through
+rosbridge.
+
+Default endpoints:
+
+```text
+http://localhost:8080
+ws://localhost:9090
+```
+
+Under WSL2, `run.sh` handles the host-accessible dashboard address and
+browser launch behavior.
+
+### 9.2 Browser responsibilities
+
+The dashboard can:
+
+```text
+select an environment
+start, stop, or reset the simulation
+activate or stop a mode
+publish manual velocity commands
+publish browser-keyboard velocity commands
+engage or release emergency stop
+request a map save
+select a saved map
+publish an initial-pose request
+send a navigation goal
+cancel a navigation goal
+display system status and feedback
+```
+
+Browser buttons and browser keyboard events both use the dashboard GUI
+velocity topic:
+
+```text
+/cmd_vel/gui
+geometry_msgs/msg/TwistStamped
+```
+
+The browser does not publish to `/cmd_vel/keyboard`.
+
+---
+
+## 10. Simulation Manager
+
+The simulation manager owns high-level simulation lifecycle and environment
+selection.
+
+### 10.1 States
+
+```text
+stopped
+starting
+running
+stopping
+error
+```
+
+### 10.2 Interfaces
+
+Publishes:
+
+```text
+/simulation/status
+/simulation/environment_status
+```
+
+Subscribes:
+
+```text
+/simulation/environment_request
+```
+
+Provides:
+
+```text
+/simulation/start
+/simulation/stop
+/simulation/reset
+```
+
+### 10.3 Environment registry
+
+Supported environment identifiers:
+
+```text
+warehouse
+hospital
+```
+
+Associated world files:
+
+```text
+warehouse_world.sdf
+hospital_world.sdf
+```
+
+### 10.4 Selection lock
+
+Environment changes are rejected while the simulation is:
+
+```text
+starting
+running
+stopping
+```
+
+or while the managed simulation process is still running.
+
+### 10.5 Managed simulation launch
+
+The simulation manager launches:
+
+```text
+interactive_control.launch.py
+```
+
+with the selected world path and simulation-time setting.
+
+### 10.6 Process lifecycle
+
+The managed simulation launch is started in a new operating-system session.
+
+The manager:
+
+```text
+tracks the launch process
+tracks the process-group identifier
+sends SIGTERM to the process group
+waits for graceful exit
+sends SIGKILL if required
+publishes stopped or error state
+detects unexpected process exit
 ```
 
 ---
 
-## 5. Layer 1 — Standalone C++ Simulation Foundation
+## 11. Core Simulation Launch
 
-The standalone C++ layer exists to isolate robotics math and simulation logic from ROS 2 middleware.
+`interactive_control.launch.py` starts:
 
-Folder:
-
-```txt
-standalone_cpp/
-```
-
-It includes:
-
-```txt
-differential-drive mobile robot simulation
-manipulator joint-state simulation
-simulation loops
-pose integration
-trajectory logging
-trajectory metrics
-validation checks
-modular headers and sources
-CMake build
-```
-
-This layer teaches and validates:
-
-```txt
-C++ syntax precision
-header/source separation
-state containers
-pass-by-reference updates
-deterministic simulation loops
-kinematic modeling
-trajectory analysis
-small-scale validation
-```
-
-The standalone executable is conceptually:
-
-```txt
-robotics_sim
-```
-
-This layer does not publish ROS topics and does not interact with Gazebo.
-
----
-
-## 6. Layer 2 — ROS 2 Kinematic Simulator
-
-The original ROS 2 simulator is a C++ `rclcpp` node.
-
-Node:
-
-```txt
-/sim_node
-```
-
-Executable:
-
-```txt
-sim_node
-```
-
-Launch:
-
-```bash
-ros2 launch cpp_robotics_sim_ros sim.launch.py
-```
-
-Runtime flow:
-
-```txt
-/cmd_vel
-  ↓
-sim_node
-  ↓
-/robot_pose
-/odom
-/tf
-/diagnostics
-```
-
-Responsibilities:
-
-```txt
-subscribe to /cmd_vel
-store latest velocity command
-clamp unsafe commands
-apply command timeout
-integrate planar pose
-publish geometry_msgs/Pose2D on /robot_pose
-publish nav_msgs/Odometry on /odom
-broadcast odom -> base_link
-publish diagnostics
-measure timer callback performance
-```
-
-This stack is useful for learning ROS 2 concepts without Gazebo physics.
-
----
-
-## 7. Kinematic Simulator Math
-
-The kinematic simulator uses planar unicycle-style motion.
-
-State:
-
-```txt
-x, y, theta
-```
-
-Command:
-
-```txt
-v = linear.x
-w = angular.z
-```
-
-Update:
-
-```txt
-theta = theta + w * dt
-x     = x + v * cos(theta) * dt
-y     = y + v * sin(theta) * dt
-```
-
-Heading normalization:
-
-```cpp
-theta = atan2(sin(theta), cos(theta));
-```
-
-Yaw quaternion for odometry and TF:
-
-```cpp
-q.x = 0.0;
-q.y = 0.0;
-q.z = sin(theta / 2.0);
-q.w = cos(theta / 2.0);
-```
-
-The simulator publishes:
-
-```txt
-/odom
-header.frame_id = odom
-child_frame_id  = base_link
-```
-
----
-
-## 8. Kinematic Simulator Safety and Diagnostics
-
-Safety features:
-
-```txt
-velocity command clamping
-command timeout
-parameter validation
-diagnostic status publishing
-callback timing measurement
-```
-
-Important parameters:
-
-```txt
-dt
-initial_x
-initial_y
-initial_theta
-cmd_timeout
-max_linear_velocity
-max_angular_velocity
-```
-
-Configuration path:
-
-```txt
-config/sim_params.yaml
-```
-
-Launch override example:
-
-```bash
-ros2 launch cpp_robotics_sim_ros sim.launch.py   initial_x:=2.0   initial_y:=1.0   initial_theta:=0.5   dt:=0.05   cmd_timeout:=1.0   max_linear_velocity:=0.2   max_angular_velocity:=0.4
-```
-
-Parameter precedence for exposed parameters:
-
-```txt
-terminal override > launch argument default > YAML > C++ default
-```
-
-Diagnostics topic:
-
-```txt
-/diagnostics
-diagnostic_msgs/msg/DiagnosticArray
-```
-
-Diagnostics report:
-
-```txt
-dt
-cmd_timeout
-time_since_cmd
-timeout_active
-current command
-velocity limits
-current pose
-callback time
-average callback time
-max callback time
-timing budget
-callback count
-```
-
----
-
-## 9. Robot Description Layer
-
-The robot is modeled as a differential-drive robot.
-
-Reference URDF:
-
-```txt
-urdf/diffbot.urdf
-```
-
-Maintainable robot model:
-
-```txt
-xacro/diffbot.xacro
-```
-
-Primary links:
-
-```txt
-base_link
-left_wheel_link
-right_wheel_link
-caster_link
-lidar_link
-```
-
-Primary joints:
-
-```txt
-left_wheel_joint   continuous
-right_wheel_joint  continuous
-caster_joint       fixed
-lidar_joint        fixed
-```
-
-Xacro is used because it supports reusable properties and macros for:
-
-```txt
-chassis dimensions
-wheel radius
-wheel width
-wheel separation
-caster dimensions
-lidar dimensions
-masses
-inertia blocks
-wheel link generation
-ros2_control interface declaration
-Gazebo sensor declaration
-```
-
-Robot description flow:
-
-```txt
-diffbot.xacro
-  ↓
-xacro command in launch
-  ↓
-robot_description parameter
-  ↓
-robot_state_publisher
-  ↓
-/robot_description
-/tf
-/tf_static
-```
-
----
-
-## 10. Robot State and Joint State Publishing
-
-Two joint-state mechanisms exist in the project.
-
-### Visualization-only stack
-
-```txt
-joint_state_publisher
-  ↓
-/joint_states
-  ↓
-robot_state_publisher
-  ↓
-base_link -> wheel link transforms
-```
-
-This is used for RViz robot model visualization without Gazebo control.
-
-### Gazebo ros2_control stack
-
-```txt
-Gazebo simulated wheel joints
-  ↓
-gz_ros2_control
-  ↓
-ros2_control state interfaces
-  ↓
-joint_state_broadcaster
-  ↓
-/joint_states
-  ↓
-robot_state_publisher
-```
-
-This is the correct joint state owner when Gazebo and `ros2_control` are active.
-
----
-
-## 11. Gazebo Simulation Layer
-
-World file:
-
-```txt
-worlds/empty_diffbot_world.sdf
-```
-
-Gazebo launch files:
-
-```txt
-gazebo_spawn.launch.py
+```text
 ros2_control.launch.py
-nav2_navigation.launch.py
+command_mux_node.py
 ```
 
-The world contains:
+The command multiplexer is delayed to allow the simulator and controller
+stack to initialize first.
 
-```txt
-physics system
-user commands system
-scene broadcaster system
-sensors system
-sun light
-ground plane
-static lidar obstacle boxes
-```
+The core runtime includes:
 
-Static obstacle boxes:
-
-```txt
-scan_box_front:
-  center = (2.0, 0.0, 0.5)
-  size   = (0.4, 1.0, 1.0)
-  footprint approx:
-    x = 1.8 to 2.2
-    y = -0.5 to 0.5
-
-scan_box_left:
-  center = (0.0, 2.0, 0.5)
-  size   = (1.0, 0.4, 1.0)
-  footprint approx:
-    x = -0.5 to 0.5
-    y = 1.8 to 2.2
-```
-
-Gazebo spawn flow:
-
-```txt
-empty_diffbot_world.sdf
-  ↓
-Gazebo Sim starts
-  ↓
-robot_description is published from Xacro
-  ↓
-ros_gz_sim create spawns diffbot
-  ↓
-diffbot appears in Gazebo
-```
-
-Important distinction:
-
-```txt
-Gazebo simulates physics, joints, contact, obstacles, and sensors.
-RViz visualizes ROS topics and TF.
-RViz does not simulate physics and does not add real obstacles.
-```
-
----
-
-## 12. ros2_control and Gazebo Hardware Interface
-
-The robot Xacro declares a `ros2_control` system using the Gazebo simulated hardware backend.
-
-Each wheel joint exposes:
-
-```txt
-command interface: velocity
-state interface: position
-state interface: velocity
-```
-
-Architecture:
-
-```txt
-diffbot.xacro ros2_control block
-  ↓
-generated robot_description
-  ↓
-gz_ros2_control plugin
-  ↓
+```text
+Gazebo Harmonic
+selected world
+robot description
+robot_state_publisher
+gz_ros2_control
 controller_manager
-  ↓
-controllers operate on simulated wheel hardware interfaces
-```
-
-`ros2_control` separates controller logic from the hardware/simulator backend. In this project, Gazebo is the simulated hardware.
-
----
-
-## 13. controller_manager and Controllers
-
-`controller_manager` is created by the `gz_ros2_control` Gazebo plugin.
-
-It is responsible for:
-
-```txt
-loading controllers
-configuring controllers
-activating controllers
-connecting controllers to hardware interfaces
-exposing controller state through ros2 control CLI
-```
-
-Expected active controllers:
-
-```txt
 joint_state_broadcaster
 diff_drive_controller
+LiDAR bridge
+simulation-time bridge
+command_mux
 ```
 
-Validation:
-
-```bash
-ros2 control list_controllers
-ros2 control list_hardware_interfaces
-```
+The dashboard launcher remains available while the simulation itself is
+stopped.
 
 ---
 
-## 14. Differential-Drive Controller Layer
+## 12. Mode Manager
 
-The Gazebo-driven robot is moved by `diff_drive_controller`.
+The mode manager owns the active high-level operating mode and each
+mode-specific launch process.
 
-Input topic:
+### 12.1 Modes
 
-```txt
+```text
+stopped
+starting
+manual
+mapping
+localization
+navigation
+error
+```
+
+### 12.2 Interfaces
+
+Provides:
+
+```text
+/mode/manual
+/mode/mapping
+/mode/localization
+/mode/navigation
+/mode/stop
+```
+
+Publishes:
+
+```text
+/mode/status
+```
+
+Subscribes to simulation status and selected-map state.
+
+### 12.3 Transition rules
+
+A mode cannot be activated unless the simulation state is `running`.
+
+Localization and Navigation modes additionally require a selected map path.
+
+The code does not require proof that an initial pose has already been
+published before Navigation mode starts or before a goal is sent.
+
+Setting an initial pose remains operationally necessary for meaningful AMCL
+localization, but it is not an enforced navigation-goal invariant in
+`v0.1.0`.
+
+### 12.4 Mutual exclusion
+
+When a new mode is requested, the manager first stops the current mode.
+
+Manual mode does not launch a separate ROS 2 process.
+
+The other modes launch:
+
+```text
+Mapping      -> slam_mapping.launch.py
+Localization -> amcl_localization.launch.py
+Navigation   -> nav2_navigation.launch.py
+```
+
+### 12.5 Mode-process shutdown
+
+Mode-specific launches run in their own process groups.
+
+The mode manager sends `SIGTERM`, waits, and escalates cleanup when required.
+
+This process ownership is separate from the simulation manager's core
+simulation process group.
+
+---
+
+## 13. Command Multiplexer
+
+`command_mux_node.py` is the authority that selects and forwards velocity
+commands to the robot controller.
+
+### 13.1 Configured command sources
+
+| Source | Topic | Priority | Freshness timeout |
+|---|---|---:|---:|
+| Gamepad | `/cmd_vel/gamepad` | 100 | 0.50 s |
+| Terminal keyboard | `/cmd_vel/keyboard` | 90 | 0.50 s |
+| Browser GUI and browser keyboard | `/cmd_vel/gui` | 80 | 0.75 s |
+| Navigation | `/cmd_vel/navigation` | 50 | 0.50 s |
+
+The gamepad source is configured in the multiplexer, but PS4/gamepad support
+is not part of the completed `v0.1.0` public feature scope.
+
+### 13.2 Output
+
+```text
 /diff_drive_controller/cmd_vel
 geometry_msgs/msg/TwistStamped
 ```
 
-Output topics:
+### 13.3 Selection algorithm
 
-```txt
-/diff_drive_controller/odom
-/diff_drive_controller/cmd_vel_out
-/tf
+At 20 Hz, the multiplexer:
+
+1. checks emergency-stop state;
+2. removes expired or invalid sources from consideration;
+3. selects the highest-priority fresh source;
+4. clamps supported velocity components;
+5. clears unsupported Twist components;
+6. publishes the selected command;
+7. publishes the active source.
+
+If no source is fresh, it publishes zero velocity and reports:
+
+```text
+/control/active_source = none
 ```
 
-Control flow:
+### 13.4 Input validation
 
-```txt
+A command is rejected when any Twist component is non-finite.
+
+### 13.5 Velocity limits
+
+```text
+maximum linear velocity: 0.30 m/s
+maximum angular velocity: 1.00 rad/s
+```
+
+### 13.6 Emergency stop
+
+The multiplexer subscribes to:
+
+```text
+/control/emergency_stop
+std_msgs/msg/Bool
+```
+
+When active, emergency stop overrides every command source, publishes zero
+velocity, and reports:
+
+```text
+/control/active_source = emergency_stop
+```
+
+### 13.7 Safe-stop ownership
+
+The primary continuous safe-stop behavior belongs to the command
+multiplexer.
+
+When an active source stops publishing and its freshness timeout expires,
+the multiplexer selects no source and publishes zero velocity.
+
+The navigation goal manager reports action completion and resets its goal
+state, but it does not directly publish a zero-velocity command in the
+tagged `v0.1.0` implementation.
+
+---
+
+## 14. Manual Control Architecture
+
+### 14.1 Browser controls
+
+Dashboard buttons and browser keyboard events publish:
+
+```text
+/cmd_vel/gui
+geometry_msgs/msg/TwistStamped
+```
+
+Flow:
+
+```text
+Dashboard button or browser key
+        |
+        v
+/cmd_vel/gui
+        |
+        v
+command_mux
+        |
+        v
 /diff_drive_controller/cmd_vel
-  ↓
+        |
+        v
 diff_drive_controller
-  ↓
-left_wheel_joint and right_wheel_joint velocity commands
-  ↓
-gz_ros2_control
-  ↓
-Gazebo wheel joints
-  ↓
-robot moves in Gazebo
-  ↓
-/diff_drive_controller/odom
-/tf odom -> base_link
+        |
+        v
+Gazebo robot
 ```
 
-Differential-drive math used internally by the controller:
+Releasing browser controls publishes zero commands, and the GUI source also
+expires after 0.75 seconds if updates stop unexpectedly.
 
-```txt
-v     = r / 2 * (wr + wl)
-omega = r / L * (wr - wl)
+### 14.2 Terminal keyboard control
 
-wr = (v + omega * L / 2) / r
-wl = (v - omega * L / 2) / r
+`keyboard_teleop_node.py` is a separate optional terminal interface.
+
+It publishes:
+
+```text
+/cmd_vel/keyboard
+geometry_msgs/msg/TwistStamped
 ```
 
-Where:
+The terminal keyboard source has higher priority than the browser GUI source.
 
-```txt
-v      = body forward velocity
-omega  = yaw velocity
-r      = wheel radius
-L      = wheel separation
-wr     = right wheel angular velocity
-wl     = left wheel angular velocity
-```
+It is not the same as browser-keyboard control.
 
 ---
 
-## 15. Simulated Lidar and ROS-Gazebo Bridge
+## 15. Mapping Manager
 
-The robot has a simulated 2D lidar attached to:
+The mapping manager owns map-save requests and saved-map inventory.
 
-```txt
-lidar_link
+### 15.1 Interfaces
+
+Subscribes:
+
+```text
+/mapping/save_request
+/mode/status
+/simulation/status
+/simulation/environment_status
 ```
 
-Sensor type:
+Publishes:
 
-```txt
-Gazebo gpu_lidar
+```text
+/mapping/save_status
+/mapping/saved_maps
 ```
 
-Gazebo-to-ROS bridge flow:
+### 15.2 Map root
 
-```txt
-Gazebo gpu_lidar sensor
-  ↓
-Gazebo /scan
-  ↓
-ros_gz_bridge parameter_bridge
-  ↓
-ROS 2 /scan
-  ↓
-sensor_msgs/msg/LaserScan
+```text
+~/.ros/cpp_robotics_sim/maps
 ```
 
-The bridge also exposes simulation time:
+### 15.3 Environment-aware storage
 
-```txt
-Gazebo /clock
-  ↓
-ros_gz_bridge
-  ↓
-ROS 2 /clock
+Maps are saved under:
+
+```text
+~/.ros/cpp_robotics_sim/maps/<environment>/<map_name>.yaml
+~/.ros/cpp_robotics_sim/maps/<environment>/<map_name>.pgm
 ```
 
-RViz and ROS nodes that visualize Gazebo-driven data must use simulation time:
+### 15.4 Save implementation
 
-```txt
-use_sim_time: true
+The manager validates the request, resolves the environment directory, and
+invokes:
+
+```text
+nav2_map_server map_saver_cli
 ```
 
-If wall time and sim time are mixed, RViz may show stale TF warnings.
+A save is treated as successful only when both YAML and PGM files exist.
+
+### 15.5 Inventory
+
+The manager recursively scans the managed map root, derives environment
+metadata from each relative path, checks whether the matching image exists,
+and publishes a JSON map inventory.
 
 ---
 
-## 16. Transform Ownership
+## 16. Mapping Mode
 
-Transform ownership depends on which stack is running.
+Mapping mode launches:
 
-### Kinematic simulator stack
+```text
+slam_mapping.launch.py
+```
 
-```txt
-sim_node owns:
+SLAM Toolbox consumes LiDAR and TF data and publishes the occupancy grid and
+map correction transform.
+
+### 16.1 Data flow
+
+```text
+Gazebo LiDAR
+    |
+    v
+/scan -----------------------+
+                             |
+diff_drive_controller        |
+    |                        |
+    v                        |
+odom -> base_link            |
+                             v
+                       SLAM Toolbox
+                             |
+                  +----------+----------+
+                  |                     |
+                  v                     v
+                /map                map -> odom
+```
+
+### 16.2 TF ownership during mapping
+
+```text
+SLAM Toolbox:
+  map -> odom
+
+diff_drive_controller:
   odom -> base_link
 
-robot_state_publisher owns:
-  base_link -> left_wheel_link
-  base_link -> right_wheel_link
-  base_link -> caster_link
-  base_link -> lidar_link
+robot_state_publisher:
+  base_link -> robot links and sensors
 ```
 
-### Gazebo / ros2_control / Nav2 stack
+SLAM Toolbox and AMCL must not simultaneously own `map -> odom`.
 
-```txt
-diff_drive_controller owns:
+Mode mutual exclusion prevents Mapping and Localization/Navigation from being
+active together.
+
+---
+
+## 17. Localization Manager
+
+The localization manager validates map selection and publishes initial-pose
+messages.
+
+### 17.1 Interfaces
+
+Subscribes:
+
+```text
+/localization/select_map_request
+/localization/initial_pose_request
+/mode/status
+/simulation/status
+/simulation/environment_status
+```
+
+Publishes:
+
+```text
+/localization/selected_map
+/localization/status
+/initialpose
+```
+
+### 17.2 Selected-map state
+
+The manager stores:
+
+```text
+selected map name
+selected map YAML path
+selected map environment
+selected simulation environment
+```
+
+### 17.3 Map resolution
+
+For environment `<environment>` and map `<name>`, the preferred path is:
+
+```text
+~/.ros/cpp_robotics_sim/maps/<environment>/<name>.yaml
+```
+
+A legacy root-level map location is also recognized by the `v0.1.0`
+implementation.
+
+### 17.4 Environment switching
+
+When the simulation environment changes, a selected map belonging to another
+environment is cleared and the updated empty selection is published.
+
+### 17.5 Initial pose
+
+The manager publishes:
+
+```text
+geometry_msgs/msg/PoseWithCovarianceStamped
+```
+
+to:
+
+```text
+/initialpose
+```
+
+A selected map is required before an initial-pose request is accepted.
+
+---
+
+## 18. Localization Mode
+
+Localization mode launches:
+
+```text
+amcl_localization.launch.py
+```
+
+The launch contains:
+
+```text
+scan-frame compatibility transform
+nav2_map_server map_server
+nav2_amcl amcl
+localization lifecycle manager
+```
+
+The lifecycle manager automatically activates:
+
+```text
+map_server
+amcl
+```
+
+### 18.1 Data flow
+
+```text
+Saved YAML and PGM map
+        |
+        v
+    map_server
+        |
+        v
+       /map ----------------------+
+                                  |
+Gazebo LiDAR                      |
+    |                             |
+    v                             |
+  /scan --------------------------+
+                                  |
+diff_drive_controller             |
+    |                             |
+    v                             |
+odom -> base_link                 |
+                                  v
+                                AMCL
+                                  |
+                       +----------+----------+
+                       |                     |
+                       v                     v
+                  /amcl_pose            map -> odom
+```
+
+### 18.2 TF ownership during localization
+
+```text
+AMCL:
+  map -> odom
+
+diff_drive_controller:
   odom -> base_link
 
-joint_state_broadcaster owns:
-  /joint_states
-
-robot_state_publisher owns:
-  base_link -> left_wheel_link
-  base_link -> right_wheel_link
-  base_link -> caster_link
-  base_link -> lidar_link
+robot_state_publisher:
+  base_link -> robot links and sensors
 ```
 
-Important rule:
+Expected transform chain:
 
-```txt
-Do not run sim_node and diff_drive_controller as simultaneous publishers of odom -> base_link.
+```text
+map -> odom -> base_link
 ```
-
-Expected frame tree:
-
-```txt
-odom
-  └── base_link
-      ├── left_wheel_link
-      ├── right_wheel_link
-      ├── caster_link
-      └── lidar_link
-```
-
-A Gazebo scan frame issue was observed where `/scan` used a Gazebo-generated frame name. The fix was to add the required static transform so the scan frame connects into the TF tree.
 
 ---
 
-## 17. RViz Visualization Layer
+## 19. Navigation Goal Manager
 
-Saved RViz configs:
+The navigation goal manager provides dashboard and CLI clients with a JSON
+interface to Nav2's `NavigateToPose` action.
 
-```txt
-rviz/sim_debug.rviz
-rviz/diffbot_robot_model.rviz
+### 19.1 Interfaces
+
+Subscribes:
+
+```text
+/navigation/goal_request
+/navigation/cancel_request
+/mode/status
+/simulation/status
 ```
 
-For Gazebo/Nav2 workflows, RViz should use:
+Publishes:
 
-```txt
-Fixed Frame: odom
-use_sim_time: true
+```text
+/navigation/status
+/navigation/feedback
 ```
 
-Important displays:
+Uses action:
 
-```txt
-Grid
-TF
-RobotModel
-Odometry
-LaserScan
-Global Costmap
-Local Costmap
-Global Plan
-Local Plan
+```text
+/navigate_to_pose
+nav2_msgs/action/NavigateToPose
 ```
 
-RViz can send goals through the goal tool, but it does not create real obstacles. Real obstacles must be in Gazebo/SDF.
+### 19.2 Goal frame
+
+Every action goal is created in:
+
+```text
+map
+```
+
+### 19.3 Goal acceptance rules
+
+A goal is rejected unless:
+
+```text
+the JSON request is valid
+x, y, and yaw are present and valid
+the simulation state is running
+the active mode is navigation
+no other navigation goal is active
+the NavigateToPose server is available
+```
+
+The goal manager does not check whether `/initialpose` has already been
+published.
+
+### 19.4 Goal state
+
+The manager tracks:
+
+```text
+request identifier
+current goal
+active goal handle
+goal request in progress
+cancel requested
+last feedback
+```
+
+### 19.5 Completion
+
+The manager converts ROS action status into:
+
+```text
+succeeded
+canceled
+aborted
+```
+
+It publishes the final status and resets internal goal state.
+
+### 19.6 Cancellation
+
+A cancellation request must contain:
+
+```json
+{"cancel": true}
+```
+
+The manager requests asynchronous cancellation and publishes cancellation
+progress and result state.
 
 ---
 
-## 18. Validation and Measurement Layer
+## 20. Navigation Mode
 
-The project includes a measurement layer for simulation evidence.
+Navigation mode launches:
 
-### Noisy odometry
-
-```txt
-/diff_drive_controller/odom
-  ↓
-noisy_odom_node.py
-  ↓
-/odom_noisy
+```text
+nav2_navigation.launch.py
 ```
 
-Purpose:
+### 20.1 Localization portion
 
-```txt
-controlled measurement noise
-covariance fields
-state-estimation readiness
-Sim2Real-style robustness preparation
+The launch includes Nav2's localization launch with:
+
+```text
+selected saved map
+shared Nav2 parameter file
+autostart enabled
+composition disabled
 ```
 
-### Trajectory validation
+This provides map-server and AMCL functionality for navigation.
 
-```txt
+### 20.2 Navigation servers
+
+The launch starts:
+
+```text
+controller_server
+planner_server
+behavior_server
+bt_navigator
+waypoint_follower
+velocity_smoother
+navigation lifecycle manager
+```
+
+### 20.3 Command path
+
+The exact `v0.1.0` navigation command path is:
+
+```text
+controller_server or behavior_server
+        |
+        | remapped output
+        v
+/cmd_vel_nav_raw
+        |
+        v
+velocity_smoother
+        |
+        v
+/cmd_vel
+geometry_msgs/msg/Twist
+        |
+        v
+cmd_vel_twist_bridge
+        |
+        v
+/cmd_vel/navigation
+geometry_msgs/msg/TwistStamped
+        |
+        v
+command_mux
+        |
+        v
 /diff_drive_controller/cmd_vel
-/diff_drive_controller/odom
-/odom_noisy
-  ↓
-trajectory_validation_recorder.py
-  ↓
-data/day84_trajectory_validation.csv
-  ↓
-plot_trajectory_validation.py
-  ↓
-plots/trajectory_validation.png
+geometry_msgs/msg/TwistStamped
+        |
+        v
+diff_drive_controller
+        |
+        v
+Gazebo wheel joints
 ```
 
-Validation proves the system is:
+Navigation has the lowest configured command-source priority:
 
-```txt
-commandable
-measurable
-recordable
-plotable
-explainable
-repeatable
+```text
+navigation priority: 50
 ```
+
+Therefore fresh gamepad, terminal-keyboard, or GUI commands take priority
+over navigation commands.
+
+### 20.4 Navigation stop behavior
+
+After Nav2 stops publishing fresh commands, the navigation source expires
+after 0.50 seconds. The command multiplexer then publishes zero velocity and
+sets the active source to `none`, unless another valid higher-priority source
+is active.
+
+The goal manager itself does not directly publish the stop command.
 
 ---
 
-## 19. GoogleTest Unit Testing Layer
+## 21. Nav2 Frame Architecture
 
-Deterministic C++ unit tests validate the core math layer.
+The `v0.1.0` navigation configuration is intentionally described precisely
+because it is not a conventional all-map-frame Nav2 configuration.
 
-Files:
+### 21.1 Global localization
 
-```txt
-include/cpp_robotics_sim_ros/core_math.hpp
-test/test_core_math.cpp
+AMCL uses:
+
+```text
+global_frame_id: map
+odom_frame_id: odom
+base_frame_id: base_link
 ```
 
-Tested functions:
+Navigation goals are sent in:
 
-```txt
-clamp()
-wrapToPi()
-integratePose()
+```text
+map
 ```
 
-Current unit test baseline:
+### 21.2 Costmap and controller frames
 
-```txt
-17 tests
+The tagged Nav2 parameter file configures the relevant Nav2 costmaps and
+controller-side global-frame settings as:
+
+```text
+global_frame: odom
+robot_base_frame: base_link
+```
+
+### 21.3 Hybrid frame design
+
+The release therefore combines:
+
+```text
+map-frame AMCL localization
+map-frame NavigateToPose goals
+map -> odom correction from AMCL
+odom-frame Nav2 costmaps and controller configuration
+```
+
+This is a hybrid `v0.1.0` design, not a conventional fully map-frame global
+costmap architecture.
+
+The system was validated operationally, but further frame and navigation
+parameter refinement is appropriate for later releases.
+
+---
+
+## 22. Principal TF Ownership
+
+```text
+map
+  |
+  v
+odom
+  |
+  v
+base_link
+  |
+  +-- left_wheel_link
+  +-- right_wheel_link
+  +-- caster_link
+  +-- lidar_link
+```
+
+| TF edge | Manual | Mapping | Localization | Navigation |
+|---|---|---|---|---|
+| `map -> odom` | not required | SLAM Toolbox | AMCL | AMCL |
+| `odom -> base_link` | `diff_drive_controller` | `diff_drive_controller` | `diff_drive_controller` | `diff_drive_controller` |
+| `base_link -> robot links` | `robot_state_publisher` | `robot_state_publisher` | `robot_state_publisher` | `robot_state_publisher` |
+
+The scan launch paths also publish a compatibility transform between
+`lidar_link` and the Gazebo-generated LiDAR frame.
+
+Duplicate publishers for one TF edge must be avoided.
+
+---
+
+## 23. Safety Architecture
+
+### 23.1 Environment validation
+
+Only configured environment names and world files are accepted.
+
+### 23.2 Mode transition validation
+
+Modes require a running simulation. Localization and Navigation additionally
+require a selected map.
+
+### 23.3 Map-path validation
+
+Map names and resolved paths are constrained to the managed map root.
+
+### 23.4 Navigation request validation
+
+Navigation JSON, numeric fields, active state, and action-server readiness
+are validated before a goal is sent.
+
+### 23.5 Finite-command validation
+
+The command mux rejects non-finite velocity commands.
+
+### 23.6 Velocity clamping
+
+The command mux limits supported linear and angular velocities.
+
+### 23.7 Source freshness
+
+Each command source must continue publishing within its configured timeout.
+
+### 23.8 Priority arbitration
+
+Only the highest-priority fresh source is forwarded.
+
+### 23.9 Emergency-stop override
+
+Emergency stop forces zero output regardless of source state.
+
+### 23.10 No-source stop
+
+When no fresh source exists, the command mux continuously publishes zero
+velocity.
+
+---
+
+## 24. Process-Lifecycle Architecture
+
+There are three distinct process-management layers.
+
+### 24.1 Dashboard-launch layer
+
+`web_interface.launch.py`:
+
+```text
+enforces one dashboard instance
+removes stale project processes at startup
+owns dashboard server, rosbridge, and manager-node launch
+```
+
+### 24.2 Simulation layer
+
+`simulation_manager_node.py`:
+
+```text
+owns interactive_control.launch.py
+owns the selected Gazebo world and core robot runtime
+tracks a simulation process group
+handles stop, reset, unexpected exit, SIGTERM, and SIGKILL
+```
+
+### 24.3 Mode layer
+
+`mode_manager_node.py`:
+
+```text
+owns SLAM, localization, or navigation launch process groups
+stops the previous mode before activating another
+terminates remaining descendant processes when required
+```
+
+These layers should not be collapsed into one generic “process manager”
+because they have different scopes and responsibilities.
+
+---
+
+## 25. Build, Docker, and CI Architecture
+
+### 25.1 Native build
+
+The native build uses ROS 2 Jazzy and `colcon` from `ros2_ws`.
+
+### 25.2 Docker image
+
+The Dockerfile creates an Ubuntu 24.04 / ROS 2 Jazzy development and test
+image.
+
+During image creation it:
+
+```text
+installs ROS 2 and build dependencies
+resolves package dependencies with rosdep
+creates a non-root development user
+copies the repository
+runs source syntax checks
+builds the ROS 2 package with testing enabled
+sources ROS and the workspace in interactive shells
+```
+
+The default container command is:
+
+```text
+/bin/bash
+```
+
+The Docker image is the supported clean build-and-test environment for
+`v0.1.0`.
+
+It is not packaged as a complete graphical Gazebo runtime entrypoint.
+Graphical simulation is normally run natively on the host.
+
+### 25.3 GitHub Actions
+
+The ROS 2 Jazzy workflow performs native validation and a separate Docker
+build-and-test job.
+
+---
+
+## 26. Validation Architecture
+
+The tagged package registers:
+
+```text
+test_navigation_goal_validation
+test_map_name_validation
+test_environment_validation
+test_localization_environment_switch
+test_mode_transition_rules
+test_command_mux_safety
+test_safe_map_path_resolution
+test_core_math
+ament lint tests
+```
+
+Repository-level integration validation additionally includes:
+
+```text
+source syntax checks
+simulator launch regression
+headless dashboard integration
+public launcher lifecycle validation
+Docker full test execution
+Docker cleanup verification
+```
+
+The validated `v0.1.0` release gate reported:
+
+```text
+357 tests
 0 errors
 0 failures
 0 skipped
 ```
 
-Purpose:
+The test-count statement is a release-gate result tied to release commit:
 
-```txt
-GoogleTest verifies deterministic C++ math.
-It does not replace Gazebo, launch, sensor, controller, or Nav2 runtime tests.
+```text
+28a080e72ee6e31baa25bcd2fdaa249706520361
 ```
+
+It should not be interpreted as a guarantee that every future branch will
+always register the same number of tests.
 
 ---
 
-## 20. GitHub Actions CI Layer
+## 27. Observability
 
-CI workflow:
+The platform exposes state through:
 
-```txt
-.github/workflows/ros2_jazzy_ci.yml
+```text
+dashboard status panels
+manager status topics
+navigation feedback topics
+active command-source topic
+ROS 2 node, topic, service, and action inspection
+TF inspection
+controller inspection
+lifecycle inspection
+process and port checks
+test output
+GitHub Actions
 ```
 
-CI validates:
-
-```txt
-repository checkout
-ROS 2 Jazzy dependency installation
-rosdep dependency installation
-colcon build
-GoogleTest execution
-test log artifact upload
-```
-
-CI currently does not run full Gazebo/Nav2 scenarios because those are runtime simulation checks, not simple unit tests.
-
-CI role:
-
-```txt
-remote build/test gate for code correctness
-```
-
----
-
-## 21. Performance Benchmarking Layer
-
-A deterministic C++ benchmark measures the core update layer.
-
-Executable:
-
-```txt
-performance_benchmark
-```
-
-Benchmark measures:
-
-```txt
-deterministic pose integration timing
-multiple dt values
-virtual robot updates
-wall-clock time
-estimated real-time factor
-```
-
-Reported baseline:
-
-```txt
-dt=0.1    RTF ≈ 5684.98
-dt=0.01   RTF ≈ 574.99
-dt=0.001  RTF ≈ 57.23
-```
-
-Scope limitation:
-
-```txt
-This benchmark does not include Gazebo physics, rendering, ROS middleware, TF, sensors, rosbag, RViz, or Nav2.
-```
-
----
-
-## 22. Nav2 Integration Layer — Days 91-100
-
-Days 91-100 added the first working Nav2 navigation phase.
-
-Primary launch:
-
-```txt
-launch/nav2_navigation.launch.py
-```
-
-Primary parameters:
-
-```txt
-config/nav2_params.yaml
-```
-
-Primary validation scripts:
-
-```txt
-scripts/nav2_lifecycle_check.sh
-scripts/nav2_costmap_check.sh
-scripts/nav2_planner_controller_check.sh
-```
-
-Primary bridge:
-
-```txt
-scripts/cmd_vel_twist_bridge.py
-```
-
-Nav2 phase scope:
-
-```txt
-odom-frame navigation only
-no SLAM yet
-no saved map yet
-no AMCL yet
-no EKF active in Nav2 loop yet
-```
-
-The goal of this phase is to prove:
-
-```txt
-Nav2 launches
-lifecycle nodes activate
-local and global costmaps publish
-planner can compute paths
-controller can follow paths
-Nav2 commands reach the Gazebo diff-drive controller
-robot reaches goals in Gazebo/RViz
-recovery/failure behavior is observable
-waypoint navigation works
-rosbag evidence is recorded and replayable
-```
-
----
-
-## 23. Nav2 Runtime Architecture
-
-Nav2 command flow:
-
-```txt
-NavigateToPose / NavigateThroughPoses action
-  ↓
-bt_navigator
-  ↓
-planner_server
-  ↓
-/plan
-  ↓
-controller_server
-  ↓
-/cmd_vel_nav
-  ↓
-velocity_smoother
-  ↓
-/cmd_vel
-  ↓
-cmd_vel_twist_bridge.py
-  ↓
-/diff_drive_controller/cmd_vel
-  ↓
-diff_drive_controller
-  ↓
-ros2_control
-  ↓
-gz_ros2_control
-  ↓
-Gazebo wheel joints
-  ↓
-robot moves
-  ↓
-/diff_drive_controller/odom
-/tf
-```
-
-Sensor/costmap flow:
-
-```txt
-Gazebo obstacles
-  ↓
-Gazebo lidar
-  ↓
-ros_gz_bridge
-  ↓
-/scan
-  ↓
-Nav2 obstacle layers
-  ↓
-/local_costmap/costmap
-/global_costmap/costmap
-```
-
-Planning and feedback flow:
-
-```txt
-/diff_drive_controller/odom
-/tf
-/scan
-/costmaps
-  ↓
-Nav2 planner/controller/behavior tree
-  ↓
-path, local plan, recoveries, velocity commands
-```
-
----
-
-## 24. Why `cmd_vel_twist_bridge.py` Exists
-
-Nav2 publishes:
-
-```txt
-/cmd_vel
-geometry_msgs/msg/Twist
-```
-
-The Gazebo diff-drive controller expects:
-
-```txt
-/diff_drive_controller/cmd_vel
-geometry_msgs/msg/TwistStamped
-```
-
-The bridge converts between them:
-
-```txt
-/cmd_vel Twist
-  ↓
-cmd_vel_twist_bridge.py
-  ↓
-/diff_drive_controller/cmd_vel TwistStamped
-```
-
-This allows Nav2 to control the Gazebo robot without changing the controller interface.
-
----
-
-## 25. Nav2 Lifecycle Architecture
-
-Nav2 uses lifecycle-managed nodes. Important nodes:
-
-```txt
-/lifecycle_manager_navigation
-/controller_server
-/smoother_server
-/planner_server
-/behavior_server
-/velocity_smoother
-/bt_navigator
-/waypoint_follower
-/local_costmap/local_costmap
-/global_costmap/global_costmap
-```
-
-Lifecycle pass state:
-
-```txt
-active [3]
-```
-
-Lifecycle validation confirmed that the main Nav2 nodes become active and expose navigation actions.
-
-The project includes a lifecycle validation script:
+Representative commands:
 
 ```bash
-ros2 run cpp_robotics_sim_ros nav2_lifecycle_check.sh
-```
-
----
-
-## 26. Nav2 Costmap Architecture
-
-The Nav2 phase currently uses odom-frame costmaps.
-
-Expected costmap frames:
-
-```txt
-local_costmap.global_frame  = odom
-local_costmap.robot_base_frame = base_link
-
-global_costmap.global_frame = odom
-global_costmap.robot_base_frame = base_link
-```
-
-Core topics:
-
-```txt
-/scan
-/local_costmap/costmap
-/global_costmap/costmap
-/local_costmap/published_footprint
-/global_costmap/published_footprint
-```
-
-Costmap validation confirmed:
-
-```txt
-/scan publishes
-local costmap publishes
-global costmap publishes
-odom -> base_link TF exists
-costmap frames are odom/base_link
-RViz shows local/global costmaps
-```
-
-Validation script:
-
-```bash
-ros2 run cpp_robotics_sim_ros nav2_costmap_check.sh
-```
-
----
-
-## 27. Nav2 Planner and Controller Architecture
-
-Core actions:
-
-```txt
-/compute_path_to_pose
-/follow_path
-/navigate_to_pose
-/navigate_through_poses
-```
-
-Planner and controller validation confirmed:
-
-```txt
-planner_server active
-controller_server active
-/compute_path_to_pose exists
-/follow_path exists
-/navigate_to_pose exists
-planner computes odom-frame path
-controller parameters are readable and conservative
-robot can move from a Nav2 action command
-```
-
-Planner validation command:
-
-```bash
-ros2 action send_goal /compute_path_to_pose nav2_msgs/action/ComputePathToPose "{...}"
-```
-
-Controller parameter baseline:
-
-```txt
-controller_frequency = 10.0
-FollowPath.max_vel_x = 0.25
-FollowPath.max_vel_theta = 0.6
-FollowPath.acc_lim_x = 0.5
-FollowPath.acc_lim_theta = 1.0
-FollowPath.sim_time = 1.5
-FollowPath.vx_samples = 20
-FollowPath.vtheta_samples = 20
-```
-
-Validation script:
-
-```bash
-ros2 run cpp_robotics_sim_ros nav2_planner_controller_check.sh
-```
-
----
-
-## 28. Goal Navigation Architecture
-
-Closed-loop goal navigation was validated.
-
-Goal command path:
-
-```txt
-/navigate_to_pose action
-  ↓
-bt_navigator
-  ↓
-planner_server
-  ↓
-controller_server
-  ↓
-velocity_smoother
-  ↓
-/cmd_vel
-  ↓
-cmd_vel_twist_bridge.py
-  ↓
-/diff_drive_controller/cmd_vel
-  ↓
-robot motion in Gazebo
-```
-
-Observed result:
-
-```txt
-Nav2 goal accepted
-path appeared in RViz
-/cmd_vel published
-/diff_drive_controller/cmd_vel received TwistStamped commands
-/diff_drive_controller/odom changed
-robot moved in Gazebo
-robot reached goal in Gazebo/RViz
-```
-
-RViz goal behavior:
-
-```txt
-RViz 2D Goal Pose / Nav2 Goal publishes goal intent.
-CLI NavigateToPose action also works and is useful for repeatable tests.
-```
-
----
-
-## 29. Recovery and Failure Behavior Architecture
-
-Three failure and recovery conditions were tested using fixed SDF obstacles.
-
-Test 1 — goal inside front obstacle:
-
-```txt
-goal = (2.0, 0.0)
-result = ABORTED
-error_code = 105
-number_of_recoveries = 18
-behavior = repeated recovery/oscillation, stack survived
-```
-
-Test 2 — goal behind obstacle:
-
-```txt
-goal = (2.8, 0.0)
-result = SUCCEEDED
-error_code = 0
-number_of_recoveries = 8
-behavior = side route around obstacle, reached goal
-```
-
-Test 3 — goal outside practical costmap region:
-
-```txt
-goal = (20.0, 20.0)
-result = ABORTED
-error_code = 204
-number_of_recoveries = 0
-behavior = immediate clean abort, no robot drive attempt
-```
-
-Interpretation:
-
-```txt
-Nav2 does not silently crash on bad goals.
-It either attempts recovery or aborts cleanly depending on the failure mode.
-```
-
----
-
-## 30. Waypoint Navigation Architecture
-
-Multi-goal missions were tested using:
-
-```txt
-/navigate_through_poses
-nav2_msgs/action/NavigateThroughPoses
-```
-
-Mission results:
-
-```txt
-easy positive-x mission             -> SUCCEEDED
-mirrored negative-x mission         -> SUCCEEDED
-obstacle-side harder waypoint route -> SUCCEEDED after recoveries
-```
-
-Important feedback fields:
-
-```txt
-number_of_poses_remaining
-number_of_recoveries
-distance_remaining
-```
-
-The robot was validated against sequential goals rather than only a single goal.
-
----
-
-## 31. rosbag2 Evidence Architecture
-
-A replayable Nav2 evidence dataset was recorded.
-
-Bag path:
-
-```txt
-bags/day98_nav2_goal_evidence/goal_run_01
-```
-
-Storage:
-
-```txt
-MCAP
-```
-
-Bag summary:
-
-```txt
-Size: 3.4 MiB
-Duration: 31.118688884 s
-Messages: 6809
-```
-
-Important recorded topics:
-
-```txt
-/behavior_tree_log
-/cmd_vel
-/cmd_vel_nav
-/cmd_vel_smoothed
-/diff_drive_controller/cmd_vel
-/diff_drive_controller/cmd_vel_out
-/diff_drive_controller/odom
-/global_costmap/costmap
-/global_costmap/published_footprint
-/local_costmap/costmap
-/local_costmap/published_footprint
-/local_plan
-/plan
-/received_global_plan
-/scan
-/tf
-/tf_static
-/transformed_global_plan
-```
-
-Replay:
-
-```bash
-ros2 bag play bags/day98_nav2_goal_evidence/goal_run_01 --clock
-```
-
-Important note:
-
-```txt
-The goal was sent through the /navigate_to_pose action, so /goal_pose did not appear in the final bag.
-That is acceptable because the bag contains command, odometry, TF, scan, costmap, plan, and behavior-tree evidence.
-```
-
-Bag data should remain local and ignored by git.
-
----
-
-## 32. Nav2 Debugging Architecture
-
-A repeatable Nav2 debugging workflow was consolidated.
-
-Main debug categories:
-
-```txt
-lifecycle state
-action server availability
-costmap topics and frames
-scan topic and scan frame
-TF tree
-cmd_vel bridge
-planner action
-controller parameters
-goal feedback
-recovery behavior
-waypoint feedback
-rosbag evidence
-ROS log search
-```
-
-Most important diagnostic commands:
-
-```bash
+ros2 node list
+ros2 topic list
+ros2 service list
+ros2 action list
+ros2 control list_controllers
+ros2 lifecycle get /amcl
 ros2 lifecycle get /planner_server
-ros2 lifecycle get /controller_server
-ros2 lifecycle get /behavior_server
-ros2 lifecycle get /bt_navigator
-
-ros2 action list -t | sort
-
-ros2 topic echo --once /scan --field header
-ros2 run tf2_ros tf2_echo odom base_link
-
-ros2 topic echo /cmd_vel
-ros2 topic echo /diff_drive_controller/cmd_vel
-ros2 topic echo /diff_drive_controller/odom --field pose.pose.position
+ros2 run tf2_ros tf2_echo map base_link
+ss -ltnp | grep -E ':8080|:9090'
 ```
 
-Known non-blocking warning:
+Operational troubleshooting belongs in
+`docs/debugging_and_validation.md`.
 
-```txt
-RTPS_TRANSPORT_SHM Error Failed init_port fastrtps_port7005: open_and_lock_file failed -> Function open_port_internal
+---
+
+## 28. Data and Generated State
+
+### Saved maps
+
+```text
+~/.ros/cpp_robotics_sim/maps/<environment>/
 ```
 
-Current status:
+### ROS 2 workspace output
 
-```txt
-Non-blocking. It has not prevented lifecycle checks, costmaps, actions, planning, navigation, waypoints, or rosbag recording.
+```text
+ros2_ws/build/
+ros2_ws/install/
+ros2_ws/log/
+```
+
+### Other generated evidence
+
+Depending on the workflow:
+
+```text
+bags/
+data/
+plots/
+screenshots/
+videos/
+```
+
+Generated artifacts remain outside version control unless deliberately
+selected as small documentation evidence.
+
+---
+
+## 29. Known Limitations
+
+Release `v0.1.0` is a validated simulation platform, not a production robot
+fleet or hardware deployment system.
+
+Current limitations include:
+
+```text
+RViz is not embedded in the browser dashboard
+Nav2 costmaps use odom-frame configuration
+navigation tuning is not final
+initial-pose completion is not enforced as a goal-submission invariant
+gamepad input is configured but not part of the completed public feature set
+planner and controller selection is configuration-file based
+parameter tuning is configuration-file based
+custom robots are not dynamically imported through the dashboard
+custom worlds require configuration changes
+hosted CI does not run full graphical Gazebo scenarios
+automatic kidnapped-robot recovery is not implemented
+hardware deployment is outside scope
+multi-robot operation is outside scope
+```
+
+These are explicit release boundaries.
+
+---
+
+## 30. Planned Architectural Direction
+
+Post-`v0.1.0` work may include:
+
+```text
+navigation controller and costmap tuning
+cleaner map-frame Nav2 configuration
+dashboard parameter editing
+selectable planners and controllers
+richer visualization integration
+custom robot and world selection
+scenario orchestration
+repeatable navigation benchmarks
+automated parameter sweeps
+rosbag replay regression
+dynamic-obstacle scenarios
+sensor and physics noise sweeps
+simulation-to-hardware workflows
+gamepad integration
+```
+
+Future work should preserve:
+
+```text
+clear component ownership
+safe command arbitration
+mode mutual exclusion
+environment-aware data
+validated paths
+managed shutdown
+reproducible tests
+observable state
 ```
 
 ---
 
-## 33. Hard Reset Utility
+## 31. Architecture Summary
 
-The project uses a hard reset script to kill stale simulator processes before clean launches.
+```text
+Browser dashboard
+    |
+    | /cmd_vel/gui, services, request topics
+    v
+rosbridge and manager nodes
+    |
+    +--> simulation_manager
+    |      -> interactive_control.launch.py
+    |      -> Gazebo + ros2_control + command_mux
+    |
+    +--> mode_manager
+    |      -> SLAM, AMCL, or Nav2 launch process
+    |
+    +--> mapping_manager
+    |      -> safe environment-aware map persistence
+    |
+    +--> localization_manager
+    |      -> map selection and /initialpose
+    |
+    +--> navigation_goal_manager
+           -> NavigateToPose action
 
-Corrected location:
-
-```txt
-scripts/hard_reset.sh
-```
-
-Usage:
-
-```bash
-./scripts/hard_reset.sh
-```
-
-The script belongs in `scripts/`, not `docs/`, because it is an executable utility.
-
-This script is used before major runtime tests to prevent stale Gazebo, RViz, controller, bridge, or Nav2 nodes from interfering with fresh validation.
-
----
-
-## 34. Standard Launch and Validation Flow
-
-Clean reset:
-
-```bash
-cd ~/robotics_projects/cpp_robotics_sim_foundation
-
-./scripts/hard_reset.sh
-```
-
-Build:
-
-```bash
-source /opt/ros/jazzy/setup.bash
-rm -rf build install log
-colcon build --cmake-args -DBUILD_TESTING=OFF
-source install/setup.bash
-```
-
-Launch Nav2 stack:
-
-```bash
-ros2 launch cpp_robotics_sim_ros nav2_navigation.launch.py
-```
-
-Run validation:
-
-```bash
-ros2 run cpp_robotics_sim_ros nav2_lifecycle_check.sh
-ros2 run cpp_robotics_sim_ros nav2_costmap_check.sh
-ros2 run cpp_robotics_sim_ros nav2_planner_controller_check.sh
-```
-
-Expected:
-
-```txt
-LIFECYCLE CHECK: PASS
-COSTMAP CHECK: PASS
-PLANNER/CONTROLLER CHECK: PASS
-```
-
----
-
-## 35. Current Capability
-
-The project can:
-
-```txt
-build standalone C++ simulation components
-build ROS 2 Jazzy workspace
-run deterministic C++ GoogleTests
-run GitHub Actions CI
-spawn a differential-drive robot in Gazebo
-drive the robot through ros2_control
-publish odom, TF, joint states, scan, and clock
-visualize robot, odom, TF, scan, and costmaps in RViz
-bridge Nav2 /cmd_vel into diff_drive_controller TwistStamped commands
-activate Nav2 lifecycle nodes
-publish local and global costmaps
-compute odom-frame paths
-execute NavigateToPose goals
-execute NavigateThroughPoses waypoint missions
-observe and document recovery/failure behavior
-record and replay rosbag2 MCAP evidence
-```
-
-Current scope limitations:
-
-```txt
-navigation is odom-frame only
-no SLAM yet
-no saved map yet
-no AMCL localization yet
-EKF is conceptually prepared but not active in the Nav2 loop
-no Docker packaging yet
-no public one-command play mode yet
-```
-
----
-
-## 36. System Architecture Summary
-
-The current core system is:
-
-```txt
-Gazebo world + obstacles
-  ↓
-Gazebo diffbot model from Xacro
-  ↓
-gz_ros2_control
-  ↓
-controller_manager
-  ↓
-joint_state_broadcaster + diff_drive_controller
-  ↓
-/diff_drive_controller/odom + /tf + /joint_states
-
-Gazebo lidar
-  ↓
-ros_gz_bridge
-  ↓
-/scan
-  ↓
-Nav2 costmaps
-
-Nav2 lifecycle nodes
-  ↓
-planner_server + controller_server + behavior_server + bt_navigator
-  ↓
-/cmd_vel
-  ↓
-cmd_vel_twist_bridge.py
-  ↓
+Velocity sources
+    |
+    +--> /cmd_vel/gamepad
+    +--> /cmd_vel/keyboard
+    +--> /cmd_vel/gui
+    +--> /cmd_vel/navigation
+           |
+           v
+       command_mux
+           |
+           v
 /diff_drive_controller/cmd_vel
-  ↓
-Gazebo robot motion
+           |
+           v
+diff_drive_controller
+           |
+           v
+Gazebo differential-drive robot
+```
 
-Validation layer
-  ↓
-lifecycle/costmap/planner-controller scripts
-  ↓
-goal, recovery, waypoint tests
-  ↓
-rosbag2 evidence
-  ↓
-documentation
+Localization TF chain:
+
+```text
+map -> odom -> base_link
+```
+
+Navigation frame design:
+
+```text
+map-frame AMCL and goals
+odom-frame Nav2 costmaps and controller configuration
 ```
 
 ---
 
-## 37. Interview-Level Explanation
+## 32. Interview-Level Explanation
 
-This project began as a standalone C++ robotics simulation foundation and evolved into a ROS 2 / Gazebo / Nav2 mobile robot simulation stack.
+This project is a browser-controlled ROS 2 mobile-robot simulation platform
+built on Gazebo Harmonic.
 
-The standalone C++ layer validates core simulation logic such as pose integration, command clamping, and trajectory metrics. The ROS 2 kinematic simulator adds topics, parameters, odometry, TF, diagnostics, launch files, QoS, RViz, and rosbag workflows. The robot modeling phase adds URDF/Xacro, `robot_state_publisher`, joint state workflows, Gazebo spawning, `ros2_control`, `controller_manager`, `diff_drive_controller`, simulated lidar, `/scan` bridging, and simulation time.
+The dashboard is served over HTTP and communicates with ROS 2 through
+rosbridge. A simulation manager launches and supervises the selected
+Warehouse or Hospital environment. A separate mode manager enforces mutual
+exclusion between Manual, Mapping, Localization, and Navigation modes and
+owns the process group for each mode-specific launch.
 
-The validation layer adds noisy odometry, trajectory CSV recording, plotting, GoogleTest unit tests, GitHub Actions CI, and deterministic performance benchmarking.
+The robot is modeled with Xacro and controlled through `gz_ros2_control`,
+`controller_manager`, and `diff_drive_controller`. A command multiplexer
+receives gamepad, terminal-keyboard, browser GUI, and navigation velocity
+sources, checks freshness and finite values, applies priorities and velocity
+limits, implements emergency-stop override, and publishes the final
+`TwistStamped` command to the differential-drive controller.
 
-The Nav2 phase connects the Gazebo robot to a working navigation stack. Nav2 publishes `/cmd_vel`, a bridge converts it to `TwistStamped`, and the diff-drive controller moves the robot in Gazebo. The stack validates lifecycle activation, costmaps, planner path generation, controller parameters, single-goal navigation, recovery behavior, waypoint navigation, and rosbag evidence.
+SLAM Toolbox owns `map -> odom` during mapping. AMCL owns `map -> odom`
+during localization and navigation. The differential-drive controller owns
+`odom -> base_link`, and `robot_state_publisher` owns transforms below
+`base_link`.
 
-The project is a reproducible ROS 2, Gazebo, and Nav2 mobile robot simulation foundation with SLAM, saved-map workflows, localization, Docker packaging, validation tooling, and browser-based controls.
+Navigation goals are created in the map frame. The `v0.1.0` Nav2
+configuration uses AMCL for global map localization while keeping Nav2
+costmaps and controller-side global-frame settings in `odom`, making it a
+hybrid first-release navigation architecture.
 
----
-
-## 38. Planned Architecture Direction
-
-Recommended next phase direction:
-
-```txt
-SLAM, map persistence, and localization foundation
-Release cleanup, validation, documentation, and public baseline
-Dockerized runnable baseline
-Public runnable simulator
-Teleoperation and controller-based play mode
-Scenario validation and quantitative metrics
-Research-grade simulation validation testbed
-```
-
-The architecture should continue to prioritize:
-
-```txt
-reproducibility
-measurable behavior
-clear topic/action interfaces
-clean launch commands
-validation scripts
-debugging documentation
-runtime evidence
-performance awareness
-```
+The release includes environment-aware map storage, safe map-path
+resolution, managed process-group shutdown, action-goal validation,
+command-source arbitration, emergency stop, native and Docker validation,
+GitHub Actions CI, and a release gate that reported 357 passing tests with
+no failures, errors, or skipped tests.
