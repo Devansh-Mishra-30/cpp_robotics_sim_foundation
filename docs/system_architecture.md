@@ -1667,3 +1667,16 @@ resolution, managed process-group shutdown, action-goal validation,
 command-source arbitration, emergency stop, native and Docker validation,
 GitHub Actions CI, and a release gate that reported 357 passing tests with
 no failures, errors, or skipped tests.
+
+---
+
+<!-- RELEASE_MEDIA_START -->
+## Release Media
+
+- [Project teaser](https://www.youtube.com/watch?v=zKf_hjIYtlk)
+- [Complete v0.1.0 demonstration playlist](https://www.youtube.com/playlist?list=PLP_aJnUqSRf8)
+- [Installation and first launch](https://www.youtube.com/watch?v=_x2Z7jXXnWw)
+- [Docker build and 357-test validation](https://www.youtube.com/watch?v=4M628CFYiz8)
+
+Release screenshots are stored in [`docs/media/v0.1.0`](media/v0.1.0).
+<!-- RELEASE_MEDIA_END -->

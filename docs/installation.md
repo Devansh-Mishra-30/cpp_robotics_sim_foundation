@@ -904,3 +904,15 @@ The architecture document describes runtime composition and ownership.
 The interface reference defines topics, services, actions, payloads, and TF.
 
 The debugging guide defines validation and failure-recovery procedures.
+
+---
+
+<!-- RELEASE_MEDIA_START -->
+## Release Media
+
+- [Installation and first-launch walkthrough](https://www.youtube.com/watch?v=_x2Z7jXXnWw)
+- [Project teaser](https://www.youtube.com/watch?v=zKf_hjIYtlk)
+- [Complete v0.1.0 demonstration playlist](https://www.youtube.com/playlist?list=PLP_aJnUqSRf8)
+
+Release screenshots are stored in [`docs/media/v0.1.0`](media/v0.1.0).
+<!-- RELEASE_MEDIA_END -->

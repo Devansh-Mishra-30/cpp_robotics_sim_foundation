@@ -2196,3 +2196,16 @@ nav2_msgs/action/NavigateToPose
 The release interface contract is designed so the browser remains a thin
 client while ROS 2 nodes retain ownership of lifecycle management, safety,
 mapping, localization, planning, control, and robot state.
+
+---
+
+<!-- RELEASE_MEDIA_START -->
+## Release Media
+
+- [Project teaser](https://www.youtube.com/watch?v=zKf_hjIYtlk)
+- [Complete v0.1.0 demonstration playlist](https://www.youtube.com/playlist?list=PLP_aJnUqSRf8)
+- [Installation and first launch](https://www.youtube.com/watch?v=_x2Z7jXXnWw)
+- [Docker build and 357-test validation](https://www.youtube.com/watch?v=4M628CFYiz8)
+
+Release screenshots are stored in [`docs/media/v0.1.0`](media/v0.1.0).
+<!-- RELEASE_MEDIA_END -->

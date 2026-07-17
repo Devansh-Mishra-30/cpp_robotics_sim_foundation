@@ -38,22 +38,40 @@ The primary user workflow is controlled from the browser dashboard rather than b
 
 ## Demo and Media
 
-The `v0.1.0` release media includes a Warehouse teaser and a complete workflow demonstration covering manual control, mapping, localization, navigation, validation, and clean shutdown.
+### v0.1.0 project overview
 
-Public video links and selected screenshots will be added here after the release media is published.
+[![CPP Robotics Simulation Foundation v0.1.0](docs/media/v0.1.0/dashboard.png)](https://www.youtube.com/watch?v=zKf_hjIYtlk)
 
-Recommended repository media layout:
+**[Watch the 32-second project teaser](https://www.youtube.com/watch?v=zKf_hjIYtlk)**
 
-```text
-docs/media/
-├── dashboard.png
-├── warehouse.png
-├── hospital.png
-├── mapping.png
-├── localization.png
-├── navigation.png
-└── architecture.png
-```
+**[Watch the complete v0.1.0 demonstration playlist](https://www.youtube.com/playlist?list=PLP_aJnUqSRf8)**
+
+### Simulation environments
+
+<table>
+  <tr>
+    <td width="50%">
+      <img src="docs/media/v0.1.0/warehouse_gazebo.png" alt="Warehouse Gazebo environment">
+      <p align="center"><strong>Warehouse Environment</strong></p>
+    </td>
+    <td width="50%">
+      <img src="docs/media/v0.1.0/hospital_gazebo.png" alt="Hospital Gazebo environment">
+      <p align="center"><strong>Hospital Environment</strong></p>
+    </td>
+  </tr>
+</table>
+
+### Demonstration videos
+
+| Demonstration | Description |
+|---|---|
+| [Project teaser](https://www.youtube.com/watch?v=zKf_hjIYtlk) | Concise overview of the complete `v0.1.0` platform |
+| [Manual control](https://www.youtube.com/watch?v=eXRZwrg_8eY) | Dashboard and keyboard-based differential-drive control |
+| [SLAM mapping](https://www.youtube.com/watch?v=gJ5ggf250xE) | LiDAR-based occupancy-map generation and saving |
+| [AMCL localization](https://www.youtube.com/watch?v=HJZlihnV8Ko) | Localization against a previously generated map |
+| [Nav2 navigation](https://www.youtube.com/watch?v=O9wMdFE_PvU) | Autonomous map-frame goal execution and cancellation |
+| [Installation and first launch](https://www.youtube.com/watch?v=_x2Z7jXXnWw) | Setup, build, launch, environment selection, validation, and shutdown |
+| [Docker build and validation](https://www.youtube.com/watch?v=4M628CFYiz8) | Reproducible container validation with 357 passing tests |
 
 ---
 
@@ -205,6 +223,11 @@ cpp_robotics_sim_foundation/
 │   └── workflows/
 │       └── ros2_jazzy_ci.yml
 ├── docs/
+│   ├── media/
+│   │   └── v0.1.0/
+│   │       ├── dashboard.png
+│   │       ├── hospital_gazebo.png
+│   │       └── warehouse_gazebo.png
 │   ├── debugging_and_validation.md
 │   ├── installation.md
 │   ├── system_architecture.md

@@ -3236,3 +3236,17 @@ honest documentation
 ```
 
 No single test count replaces complete lifecycle and runtime validation.
+
+---
+
+<!-- RELEASE_MEDIA_START -->
+## Release Media
+
+- [Docker build and 357-test validation](https://www.youtube.com/watch?v=4M628CFYiz8)
+- [Installation and first launch](https://www.youtube.com/watch?v=_x2Z7jXXnWw)
+- [Complete v0.1.0 demonstration playlist](https://www.youtube.com/playlist?list=PLP_aJnUqSRf8)
+
+The validated `v0.1.0` baseline includes 357 automated tests, launch
+regression, headless dashboard integration, lifecycle validation, and clean
+container removal.
+<!-- RELEASE_MEDIA_END -->
