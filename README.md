@@ -190,6 +190,7 @@ Gazebo Harmonic
 
 Detailed architecture:
 
+- [`docs/installation.md`](docs/installation.md)
 - [`docs/system_architecture.md`](docs/system_architecture.md)
 - [`docs/topic_interface_reference.md`](docs/topic_interface_reference.md)
 - [`docs/debugging_and_validation.md`](docs/debugging_and_validation.md)
@@ -205,9 +206,9 @@ cpp_robotics_sim_foundation/
 │       └── ros2_jazzy_ci.yml
 ├── docs/
 │   ├── debugging_and_validation.md
+│   ├── installation.md
 │   ├── system_architecture.md
-│   ├── topic_interface_reference.md
-│   └── localization/
+│   └── topic_interface_reference.md
 ├── ros2_ws/
 │   └── src/
 │       └── cpp_robotics_sim_ros/
